@@ -5,8 +5,8 @@ html{background:#F4FAFF;color:#2f4156;-webkit-text-size-adjust:100%;text-size-ad
 @media (min-width:1536px){html{font-size:106.25%}}
 @media (min-width:1920px){html{font-size:118%}}
 @media (min-width:2560px){html{font-size:137.5%}}
-body{background:#F4FAFF;color:#2f4156;font-family:"Odor Mean Chey",ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif;overflow-x:hidden;overflow-x:clip;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
-html.lang-km body{font-family:"Odor Mean Chey","Noto Sans Khmer","Khmer OS Battambang","Leelawadee UI","Khmer UI",ui-rounded,system-ui,sans-serif;line-height:1.6}
+body{background:#F4FAFF;color:#2f4156;font-family:"Dangrek",ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif;overflow-x:hidden;overflow-x:clip;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+html.lang-km body{font-family:"Nokora","Noto Sans Khmer","Khmer OS Battambang","Leelawadee UI","Khmer UI",ui-rounded,system-ui,sans-serif;line-height:1.6}
 img,video,svg{max-width:100%}
 table{max-width:100%}
 /* 16px inputs on phones stop iOS Safari from zooming the page when a field is tapped */
@@ -41,3 +41,11 @@ dialog{max-width:calc(100vw - 2rem)}
 button,input,select,textarea{font-family:inherit;color:inherit}
 /* header stays fixed in place on phone, iPad and tablet */
 @media (max-width:1023px){header.sticky{position:-webkit-sticky;position:sticky;top:0}}
+
+/* header animations */
+@keyframes menuIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@keyframes itemIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@keyframes badgePop{0%{transform:scale(.4)}60%{transform:scale(1.35)}100%{transform:scale(1)}}
+.menu-in{animation:menuIn .25s ease-out}
+.menu-item{opacity:0;animation:itemIn .3s ease-out forwards}
+.badge-pop{animation:badgePop .4s ease-out}
