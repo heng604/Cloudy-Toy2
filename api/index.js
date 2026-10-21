@@ -230,7 +230,7 @@ async function deleteAllOrders() {
 }
 
 // shared/types.ts
-var DEFAULT_SETTINGS = { shipPhnomPenhCents: 150, shipProvinceCents: 200, telegramUrl: "", facebookUrl: "", logoUrl: "/img/logo.png", banners: [] };
+var DEFAULT_SETTINGS = { shipPhnomPenhCents: 150, shipProvinceCents: 200, telegramUrl: "", facebookUrl: "", logoUrl: "/img/logo.png", banners: [], qrUrl: "/img/qr-pay.png" };
 
 // server/lib/settings.ts
 var cache = null;
@@ -990,6 +990,40 @@ admin.post("/settings/banners", upload.any(), wrap(async (req, res) => {
     return res.json({ error: "Could not save the banners. Please try again." });
   }
   await deleteProductImages(old.filter((b) => !keep.includes(b)));
+  res.json({ ok: true });
+}));
+admin.post("/settings/banners/delete", wrap(async (req, res) => {
+  const url = String(req.body?.url ?? "");
+  const old = (await getSettings()).banners ?? [];
+  if (!old.includes(url)) return res.json({ error: "Banner not found" });
+  try {
+    await saveSettings({ banners: old.filter((b) => b !== url) });
+  } catch {
+    return res.json({ error: "Could not delete the banner. Please try again." });
+  }
+  await deleteProductImages([url]);
+  res.json({ ok: true });
+}));
+admin.post("/settings/qr", upload.any(), wrap(async (req, res) => {
+  const old = (await getSettings()).qrUrl || DEFAULT_SETTINGS.qrUrl;
+  let next = DEFAULT_SETTINGS.qrUrl, uploaded = null;
+  if (fld(req, "reset") !== "on") {
+    const f = files(req, "qr")[0];
+    if (!f) return res.json({ error: "Choose an image file first" });
+    const bytes = new Uint8Array(f.buffer);
+    const v = validateImage(bytes, f.mimetype);
+    if (!v.ok) return res.json({ error: v.error });
+    const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: 1200, height: 1600, fit: "inside", withoutEnlargement: true }).webp({ quality: 92 }).toBuffer());
+    uploaded = await uploadProductImage(`payqr-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}.webp`, small, "image/webp");
+    next = uploaded;
+  }
+  try {
+    await saveSettings({ qrUrl: next });
+  } catch {
+    if (uploaded) await deleteProductImages([uploaded]);
+    return res.json({ error: "Could not save the QR. Please try again." });
+  }
+  if (old !== next && old.includes("/payqr-")) await deleteProductImages([old]);
   res.json({ ok: true });
 }));
 app.use("/api", api);

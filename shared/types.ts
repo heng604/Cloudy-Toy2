@@ -7,6 +7,6 @@ export type StoredOrder = {
   claimedPaidAt?: string; paymentProof?: string; proofAt?: string; claimEmail?: { status: "SENT" | "SKIPPED" | "FAILED"; detail?: string };
   email: { status: "NONE" | "SENT" | "SKIPPED" | "FAILED"; detail?: string; attempts: number };
 };
-export type Settings = { shipPhnomPenhCents: number; shipProvinceCents: number; telegramUrl: string; facebookUrl: string; logoUrl: string; banners: string[] };
-export const DEFAULT_SETTINGS: Settings = { shipPhnomPenhCents: 150, shipProvinceCents: 200, telegramUrl: "", facebookUrl: "", logoUrl: "/img/logo.png", banners: [] };
+export type Settings = { shipPhnomPenhCents: number; shipProvinceCents: number; telegramUrl: string; facebookUrl: string; logoUrl: string; banners: string[]; qrUrl: string };
+export const DEFAULT_SETTINGS: Settings = { shipPhnomPenhCents: 150, shipProvinceCents: 200, telegramUrl: "", facebookUrl: "", logoUrl: "/img/logo.png", banners: [], qrUrl: "/img/qr-pay.png" };
 export type ProductDiscount = { code: string; percent: number };

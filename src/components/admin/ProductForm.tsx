@@ -3,13 +3,15 @@ import { useNavigate } from "react-router-dom";
 import type { Product } from "@shared/products";
 import type { ProductDiscount } from "@shared/types";
 import { api } from "@/lib/api";
+import { compressFormData } from "@/lib/compress";
 const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3";
 export default function ProductForm({ p, error: initialError, categories, discount }: { p?: Product; error?: string; categories: string[]; discount?: ProductDiscount | null }) {
   const navigate = useNavigate(); const [busy, setBusy] = useState(false); const [error, setError] = useState(initialError);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); if (busy) return; setBusy(true); setError(undefined);
     try {
-      const r = await api("/admin/products/save", { method: "POST", body: new FormData(e.currentTarget) });
+      const r = await api("/admin/products/save", { method: "POST", body: await compressFormData(new FormData(e.currentTarget)) });
+      if (r.status === 413) { setError("Images are too large. Try fewer or smaller photos."); window.scrollTo({ top: 0 }); return; }
       const j = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
       if (j.ok) { navigate("/admin/products?saved=1"); return; }
       setError(j.error ?? "Could not save. Please try again."); window.scrollTo({ top: 0 });

@@ -6,11 +6,14 @@ import { money } from "@shared/products";
 import type { CartProduct } from "@shared/cartTypes";
 import type { Area, Method } from "@shared/delivery";
 import { ADMIN_EMAIL } from "@shared/admin";
+import { compressFormData } from "@/lib/compress";
+import { useSettings } from "@/lib/store";
 export default function CheckoutForm({ fees, products, telegram = "", facebook = "" }: { fees: { pp: number; prov: number }; products: CartProduct[]; telegram?: string; facebook?: string }) {
+  const { settings: site } = useSettings();
   const { lines, clear } = useCart(); const navigate = useNavigate(); const router = { push: (p: string) => navigate(p) };
   const dlg = useRef<HTMLDialogElement>(null); const [placed, setPlaced] = useState(""); const closing = useRef(false);
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState("");
-  const pickProof = (f: File | null) => { setErr(""); if (f && f.size > 5 * 1024 * 1024) { setFile(null); setPreview(""); setErr("Screenshot is larger than 5 MB."); return; } setFile(f); setPreview(f ? URL.createObjectURL(f) : ""); };
+  const pickProof = (f: File | null) => { setErr(""); if (f && f.size > 25 * 1024 * 1024) { setFile(null); setPreview(""); setErr("Screenshot is too large (max 25 MB)."); return; } setFile(f); setPreview(f ? URL.createObjectURL(f) : ""); };
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [code, setCode] = useState(""); const [applied, setApplied] = useState<{ code: string; cents: number } | null>(null); const [codeMsg, setCodeMsg] = useState(""); const [checking, setChecking] = useState(false);
   const [area, setArea] = useState<Area>("PHNOM_PENH"); const [method, setMethod] = useState<Method>("QR_IMAGE");
@@ -39,7 +42,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     if (!res.ok) { setErr(data.error ?? "Something went wrong."); setBusy(false); return; }
     if (method === "QR_IMAGE" && file) { // send the payment screenshot to the admin, then show the notification popup
       const fd = new FormData(); fd.set("orderNumber", data.orderNumber); fd.set("proof", file);
-      const up = await fetch("/api/payment/proof", { method: "POST", body: fd }).catch(() => null);
+      const up = await fetch("/api/payment/proof", { method: "POST", body: await compressFormData(fd) }).catch(() => null);
       if (!up || !up.ok) { clear(); router.push(`/payment/${data.orderNumber}`); return; } // order is saved; the payment page lets the customer retry the upload
       setPlaced(data.orderNumber); setBusy(false); dlg.current?.showModal(); return;
     }
@@ -68,7 +71,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       <label className={opt}><input type="radio" name="pay" checked={method === "QR_IMAGE"} onChange={() => setMethod("QR_IMAGE")} />Scan QR image and pay. We verify it with you on Telegram or Facebook.</label>
       <label className={`${opt} ${area !== "PHNOM_PENH" ? "opacity-50" : ""}`}><input type="radio" name="pay" disabled={area !== "PHNOM_PENH"} checked={method === "COD"} onChange={() => setMethod("COD")} />Pay with delivery (Phnom Penh only)</label></fieldset>
     {method === "QR_IMAGE" && <div className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4 text-center">
-      <img src="/img/qr-pay.png" alt="ABA PAY QR code for Cloudy Toys (YIHOR THENG)" className="mx-auto w-full max-w-sm rounded-xl2 border border-sky-border" />
+      <img src={site.qrUrl || "/img/qr-pay.png"} alt="ABA PAY QR code for Cloudy Toys (YIHOR THENG)" className="mx-auto w-full max-w-sm rounded-xl2 border border-sky-border" />
       <p>Scan and pay exactly <b>{money(subtotal - discount + ship)}</b>.</p>
       <div className="mx-auto max-w-sm space-y-2 text-left"><label className="block text-sm font-semibold">Upload your payment screenshot (required)
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => pickProof(e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-xl border border-sky-border bg-white px-3 py-2 text-sm font-normal" /></label>
