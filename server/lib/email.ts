@@ -23,21 +23,34 @@ export function fromAddress(v: string | undefined): string {
   return !domain || FREE_MAIL.includes(domain) ? TEST_SENDER : addr;
 }
 export type SendResult = { status: "SENT" | "SKIPPED" | "FAILED"; detail?: string };
-/** Admin inbox: ADMIN_NOTIFICATION_EMAIL if set, otherwise the admin account email. */
+/** Admin inbox: ADMIN_NOTIFICATION_EMAIL if set (comma separated list allowed), otherwise the admin account email. */
 export const adminInbox = () => process.env.ADMIN_NOTIFICATION_EMAIL || ADMIN_EMAIL;
+const recipients = () => adminInbox().split(",").map((x) => x.trim()).filter(Boolean);
 /** Plain-text twin of the HTML (mail without a text part is scored more like spam). */
 const plain = (h: string) => h.replace(/<\/(p|h[1-6]|tr|table)>|<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
-/** Returns SENT only when Resend confirms with a 2xx. Never claims success otherwise. */
-async function deliver(subject: string, html: string): Promise<SendResult> {
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const validEmail = (v: string | undefined) => !!v && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v);
+/** Returns SENT only when Resend confirms with a 2xx. Retries up to 3 times on network errors, 429 and 5xx. Never claims success otherwise. */
+async function deliver(subject: string, html: string, o: StoredOrder): Promise<SendResult> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in .env.local" };
-  try {
-    const res = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: fromAddress(process.env.EMAIL_FROM), to: [adminInbox()], subject, html, text: plain(html) }) });
-    return res.ok ? { status: "SENT" } : { status: "FAILED", detail: `Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` };
-  } catch (e) { return { status: "FAILED", detail: e instanceof Error ? e.message : "network error" }; }
+  const body = JSON.stringify({ from: fromAddress(process.env.EMAIL_FROM), to: recipients(), subject, html, text: plain(html),
+    ...(validEmail(o.customer.email) ? { reply_to: o.customer.email } : {}), // admin can reply straight to the customer
+    headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}` } });
+  let detail = "";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body });
+      if (res.ok) return { status: "SENT" };
+      detail = `Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
+      if (res.status !== 429 && res.status < 500) break; // permanent error (bad key, unverified sender...): retrying will not help
+    } catch (e) { detail = e instanceof Error ? e.message : "network error"; }
+    if (attempt < 3) await wait(attempt * 500);
+  }
+  console.error("[email]", o.orderNumber, detail);
+  return { status: "FAILED", detail };
 }
-export const sendAdminEmail = (o: StoredOrder) => deliver(adminSubject(o), adminHtml(o));
+export const sendAdminEmail = (o: StoredOrder) => deliver(adminSubject(o), adminHtml(o), o);
 
 export const claimSubject = (o: StoredOrder) => `[Cloudy-Toy] Customer says PAID #${o.orderNumber} - ${usd(o.totalCents)} - please verify`;
 export function claimHtml(o: StoredOrder) {
@@ -47,5 +60,5 @@ export function claimHtml(o: StoredOrder) {
 /** Full order details + "customer says paid" banner. Sent when the customer presses "I have paid" on a QR order. */
 export const paidOrderSubject = (o: StoredOrder) => `[Cloudy-Toy] New Order #${o.orderNumber} - QR PAYMENT, CUSTOMER SAYS PAID (verify)`;
 const proofNote = (o: StoredOrder) => o.paymentProof ? `<p style="background:#d1f2d1;padding:10px"><b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc(o.orderNumber)}).</p>` : "";
-export const sendPaidOrderEmail = (o: StoredOrder) => deliver(paidOrderSubject(o), claimHtml(o) + proofNote(o) + "<hr>" + adminHtml(o));
-export const sendPaidClaimEmail = (o: StoredOrder) => deliver(claimSubject(o), claimHtml(o));
+export const sendPaidOrderEmail = (o: StoredOrder) => deliver(paidOrderSubject(o), claimHtml(o) + proofNote(o) + "<hr>" + adminHtml(o), o);
+export const sendPaidClaimEmail = (o: StoredOrder) => deliver(claimSubject(o), claimHtml(o), o);

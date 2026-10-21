@@ -86,8 +86,8 @@ api.post("/checkout", wrap(async (req, res) => {
     const lines2 = t.items.map((i) => ({ productId: i.productId, qty: i.qty }));
     await decrementStock(lines2); // atomic in the database; throws INSUFFICIENT_STOCK without changing anything
     try { await saveOrder(order); } catch (e) { await restoreStock(lines2); throw e; }
-    if (method === "COD") { // QR orders are emailed when the customer presses "I have paid"
-      const r = await sendAdminEmail(order); // order is never lost if email fails; status is recorded
+    { // EVERY new order (pay with delivery AND QR) is emailed to the admin right away; QR orders get a second email when the customer presses "I have paid"
+      const r = await sendAdminEmail(order); // order is never lost if email fails; status is recorded (admin can press "Resend email")
       await updateOrder(orderNumber, (x) => { x.email = { status: r.status, detail: r.detail, attempts: 1 }; });
     }
     return res.json({ orderNumber });
@@ -123,7 +123,7 @@ api.post("/payment/claim", wrap(async (req, res) => {
   if (o.paymentStatus === "PENDING" && !o.paymentProof) return res.status(400).json({ error: "Please upload your payment screenshot first." });
   if (o.paymentStatus === "PAID" || o.claimEmail?.status === "SENT") return res.json({ ok: true, already: true, status: "SENT" }); // never email twice
   const r = await sendPaidOrderEmail(o);
-  await updateOrder(n, (x) => { x.claimedPaidAt = x.claimedPaidAt ?? new Date().toISOString(); x.claimEmail = r; x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; });
+  await updateOrder(n, (x) => { x.claimedPaidAt = x.claimedPaidAt ?? new Date().toISOString(); x.claimEmail = r; x.email = r.status !== "SENT" && x.email.status === "SENT" ? { ...x.email, attempts: x.email.attempts + 1 } : { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; });
   if (r.status !== "SENT") console.error("[claim email]", n, r.status, r.detail);
   return res.json({ ok: r.status === "SENT", status: r.status, detail: r.detail });
 }));
@@ -157,6 +157,12 @@ admin.post("/orders/:n/mark-paid", wrap(async (req, res) => {
   if (!o || !canPay(o.paymentStatus, "PAID")) return res.json({ ok: false });
   await updateOrder(o.orderNumber, (x) => { x.paymentStatus = "PAID"; x.paidAt = new Date().toISOString(); x.paidManuallyBy = adminOf(req).email ?? "admin"; });
   res.json({ ok: true });
+}));
+admin.post("/orders/:n/resend-email", wrap(async (req, res) => {
+  const o = await getOrder(String(req.params.n)); if (!o) return res.status(404).json({ ok: false });
+  const r = o.claimedPaidAt ? await sendPaidOrderEmail(o) : await sendAdminEmail(o);
+  await updateOrder(o.orderNumber, (x) => { x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; });
+  res.json({ ok: r.status === "SENT", status: r.status, detail: r.detail });
 }));
 admin.post("/transactions/clear", wrap(async (_req, res) => {
   try { const proofs = (await listAllOrders()).map((o) => o.paymentProof ?? ""); await deleteAllOrders(); await deleteProofs(proofs); res.json({ ok: true }); }

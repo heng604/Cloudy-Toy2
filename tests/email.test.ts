@@ -20,3 +20,7 @@ describe("customer paid-claim email", () => {
   it("defaults to the admin account inbox", () => { delete process.env.ADMIN_NOTIFICATION_EMAIL; expect(adminInbox()).toBe("toyscloudy@gmail.com"); });
   it("never claims SENT without a Resend key", async () => { delete process.env.RESEND_API_KEY; expect((await sendPaidClaimEmail(o)).status).toBe("SKIPPED"); });
 });
+
+describe("admin inbox list", () => {
+  it("accepts several comma separated admin emails", () => { process.env.ADMIN_NOTIFICATION_EMAIL = "a@x.com, b@y.com"; expect(adminInbox()).toContain("b@y.com"); delete process.env.ADMIN_NOTIFICATION_EMAIL; });
+});
