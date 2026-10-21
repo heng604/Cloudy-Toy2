@@ -11,8 +11,8 @@ function CloudArt() {
     <svg viewBox="0 0 200 120" className="mx-auto h-28 w-auto" aria-hidden="true">
       <path d="M52 92a28 28 0 0 1 8-55 38 38 0 0 1 74-6 31 31 0 0 1 40 61z" fill="#8ECCFF" />
       <path d="M70 92a20 20 0 0 1 6-39 27 27 0 0 1 52-4 22 22 0 0 1 28 43z" fill="#EAF5FF" />
-      <circle cx="92" cy="70" r="3.5" fill="#243447" /><circle cx="116" cy="70" r="3.5" fill="#243447" />
-      <path d="M97 79q5 5 14 0" stroke="#243447" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <circle cx="92" cy="70" r="3.5" fill="#2f4156" /><circle cx="116" cy="70" r="3.5" fill="#2f4156" />
+      <path d="M97 79q5 5 14 0" stroke="#2f4156" strokeWidth="3" strokeLinecap="round" fill="none" />
     </svg>
   );
 }

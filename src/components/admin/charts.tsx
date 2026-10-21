@@ -1,6 +1,6 @@
 import { useState } from "react";
 /** Tiny dependency-free SVG charts in the dashboard style (smooth lines, rings, rounded bars, calendar). */
-export const C = { indigo: "#5B5BE6", teal: "#22CBD0", yellow: "#FFC94D", orange: "#F5A25D", ink: "#243447", grid: "#E3EEF2" };
+export const C = { indigo: "#5B5BE6", teal: "#22CBD0", yellow: "#FFC94D", orange: "#F5A25D", ink: "#2f4156", grid: "#E3EEF2" };
 /** Smooth curve through points (Catmull-Rom converted to cubic Bézier). */
 const curve = (pts: [number, number][]) => pts.reduce((d, p, i) => {
   if (i === 0) return `M${p[0]},${p[1]}`;

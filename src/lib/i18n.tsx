@@ -4,7 +4,7 @@ export type Lang = "en" | "km";
 type Vars = Record<string, string | number>;
 const KM: Record<string, string> = {
   // shop
-  "Home": "ទំព័រដើម", "Shop": "ហាង", "Account": "គណនី", "Cart": "កន្ត្រក", "Search toys": "ស្វែងរកប្រដាប់ក្មេងលេង", "Open search": "បើកការស្វែងរក", "Close search": "បិទការស្វែងរក",
+  "Home": "ទំព័រដើម", "Shop": "ហាង", "Account": "គណនី", "Cart": "កន្ត្រក", "Search toys": "ស្វែងរកប្រដាប់ក្មេងលេង", "Open search": "បើកការស្វែងរក", "Close search": "បិទការស្វែងរក", "Open menu": "បើកម៉ឺនុយ", "Close menu": "បិទម៉ឺនុយ",
   "All toys": "ប្រដាប់ក្មេងលេងទាំងអស់", "My account": "គណនីរបស់ខ្ញុំ", "Company": "ក្រុមហ៊ុន", "About": "អំពីយើង", "Contact": "ទំនាក់ទំនង", "Admin login": "ចូលជាអ្នកគ្រប់គ្រង", "All rights reserved.": "រក្សាសិទ្ធិគ្រប់យ៉ាង។",
   "Little Toys, Big Happiness.": "ប្រដាប់លេងតូចៗ សុភមង្គលធំៗ។", "Thoughtfully chosen toys, delivered across Cambodia.": "ប្រដាប់ក្មេងលេងដែលជ្រើសរើសយ៉ាងយកចិត្តទុកដាក់ ដឹកជញ្ជូនទូទាំងកម្ពុជា។",
   "Thoughtfully chosen toys for every age, delivered across Cambodia.": "ប្រដាប់ក្មេងលេងដែលជ្រើសរើសយ៉ាងយកចិត្តទុកដាក់សម្រាប់គ្រប់វ័យ ដឹកជញ្ជូនទូទាំងកម្ពុជា។",
