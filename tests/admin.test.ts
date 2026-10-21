@@ -11,9 +11,9 @@ const mk = (n: string, total: number, status: "PENDING" | "PAID", createdAt: str
   subtotalCents: total, discountCents: 0, shippingCents: 0, totalCents: total, currency: "USD", paymentStatus: status, paymentReference: "R", email: { status: "NONE", attempts: 0 } });
 const orders = [mk("A", 500, "PAID", "2026-10-17T10:00:00Z"), mk("B", 2500, "PENDING", "2026-10-18T10:00:00Z"), mk("C", 1200, "PAID", "2026-10-18T11:00:00Z")];
 
-describe("admin is only toyscloudy@gmail.com", () => {
+describe("admin is only the two allowlisted emails", () => {
   it("accepts it (any case) when verified", () => { expect(ADMIN_EMAIL).toBe("toyscloudy@gmail.com"); expect(isAdminEmail("ToysCloudy@Gmail.com", true)).toBe(true); });
-  it("rejects unverified and every other email", () => { expect(isAdminEmail("toyscloudy@gmail.com", false)).toBe(false); expect(isAdminEmail("other@gmail.com", true)).toBe(false); expect(isAdminEmail("toyscloudy@gmail.com.evil.com", true)).toBe(false); });
+  it("rejects unverified and every other email", () => { expect(isAdminEmail("toyscloudy@gmail.com", false)).toBe(false); expect(isAdminEmail("other@gmail.com", true)).toBe(false); expect(isAdminEmail("Seangheng2006@gmail.com", true)).toBe(true); expect(isAdminEmail("seangheng2006@gmail.com", false)).toBe(false); expect(isAdminEmail("toyscloudy@gmail.com.evil.com", true)).toBe(false); });
 });
 describe("csv", () => {
   it("quotes, escapes and neutralises formulas", () => {

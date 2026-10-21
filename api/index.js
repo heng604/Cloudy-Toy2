@@ -34,8 +34,9 @@ function must(r) {
 }
 
 // shared/admin.ts
-var ADMIN_EMAIL = "toyscloudy@gmail.com";
-function isAdminEmail(email, verified, allowlist = ADMIN_EMAIL) {
+var ADMIN_EMAILS = ["toyscloudy@gmail.com", "seangheng2006@gmail.com"];
+var ADMIN_EMAIL = ADMIN_EMAILS[0];
+function isAdminEmail(email, verified, allowlist = ADMIN_EMAILS.join(",")) {
   if (!email || !verified) return false;
   return allowlist.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean).includes(email.toLowerCase());
 }

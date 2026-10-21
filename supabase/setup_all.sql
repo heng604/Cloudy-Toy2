@@ -53,7 +53,7 @@ create policy "public read settings" on public.site_settings for select using (t
 -- ---- admin = admin_users row OR the verified admin Google account
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path=public as $$
   select exists(select 1 from public.admin_users where user_id=auth.uid())
-      or (lower(coalesce(auth.jwt()->>'email','')) = 'toyscloudy@gmail.com'
+      or (lower(coalesce(auth.jwt()->>'email','')) in ('toyscloudy@gmail.com','seangheng2006@gmail.com')
           and coalesce((auth.jwt()->'user_metadata'->>'email_verified')::boolean, false))
 $$;
 drop policy if exists "admin read all products" on public.products;
