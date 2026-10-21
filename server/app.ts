@@ -34,6 +34,7 @@ app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 8 } });
 const api = express.Router();
+api.get("/health", (_req, res) => res.json({ ok: true, db: !!(process.env.SUPABASE_SERVICE_ROLE_KEY && (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) }));
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response) => { fn(req, res).catch((e) => { console.error("[api]", req.path, e); if (!res.headersSent) res.status(500).json({ error: "Server error" }); }); };
 const files = (req: Request, name: string) => ((req.files as Express.Multer.File[] | undefined) ?? []).filter((f) => f.fieldname === name && f.size > 0);
 const fld = (req: Request, k: string) => String((req.body as Record<string, unknown>)?.[k] ?? "");
