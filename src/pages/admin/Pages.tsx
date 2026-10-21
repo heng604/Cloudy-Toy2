@@ -1,3 +1,4 @@
+import { useI18n } from "@/lib/i18n";
 import { useSearchParams } from "react-router-dom";
 import { PAGE_DEFS, MAX_CONTENT, type PageData, type PageSlug } from "@shared/pages";
 import DeleteButton from "@/components/admin/DeleteButton";
@@ -6,12 +7,12 @@ import { post } from "@/lib/api";
 import { useTitle } from "@/lib/title";
 import { useAdmin, refreshAdmin, Msg } from "./hooks";
 export default function AdminPages() {
-  useTitle("Pages", true);
+  const { t } = useI18n(); useTitle(t("Pages"), true);
   const [sp, setSp] = useSearchParams(); const { data } = useAdmin<{ pages: Record<PageSlug, PageData> }>("/admin/pages");
   if (!data) return <Skeleton />;
   const pages = data.pages;
   const done = async (r: Response, ok: Record<string, string>) => { const j = await r.json().catch(() => ({})) as { ok?: boolean; error?: string }; refreshAdmin(); setSp(j.ok ? ok : { error: j.error ?? "Could not save" }); window.scrollTo({ top: 0 }); };
-  return (<div className="max-w-3xl space-y-6"><h1 className="text-3xl font-extrabold">Pages</h1>
+  return (<div className="max-w-3xl space-y-6"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Pages")}</h1>
     <p className="text-sm text-mute">Write the text of your shop pages here. Use a line starting with <code>## </code> for a heading, and a blank line between paragraphs. Plain text only. The Contact page also shows your Telegram, Facebook (set in Settings) and email buttons automatically. Deleting a page hides it and removes its footer link; you can restore it any time.</p>
     <Msg ok={sp.get("saved") ? "Saved" : sp.get("deleted") ? "Page deleted (hidden from the shop)" : null} err={sp.get("error")} />
     {PAGE_DEFS.map((d) => { const p = pages[d.slug]; return (<section key={d.slug} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4">

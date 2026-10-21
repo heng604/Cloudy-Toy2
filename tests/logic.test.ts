@@ -62,14 +62,6 @@ describe("payment verification rules", () => {
 });
 
 
-import { productCodeDiscount } from "../shared/discount";
-describe("per-product discount codes", () => {
-  const items = [{ productId: "a", lineCents: 3000 }, { productId: "b", lineCents: 1000 }];
-  it("discounts only the products that own the code", () => expect(productCodeDiscount(items, new Map([["a", 10]]))).toEqual({ ok: true, discountCents: 300 }));
-  it("no matching product means no discount (full price)", () => expect(productCodeDiscount(items, new Map([["z", 10]])).ok).toBe(false));
-  it("adds up several products with the same code", () => expect(productCodeDiscount(items, new Map([["a", 10], ["b", 50]]))).toEqual({ ok: true, discountCents: 800 }));
-});
-
 import { percentOk } from "../shared/discount";
 describe("percent limits", () => { it("allows 10-50 whole numbers only", () => { expect(percentOk(10)).toBe(true); expect(percentOk(50)).toBe(true); expect(percentOk(9)).toBe(false); expect(percentOk(51)).toBe(false); expect(percentOk(12.5)).toBe(false); }); });
 
@@ -78,4 +70,13 @@ describe("store-wide discount codes", () => {
   it("takes the % off the whole subtotal", () => expect(subtotalCodeDiscount(4000, 25)).toEqual({ ok: true, discountCents: 1000 }));
   it("rounds to whole cents", () => expect(subtotalCodeDiscount(1999, 10)).toEqual({ ok: true, discountCents: 200 }));
   it("empty cart gives no discount", () => expect(subtotalCodeDiscount(0, 10).ok).toBe(false));
+});
+
+import { generateCode, CODE_RE } from "../shared/discount";
+describe("generated discount codes", () => { it("always match the allowed code format", () => { for (let i = 0; i < 50; i++) expect(CODE_RE.test(generateCode())).toBe(true); }); });
+describe("SKU characters", () => {
+  const SKU = /^[A-Za-z0-9_#*-]+$/;
+  it("allows letters, numbers, # * _ -", () => { for (const s of ["CT-TOY-001", "#A1", "BEAR*2", "toy_9", "a#b*c_d"]) expect(SKU.test(s)).toBe(true); });
+  it("rejects spaces and other symbols", () => { for (const s of ["a b", "a/b", "a.b", "a'b", "a%b"]) expect(SKU.test(s)).toBe(false); });
+  it("image file names stay safe with # and *", () => { const n = safeFileName("#A*1_x", "webp", "abc123"); expect(n).toBe("a1x-abc123.webp"); });
 });

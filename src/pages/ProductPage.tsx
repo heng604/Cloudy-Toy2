@@ -24,7 +24,7 @@ export default function ProductPage() {
         <div className="space-y-4 md:sticky md:top-24">
           <div className="flex flex-wrap gap-2">{isNewProduct(p.createdAt) && <span className="rounded-full bg-ink px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-white">New</span>}{p.category && <span className="rounded-full bg-sky-pale px-3 py-1 text-sm font-semibold">{p.category}</span>}</div>
           <h1 className="text-3xl font-extrabold leading-tight md:text-4xl">{p.name}</h1>
-          <p className="text-3xl font-extrabold">{money(p.price)}</p>
+          <p className="text-2xl font-extrabold sm:text-3xl">{money(p.price)}</p>
           <p className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold ${st === "OUT" ? "bg-red-100 text-red-800" : st === "LOW" ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"}`}><span className="h-2 w-2 rounded-full bg-current" aria-hidden="true" />{st === "OUT" ? "Out of stock" : st === "LOW" ? `Only ${p.stock} left` : `${p.stock} in stock`}</p>
           {p.description && <p className="whitespace-pre-line leading-relaxed text-ink/90">{p.description}</p>}
           <AddButton key={p.id} id={p.id} disabled={p.stock <= 0} />

@@ -1,3 +1,4 @@
+import { useI18n } from "@/lib/i18n";
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import Skeleton from "@/components/Skeleton";
@@ -7,7 +8,7 @@ import { compressFormData } from "@/lib/compress";
 import { useTitle } from "@/lib/title";
 import { refreshAdmin, Msg } from "./hooks";
 export default function Settings() {
-  useTitle("Settings", true);
+  const { t } = useI18n(); useTitle(t("Settings"), true);
   const [sp, setSp] = useSearchParams(); const { settings: s, loading } = useSettings(); const [busy, setBusy] = useState("");
   if (loading) return <Skeleton />;
   const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3";
@@ -25,7 +26,7 @@ export default function Settings() {
   const btnDel = "rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50";
   const multi = (path: string) => async (f: FormData) => api(path, { method: "POST", body: await compressFormData(f) });
   const json = (f: FormData) => post("/admin/settings", { pp: f.get("pp"), prov: f.get("prov"), tg: f.get("tg"), fb: f.get("fb") });
-  return (<div className="max-w-xl space-y-6"><h1 className="text-3xl font-extrabold">Store settings</h1>
+  return (<div className="max-w-xl space-y-6"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Store settings")}</h1>
     <Msg ok={sp.get("saved") ? "Saved" : null} err={sp.get("error")} />
     <form onSubmit={run("logo", multi("/admin/settings/logo"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Shop logo</p>
       <p className="text-sm text-mute">Shown in the shop header, footer and admin. JPG, PNG or WebP, max 5 MB. A PNG with a transparent background looks best.</p>

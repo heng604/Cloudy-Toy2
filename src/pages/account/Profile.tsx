@@ -24,5 +24,5 @@ function Form({ user }: { user: User }) {
 }
 export default function Profile() {
   useTitle("Profile");
-  return <RequireUser>{(user) => (<div className="max-w-xl space-y-4"><h1 className="text-3xl font-extrabold">Profile</h1><p className="text-mute">Email: {user.email} (managed by Google)</p><Form user={user} /></div>)}</RequireUser>;
+  return <RequireUser>{(user) => (<div className="max-w-xl space-y-4"><h1 className="text-2xl font-extrabold sm:text-3xl">Profile</h1><p className="text-mute">Email: {user.email} (managed by Google)</p><Form user={user} /></div>)}</RequireUser>;
 }

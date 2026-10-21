@@ -21,12 +21,20 @@ export async function updateOrder(n: string, fn: (o: StoredOrder) => void) {
 /** Order history for a signed-in customer: orders placed while signed in to this account, plus older ones whose checkout email matches. */
 export async function listOrdersByEmail(email: string) {
   const e = email.toLowerCase();
-  const [a, b] = await Promise.all([
+  // Two independent lookups: one failing (or returning nothing) must not break the whole history.
+  const results = await Promise.allSettled([
     db().from("orders").select("data").eq("customer_email", e).order("created_at", { ascending: false }),
     db().from("orders").select("data").eq("data->>accountEmail", e).order("created_at", { ascending: false }),
   ]);
+  const rows: StoredOrder[] = [];
+  let failures = 0;
+  for (const r of results) {
+    if (r.status === "fulfilled" && !r.value.error) rows.push(...fromRows(r.value.data as Row[] | null));
+    else { failures++; console.error("[orders by email]", r.status === "rejected" ? r.reason : r.value.error?.message); }
+  }
+  if (failures === results.length) throw new Error("Could not load orders");
   const seen = new Set<string>();
-  return [...fromRows(must(a)), ...fromRows(must(b))].filter((o) => !seen.has(o.orderNumber) && !!seen.add(o.orderNumber)).sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+  return rows.filter((o) => !seen.has(o.orderNumber) && !!seen.add(o.orderNumber)).sort((x, y) => (y.createdAt ?? "").localeCompare(x.createdAt ?? ""));
 }
 export async function listAllOrders() { return fromRows(must(await db().from("orders").select("data").order("created_at", { ascending: false }))); }
 /** Permanently deletes EVERY order (used by Admin > Transactions > Clear all). Returns how many were removed. */

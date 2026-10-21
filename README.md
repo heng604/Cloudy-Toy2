@@ -5,7 +5,7 @@ Same shop, same UI, same features, no Next.js.
 - `src/`     React app (Vite + React Router + Tailwind). Same Tailwind classes as before.
 - `server/`  Small Express API for what must stay private: checkout, stock, discount codes, order e-mails (Resend), image uploads (sharp), CSV/PDF export, all admin writes.
 - `shared/`  Pure logic used by both sides (pricing, discounts, delivery rules, stats, image checks...).
-- `supabase/` unchanged. Run the same SQL as before. No database changes are needed.
+- `supabase/` run `supabase/setup_all.sql` once in Supabase > SQL Editor (it is safe to run again; it also removes the old per-item discount table).
 
 ## Run
 No Supabase keys? The shop still starts and shows 6 sample products (preview only: checkout, login and admin need real keys).
@@ -30,3 +30,12 @@ Authentication > URL Configuration: keep `https://YOUR-SITE/auth/callback` in Re
 
 ## Removed (they were broken or unused in the Next.js version)
 `/api/payment-qr`, `/api/payment-claim`, `/api/product-image/[file]`, `/admin/discounts` (these imported functions that no longer exist), the unlinked `/faq`, `/privacy`, `/terms`, `/shipping-returns` pages (they crashed), and the unused `simulateTestPayment` action.
+
+## Discounts
+Only subtotal codes exist. Admin > Discounts: create a code (type one or press Generate) worth 10%-50%, give it to customers; they type it at checkout and get that % off the cart subtotal. Delivery is never discounted. Codes can be edited (%) or deleted any time.
+
+## SKU
+Letters, numbers and `#` `*` `_` `-` (no spaces), 2 to 40 characters. Example: `CT-TOY-001`, `#A1`, `BEAR*2`.
+
+## Screen sizes
+Layout adapts automatically: phone, tablet/iPad, laptop, desktop and large screens (page width and text size grow with the screen).

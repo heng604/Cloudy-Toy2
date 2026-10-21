@@ -7,7 +7,7 @@ import { useTitle } from "@/lib/title";
 export default function AdminLogin() {
   useTitle("Admin login", true); const [sp] = useSearchParams(); const { isAdmin } = useAuth(); const { settings: { logoUrl } } = useSettings();
   if (isAdmin) return <Navigate to="/admin" replace />;
-  return (<main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8"><div className="mx-auto max-w-md space-y-4 rounded-xl2 border border-sky-border bg-white p-8 text-center shadow-soft">
+  return (<main className="page-wrap flex-1 py-5 sm:py-8"> <div className="mx-auto max-w-md space-y-4 rounded-xl2 border border-sky-border bg-white p-8 text-center shadow-soft">
     <img src={logoUrl} alt="Cloudy Toys" className="mx-auto h-24 w-auto rounded-xl" />
     <h1 className="text-2xl font-extrabold">Admin login</h1>
     <p className="text-mute">Only the store owner&apos;s account can sign in here. It opens the admin dashboard only.</p>

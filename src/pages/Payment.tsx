@@ -12,7 +12,7 @@ export default function Payment() {
   useEffect(() => { let live = true; setO(undefined); fetch(`/api/orders/${encodeURIComponent(orderNumber ?? "")}`).then((r) => (r.ok ? r.json() : null)).then((j) => live && setO(j?.order ?? null)).catch(() => live && setO(null)); return () => { live = false; }; }, [orderNumber]);
   if (o === undefined) return <div className="mx-auto max-w-xl animate-pulse space-y-4" aria-busy="true"><div className="h-9 w-64 rounded-full bg-sky-pale" /><div className="h-14 rounded-xl2 bg-sky-pale" /><div className="h-40 rounded-xl2 bg-sky-pale" /></div>;
   if (!o) return <NotFound />;
-  return (<div className="mx-auto max-w-xl space-y-4"><h1 className="text-3xl font-extrabold">Order {o.orderNumber}</h1>
+  return (<div className="mx-auto max-w-xl space-y-4"><h1 className="text-2xl font-extrabold sm:text-3xl">Order {o.orderNumber}</h1>
     <p role="status" className="rounded-xl2 bg-green-100 p-4 font-semibold">Order received. Status: {o.paymentStatus === "PAID" ? "Paid" : o.method === "COD" ? "Pay with delivery" : "Waiting for payment verification"}</p>
     <ul className="rounded-xl2 border border-sky-border bg-white p-5">{o.items.map((i) => <li key={i.productId} className="flex justify-between"><span>{i.name} × {i.qty}</span><span>{usd(i.lineCents)}</span></li>)}
       {o.discountCents > 0 && <><li className="mt-2 flex justify-between border-t border-sky-border pt-2 text-mute"><span>Subtotal</span><span>{usd(o.subtotalCents)}</span></li>

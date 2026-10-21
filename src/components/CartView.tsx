@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useCart } from "@/components/CartProvider";
 import { FALLBACK_IMG, money } from "@shared/products";
 import type { CartProduct } from "@shared/cartTypes";
+import { useI18n } from "@/lib/i18n";
 
 const iconBtn = "grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-ink transition hover:bg-sky disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 
@@ -17,7 +18,7 @@ function CloudArt() {
 }
 
 export default function CartView({ products, telegram = "" }: { products: CartProduct[]; telegram?: string }) {
-  const { lines, setQty, clear, ready } = useCart();
+  const { lines, setQty, clear, ready } = useCart(); const { t } = useI18n();
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x): x is { l: { id: string; qty: number }; p: CartProduct } => !!x.p);
   const unit = (p: CartProduct) => p.salePrice ?? p.price;
   const subtotal = items.reduce((s, x) => s + unit(x.p) * x.l.qty, 0);
@@ -31,9 +32,9 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
     return (
       <section className="mx-auto max-w-lg rounded-xl2 border border-sky-border bg-white px-6 py-12 text-center shadow-soft">
         <CloudArt />
-        <h1 className="mt-4 text-2xl font-extrabold">Your cart is empty</h1>
+        <h1 className="mt-4 text-2xl font-extrabold">{t("Your cart is empty")}</h1>
         <p className="mt-2 text-mute">No toys here yet. Let&apos;s find something that will make a little one smile.</p>
-        <Link to="/shop" className="mt-6 inline-block rounded-full bg-sky px-8 py-3 font-bold transition hover:bg-sky-hover hover:shadow-lift">Browse toys</Link>
+        <Link to="/shop" className="mt-6 inline-block rounded-full bg-sky px-8 py-3 font-bold transition hover:bg-sky-hover hover:shadow-lift">{t("Browse toys")}</Link>
       </section>
     );
   }
@@ -42,13 +43,13 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
     <div>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h1 className="text-3xl font-extrabold">Your cart</h1>
+          <h1 className="text-2xl font-extrabold sm:text-3xl">{t("Your cart")}</h1>
           <p className="text-mute">{count} {count === 1 ? "toy" : "toys"} ready for a new home</p>
         </div>
-        <button type="button" onClick={clear} className="rounded-full px-4 py-2 text-sm font-semibold text-mute hover:bg-sky-pale hover:text-ink">Clear cart</button>
+        <button type="button" onClick={clear} className="rounded-full px-4 py-2 text-sm font-semibold text-mute hover:bg-sky-pale hover:text-ink">{t("Clear cart")}</button>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_22rem] xl:grid-cols-[1fr_26rem]">
         <ul className="space-y-4">
           {items.map(({ l, p }) => {
             const stock = p.stock ?? Infinity;
@@ -84,7 +85,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
                     </div>
                     <button type="button" onClick={() => setQty(l.id, 0)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-mute hover:bg-sky-pale hover:text-ink">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" /></svg>
-                      Remove
+                      {t("Remove")}
                     </button>
                   </div>
                 </div>
@@ -94,22 +95,22 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
         </ul>
 
         <aside aria-label="Order summary" className="space-y-4 rounded-xl2 border border-sky-border bg-white p-5 shadow-soft lg:sticky lg:top-24">
-          <h2 className="text-xl font-extrabold">Order summary</h2>
+          <h2 className="text-xl font-extrabold">{t("Order summary")}</h2>
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between"><dt className="text-mute">Items ({count})</dt><dd className="font-semibold">{money(subtotal)}</dd></div>
-            {saved > 0 && <div className="flex justify-between text-green-700"><dt>You save</dt><dd className="font-semibold">−{money(saved)}</dd></div>}
-            <div className="flex justify-between"><dt className="text-mute">Delivery</dt><dd className="font-semibold">Calculated at checkout</dd></div>
+            {saved > 0 && <div className="flex justify-between text-green-700"><dt>{t("You save")}</dt><dd className="font-semibold">−{money(saved)}</dd></div>}
+            <div className="flex justify-between"><dt className="text-mute">{t("Delivery")}</dt><dd className="font-semibold">{t("Calculated at checkout")}</dd></div>
           </dl>
           <div className="flex items-baseline justify-between border-t border-sky-border pt-4">
-            <span className="font-bold">Subtotal</span>
+            <span className="font-bold">{t("Subtotal")}</span>
             <span className="text-2xl font-extrabold">{money(subtotal)}</span>
           </div>
-          <p className="text-xs text-mute">Display only. Final totals, delivery and discount codes are calculated on the server at checkout.</p>
+          <p className="text-xs text-mute">Display only. Delivery and your discount code (10% to 50% off the subtotal) are applied at checkout.</p>
 
           {blocked
             ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Please fix the items marked above before checking out.</p>
-            : <Link to="/checkout" className="block rounded-full bg-sky px-6 py-3 text-center text-lg font-extrabold transition hover:bg-sky-hover hover:shadow-lift">Checkout</Link>}
-          <Link to="/shop" className="block text-center text-sm font-semibold text-mute hover:text-ink hover:underline">← Continue shopping</Link>
+            : <Link to="/checkout" className="block rounded-full bg-sky px-6 py-3 text-center text-lg font-extrabold transition hover:bg-sky-hover hover:shadow-lift">{t("Checkout")}</Link>}
+          <Link to="/shop" className="block text-center text-sm font-semibold text-mute hover:text-ink hover:underline">{t("← Continue shopping")}</Link>
 
           {telegram && (
             <a href={telegram} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-xl bg-sky-pale px-4 py-3 text-sm font-semibold hover:bg-sky">

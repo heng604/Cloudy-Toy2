@@ -9,7 +9,7 @@ export default function BannerSlider({ images = [] }: { images?: string[] }) {
   }, [images.length, paused]);
   if (images.length === 0) return null;
   return (<section aria-label="Promotions" className="relative mt-8 overflow-hidden rounded-xl2 border border-sky-border bg-sky-pale shadow-soft" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-    <div className="relative aspect-[8/3] w-full">
+    <div className="relative aspect-[16/9] w-full sm:aspect-[2/1] lg:aspect-[8/3]">
       {images.map((src, n) => (<img key={src} src={src} alt={`Banner ${n + 1}`} loading={n === 0 ? "eager" : "lazy"} className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${n === i ? "opacity-100" : "opacity-0"}`} aria-hidden={n !== i} />))}
     </div>
     {images.length > 1 && <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-2">{images.map((_, n) => (

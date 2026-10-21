@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/lib/auth";
+import { LangProvider } from "@/lib/i18n";
 import CartProvider from "@/components/CartProvider";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -30,7 +31,7 @@ function Shell() {
   return (<>
     <RealtimeRefresh tables={["products", "site_settings"]} onChange={refreshStore} />
     <Header logoUrl={settings.logoUrl} />
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+    <main className="page-wrap flex-1 py-5 sm:py-8">
       <Suspense fallback={<Skeleton />}>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -56,9 +57,9 @@ function Shell() {
 
 export default function App() {
   const { pathname } = useLocation(); const isAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
-  return (<AuthProvider><CartProvider><ScrollToTop />
+  return (<LangProvider><AuthProvider><CartProvider><ScrollToTop />
     {isAdmin
-      ? <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8"><Suspense fallback={<Skeleton />}><AdminRoutes /></Suspense></main>
+      ? <div className="admin-theme flex-1 p-2 sm:p-4"><Suspense fallback={<Skeleton />}><AdminRoutes /></Suspense></div>
       : <Shell />}
-  </CartProvider></AuthProvider>);
+  </CartProvider></AuthProvider></LangProvider>);
 }

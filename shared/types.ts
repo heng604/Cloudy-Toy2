@@ -9,4 +9,3 @@ export type StoredOrder = {
 };
 export type Settings = { shipPhnomPenhCents: number; shipProvinceCents: number; telegramUrl: string; facebookUrl: string; logoUrl: string; banners: string[]; qrUrl: string };
 export const DEFAULT_SETTINGS: Settings = { shipPhnomPenhCents: 150, shipProvinceCents: 200, telegramUrl: "", facebookUrl: "", logoUrl: "/img/logo.png", banners: [], qrUrl: "/img/qr-pay.png" };
-export type ProductDiscount = { code: string; percent: number };

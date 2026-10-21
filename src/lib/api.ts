@@ -8,7 +8,10 @@ export async function api(path: string, init: RequestInit = {}): Promise<Respons
 }
 export async function apiJson<T = any>(path: string, init?: RequestInit): Promise<T> {
   const r = await api(path, init);
-  if (!r.ok) { const e = new Error(`HTTP ${r.status}`) as Error & { status: number }; e.status = r.status; throw e; }
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({})) as { detail?: string; hint?: string };
+    const e = new Error(`HTTP ${r.status}`) as Error & { status: number; detail?: string; hint?: string }; e.status = r.status; e.detail = j.detail; e.hint = j.hint; throw e;
+  }
   return r.json();
 }
 export const post = (path: string, body?: unknown) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });

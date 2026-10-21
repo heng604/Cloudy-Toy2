@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import RequireUser from "@/components/RequireUser";
 import { useResource } from "@/lib/data";
 import { apiJson } from "@/lib/api";
@@ -12,11 +12,12 @@ const FILTERS: { id: Filter; label: string }[] = [{ id: "ALL", label: "All" }, {
 function List({ email }: { email: string }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const { data, loading, error, refresh } = useResource<{ orders: StoredOrder[] }>(`account:orders:${email}`, () => apiJson("/account/orders"));
+  if (error && (error as Error & { status?: number }).status === 401 && !data) return <Navigate to="/login?next=%2Faccount%2Forders" replace />; // session expired
   const orders = data?.orders ?? [];
   const shown = orders.filter((o) => filter === "ALL" || (filter === "PAID" ? o.paymentStatus === "PAID" : o.paymentStatus !== "PAID"));
   const spent = orders.filter((o) => o.paymentStatus === "PAID").reduce((s, o) => s + o.totalCents, 0);
   return (<div className="max-w-xl space-y-4"><Link to="/account" className="text-sm font-semibold underline">← My account</Link>
-    <h1 className="text-3xl font-extrabold">Order history</h1>
+    <h1 className="text-2xl font-extrabold sm:text-3xl">Order history</h1>
     <p className="text-sm text-mute">Everything you bought while signed in as {email}.</p>
     {error && !data ? <div role="alert" className="space-y-2 rounded-xl2 bg-amber-100 p-4 text-sm text-amber-900">We couldn't load your orders. <button onClick={refresh} className="font-bold underline">Try again</button></div>
       : loading ? <div className="h-24 animate-pulse rounded-xl2 bg-sky-pale" aria-busy="true" />

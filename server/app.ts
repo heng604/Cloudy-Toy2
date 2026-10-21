@@ -9,7 +9,7 @@ import { z } from "zod";
 import { requireAdmin, requireUser, userFromReq, adminOf, userOf } from "./lib/auth";
 import { tooMany, clientKey } from "./lib/rateLimit";
 import { listProducts, listAllProducts, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
-import { getProductDiscount, setProductDiscount, resolveDiscount, listStoreDiscounts, createStoreDiscount, deleteStoreDiscount, listProductDiscounts } from "./lib/discountStore";
+import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
 import { saveOrder, getOrder, updateOrder, listAllOrders, listOrdersByEmail, deleteAllOrders } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
@@ -35,7 +35,17 @@ app.use(express.json({ limit: "1mb" }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 8 } });
 const api = express.Router();
 api.get("/health", (_req, res) => res.json({ ok: true, db: !!(process.env.SUPABASE_SERVICE_ROLE_KEY && (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) }));
-const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response) => { fn(req, res).catch((e) => { console.error("[api]", req.path, e); if (!res.headersSent) res.status(500).json({ error: "Server error" }); }); };
+/** Plain-language hint for the most common setup problems (shown to the admin only). */
+const hint = (m: string) => /relation .* does not exist|could not find the table|schema cache|column .* does not exist|function .* does not exist|Could not find the function/i.test(m) ? "Database tables are missing or out of date. Open Supabase > SQL Editor, paste supabase/setup_all.sql and click Run (it is safe to run again), then reload."
+  : /not configured|SUPABASE_SERVICE_ROLE_KEY/i.test(m) ? "SUPABASE_SERVICE_ROLE_KEY (or the Supabase URL) is missing in .env.local. Add it and restart npm run dev."
+  : /invalid api key|jwt|apikey/i.test(m) ? "The Supabase key is wrong. Copy the service_role / secret key from Supabase > Project Settings > API into SUPABASE_SERVICE_ROLE_KEY."
+  : /fetch failed|ENOTFOUND|ECONNREFUSED|network/i.test(m) ? "The server cannot reach Supabase. Check VITE_SUPABASE_URL and your internet connection."
+  : "";
+const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response) => { fn(req, res).catch((e) => {
+  console.error("[api]", req.path, e); const msg = e instanceof Error ? e.message : String(e);
+  // Only admin routes explain the cause; public routes stay generic.
+  const body = req.path.startsWith("/admin") ? { error: "Server error", detail: msg, hint: hint(msg) } : { error: "Server error" };
+  if (!res.headersSent) res.status(500).json(body); }); };
 const files = (req: Request, name: string) => ((req.files as Express.Multer.File[] | undefined) ?? []).filter((f) => f.fieldname === name && f.size > 0);
 const fld = (req: Request, k: string) => String((req.body as Record<string, unknown>)?.[k] ?? "");
 const all = (req: Request, k: string): string[] => { const v = (req.body as Record<string, unknown>)?.[k]; return v === undefined ? [] : Array.isArray(v) ? v.map(String) : [String(v)]; };
@@ -62,7 +72,7 @@ api.post("/checkout", wrap(async (req, res) => {
   const catalog = catalogOf(products); let usedCode: string | undefined;
   try {
     const ship = shippingFor(area, settings); let discount = 0;
-    if (codeIn) { // admin-created codes only; checked on the server, never trusted from the browser
+    if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
       const t0 = computeTotals(lines, catalog, ship); const ev = await resolveDiscount(codeIn, t0.items);
       if (!ev.ok) return res.status(400).json({ error: ev.error });
       usedCode = codeIn; discount = ev.discountCents;
@@ -172,14 +182,14 @@ admin.get("/export", wrap(async (req, res) => {
 const MAX_IMAGES = 6;
 const Schema = z.object({
   name: z.string().trim().min(2, "Name needs at least 2 characters").max(120),
-  sku: z.string().trim().min(2, "SKU needs at least 2 characters").max(40).regex(/^[A-Za-z0-9-_]+$/, "SKU: letters, numbers, - and _ only"),
+  sku: z.string().trim().min(2, "SKU needs at least 2 characters").max(40).regex(/^[A-Za-z0-9_#*-]+$/, "SKU: letters, numbers and the symbols # * _ - only (no spaces)"),
   category: z.string().trim().min(1, "Category is required").max(40),
   description: z.string().trim().max(2000), price: z.coerce.number().min(0).max(100000), stock: z.coerce.number().int("Stock must be a whole number").min(0).max(100000),
 });
 admin.get("/products", wrap(async (_req, res) => res.json({ products: await listAllProducts() })));
 admin.get("/products/:id", wrap(async (req, res) => {
   const p = await getProductById(String(req.params.id)); if (!p) return res.status(404).json({ error: "Not found" });
-  res.json({ product: p, discount: await getProductDiscount(p.id), categories: categoriesOf(await listAllProducts()) });
+  res.json({ product: p, categories: categoriesOf(await listAllProducts()) });
 }));
 admin.get("/product-form-meta", wrap(async (_req, res) => res.json({ categories: categoriesOf(await listAllProducts()) })));
 admin.post("/products/save", upload.any(), wrap(async (req, res) => {
@@ -189,15 +199,6 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
   if (!p.success) return fail(p.error.issues[0]?.message ?? "Invalid input");
   const d = p.data;
   if (await skuTaken(d.sku, id || undefined)) return fail("That SKU is already used by another product");
-  const pctRaw = fld(req, "discountPercent").trim(), codeRaw = normalizeCode(fld(req, "discountCode"));
-  let discount: { code: string; percent: number } | null = null;
-  if (pctRaw || codeRaw) {
-    const pct = Number(pctRaw);
-    if (!pctRaw || !codeRaw) return fail("Discount needs both a % and a code (or leave both empty)");
-    if (!percentOk(pct)) return fail("Discount % must be a whole number from 10 to 50");
-    if (!CODE_RE.test(codeRaw)) return fail("Discount code: 3-30 letters, numbers, - or _ (e.g. TOY10)");
-    discount = { code: codeRaw, percent: pct };
-  }
   const old = id ? await getProductById(id) : null; const keep = new Set(all(req, "keep"));
   const images = (old?.images ?? []).filter((i) => keep.has(i.src)); const removed = (old?.images ?? []).filter((i) => !keep.has(i.src)).map((i) => i.src);
   const fl = files(req, "images");
@@ -210,7 +211,7 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
     const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer());
     const src = await uploadProductImage(safeFileName(d.sku, "webp"), small, "image/webp"); uploaded.push(src); images.push({ src, alt: d.name });
   }
-  try { const savedId = await upsertProduct({ id: id || undefined, name: d.name, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, active: fld(req, "active") === "on" }); await setProductDiscount(savedId, discount); }
+  try { await upsertProduct({ id: id || undefined, name: d.name, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, active: fld(req, "active") === "on" }); }
   catch { await deleteProductImages(uploaded); return fail("Could not save to the database. Nothing was lost; please try again."); }
   await deleteProductImages(removed); // only after the product row is safely saved
   res.json({ ok: true });
@@ -230,8 +231,8 @@ admin.post("/pages/save", wrap(async (req, res) => {
 admin.post("/pages/:slug/delete", wrap(async (req, res) => { const d = PAGE_DEFS.find((p) => p.slug === req.params.slug); if (!d || !d.deletable) return res.json({ error: "This page cannot be deleted" }); await savePage(d.slug, { deleted: true }); res.json({ ok: true }); }));
 admin.post("/pages/:slug/restore", wrap(async (req, res) => { const d = PAGE_DEFS.find((p) => p.slug === req.params.slug); if (!d) return res.json({ error: "Unknown page" }); await savePage(d.slug, { deleted: false }); res.json({ ok: true }); }));
 
-// discounts: store-wide codes (% off subtotal) + per-product discounts, each deletable one by one
-admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts(), products: await listProductDiscounts() })));
+// discounts: the admin creates codes worth 10-50% off the cart subtotal (customers type them at checkout)
+admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts() })));
 admin.post("/discounts/create", wrap(async (req, res) => {
   const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
   if (!CODE_RE.test(code)) return res.json({ error: "Code: 3-30 letters, numbers, - or _ (e.g. SAVE10)" });
@@ -239,8 +240,14 @@ admin.post("/discounts/create", wrap(async (req, res) => {
   if (!(await createStoreDiscount(code, pct))) return res.json({ error: "That code already exists" });
   res.json({ ok: true });
 }));
+admin.post("/discounts/update", wrap(async (req, res) => {
+  const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
+  if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" });
+  if (!percentOk(pct)) return res.json({ error: "Discount % must be a whole number from 10 to 50" });
+  if (!(await updateStoreDiscount(code, pct))) return res.json({ error: "Unknown code" });
+  res.json({ ok: true });
+}));
 admin.post("/discounts/delete", wrap(async (req, res) => { const code = normalizeCode(String(req.body?.code ?? "")); if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" }); await deleteStoreDiscount(code); res.json({ ok: true }); }));
-admin.post("/discounts/product/delete", wrap(async (req, res) => { const id = String(req.body?.productId ?? ""); if (!/^[0-9a-f-]{36}$/i.test(id)) return res.json({ error: "Unknown product" }); await setProductDiscount(id, null); res.json({ ok: true }); }));
 
 // settings
 const Url = z.string().trim().max(300).refine((v) => v === "" || /^https:\/\/[^\s]+$/.test(v), "Links must start with https://");

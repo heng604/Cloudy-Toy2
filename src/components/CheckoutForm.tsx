@@ -10,8 +10,9 @@ import { compressFormData } from "@/lib/compress";
 import { useSettings } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 export default function CheckoutForm({ fees, products, telegram = "", facebook = "" }: { fees: { pp: number; prov: number }; products: CartProduct[]; telegram?: string; facebook?: string }) {
-  const { settings: site } = useSettings(); const { user } = useAuth();
+  const { settings: site } = useSettings(); const { user } = useAuth(); const { t } = useI18n();
   const { lines, clear } = useCart(); const navigate = useNavigate(); const router = { push: (p: string) => navigate(p) };
   const dlg = useRef<HTMLDialogElement>(null); const [placed, setPlaced] = useState(""); const closing = useRef(false);
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState("");
@@ -57,18 +58,18 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   };
   const link = "block rounded-full bg-sky px-4 py-2 text-center font-bold hover:bg-sky-hover";
   const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3"; const opt = "flex items-start gap-3 rounded-xl border border-sky-border bg-white p-4";
-  return (<div className="grid gap-8 md:grid-cols-[1fr_320px]"><form onSubmit={submit} className="space-y-3"><h1 className="text-3xl font-extrabold">Checkout</h1>
-    <label className="block">Full name<input name="name" required minLength={2} autoComplete="name" placeholder="Example: Sok Dara" className={cls} /></label>
-    <label className="block">Email (optional)<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
-    <label className="block">Phone<input name="phone" type="tel" required minLength={6} autoComplete="tel" placeholder="Example: 012 345 678" className={cls} /></label>
-    <div className="grid gap-3 sm:grid-cols-2"><label className="block">Facebook name (optional)<input name="facebook" maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
-      <label className="block">Telegram username (optional)<input name="telegram" maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
-    <fieldset className="space-y-2"><legend className="font-semibold">Delivery area</legend>
-      <label className={opt}><input type="radio" name="area" checked={area === "PHNOM_PENH"} onChange={() => pickArea("PHNOM_PENH")} />Phnom Penh · {money(fees.pp / 100)}</label>
-      <label className={opt}><input type="radio" name="area" checked={area === "PROVINCE"} onChange={() => pickArea("PROVINCE")} />Province · {money(fees.prov / 100)}</label></fieldset>
-    <label className="block">Delivery address<textarea name="address" required minLength={5} rows={3} placeholder="Example: House 12, Street 271, Sangkat Tuol Tumpung 1, Khan Chamkar Mon, Phnom Penh" className={cls} /></label>
-    <label className="block">Delivery instructions (optional)<input name="notes" placeholder="Example: Call me before arriving" className={cls} /></label>
-    <fieldset className="space-y-2"><legend className="font-semibold">Payment</legend>
+  return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form onSubmit={submit} className="space-y-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Checkout")}</h1>
+    <label className="block">{t("Full name")}<input name="name" required minLength={2} autoComplete="name" placeholder="Example: Sok Dara" className={cls} /></label>
+    <label className="block">{t("Email (optional)")}<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
+    <label className="block">{t("Phone")}<input name="phone" type="tel" required minLength={6} autoComplete="tel" placeholder="Example: 012 345 678" className={cls} /></label>
+    <div className="grid gap-3 sm:grid-cols-2"><label className="block">{t("Facebook name (optional)")}<input name="facebook" maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
+      <label className="block">{t("Telegram username (optional)")}<input name="telegram" maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
+    <fieldset className="space-y-2"><legend className="font-semibold">{t("Delivery area")}</legend>
+      <label className={opt}><input type="radio" name="area" checked={area === "PHNOM_PENH"} onChange={() => pickArea("PHNOM_PENH")} />{t("Phnom Penh")} · {money(fees.pp / 100)}</label>
+      <label className={opt}><input type="radio" name="area" checked={area === "PROVINCE"} onChange={() => pickArea("PROVINCE")} />{t("Province")} · {money(fees.prov / 100)}</label></fieldset>
+    <label className="block">{t("Delivery address")}<textarea name="address" required minLength={5} rows={3} placeholder="Example: House 12, Street 271, Sangkat Tuol Tumpung 1, Khan Chamkar Mon, Phnom Penh" className={cls} /></label>
+    <label className="block">{t("Delivery instructions (optional)")}<input name="notes" placeholder="Example: Call me before arriving" className={cls} /></label>
+    <fieldset className="space-y-2"><legend className="font-semibold">{t("Payment")}</legend>
       <label className={`${opt} opacity-50`}><input type="radio" name="pay" disabled />Scan with Bakong (KHQR) · Coming soon</label>
       <label className={opt}><input type="radio" name="pay" checked={method === "QR_IMAGE"} onChange={() => setMethod("QR_IMAGE")} />Scan QR image and pay. We verify it with you on Telegram or Facebook.</label>
       <label className={`${opt} ${area !== "PHNOM_PENH" ? "opacity-50" : ""}`}><input type="radio" name="pay" disabled={area !== "PHNOM_PENH"} checked={method === "COD"} onChange={() => setMethod("COD")} />Pay with delivery (Phnom Penh only)</label></fieldset>
@@ -78,17 +79,17 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       <div className="mx-auto max-w-sm space-y-2 text-left"><label className="block text-sm font-semibold">Upload your payment screenshot (required)
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => pickProof(e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-xl border border-sky-border bg-white px-3 py-2 text-sm font-normal" /></label>
         {preview && <img src={preview} alt="Your payment screenshot" className="mx-auto max-h-48 rounded-lg border border-sky-border" />}</div></div>}
-    <div><label className="block">Discount code (optional)<span className="mt-1 flex gap-2"><input value={code} placeholder="Example: TOY10" onChange={(e) => { setCode(e.target.value.toUpperCase()); setApplied(null); setCodeMsg(""); }} maxLength={40} autoComplete="off" className={`${cls} font-mono uppercase`} />
-      <button type="button" onClick={applyCode} disabled={checking || !code.trim()} className="rounded-full border border-sky-border bg-white px-5 font-bold hover:bg-sky-pale disabled:opacity-50">{checking ? "…" : "Apply"}</button></span></label>
-      {applied && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div>
+    <div><label className="block">{t("Discount code (optional)")}<span className="mt-1 flex gap-2"><input value={code} placeholder="Example: TOY10" onChange={(e) => { setCode(e.target.value.toUpperCase()); setApplied(null); setCodeMsg(""); }} maxLength={40} autoComplete="off" className={`${cls} font-mono uppercase`} />
+      <button type="button" onClick={applyCode} disabled={checking || !code.trim()} className="rounded-full border border-sky-border bg-white px-5 font-bold hover:bg-sky-pale disabled:opacity-50">{checking ? "…" : t("Apply")}</button></span></label>
+      <p className="mt-1 text-xs text-mute">{t("Takes 10% to 50% off your subtotal.")}</p>{applied && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div>
     {err && <p role="alert" className="text-red-700">{err}</p>}
-    <button disabled={busy || !!placed || (method === "QR_IMAGE" && !file)} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Sending…" : method === "QR_IMAGE" ? "I have paid" : "Place order"}</button>
+    <button disabled={busy || !!placed || (method === "QR_IMAGE" && !file)} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{busy ? t("Sending…") : method === "QR_IMAGE" ? t("I have paid") : t("Place order")}</button>
     {method === "QR_IMAGE" && !file && <p className="text-xs text-mute">Upload your payment screenshot to enable &quot;I have paid&quot;.</p>}
 </form>
-    <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5"><h2 className="font-extrabold">Order summary</h2>
+    <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5 lg:sticky lg:top-24"><h2 className="font-extrabold">{t("Order summary")}</h2>
       {items.map(({ l, p }) => <p key={l.id} className="flex justify-between text-sm"><span>{p!.name} × {l.qty}</span><span>{money((p!.salePrice ?? p!.price) * l.qty)}</span></p>)}
       {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}
-      <p className="flex justify-between text-sm text-mute"><span>Delivery</span><span>{money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>Total</span><span>{money(subtotal - discount + ship)}</span></p>
+      <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span>{money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(subtotal - discount + ship)}</span></p>
       <p className="text-xs text-mute">The server sets the final total.</p></aside>
     <dialog ref={dlg} onClose={onClosePopup} className="max-w-sm rounded-xl2 p-6 backdrop:bg-black/40"><h2 className="text-lg font-extrabold">Please contact our admin</h2>
       <p className="my-3 text-sm">Thank you! Your order and payment screenshot have been sent to our admin. To confirm your payment quickly, you can also message our admin with your order number <b>{placed}</b>.</p>

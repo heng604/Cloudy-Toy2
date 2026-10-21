@@ -253,12 +253,22 @@ async function updateOrder(n, fn) {
 }
 async function listOrdersByEmail(email) {
   const e = email.toLowerCase();
-  const [a, b] = await Promise.all([
+  const results = await Promise.allSettled([
     db().from("orders").select("data").eq("customer_email", e).order("created_at", { ascending: false }),
     db().from("orders").select("data").eq("data->>accountEmail", e).order("created_at", { ascending: false })
   ]);
+  const rows = [];
+  let failures = 0;
+  for (const r of results) {
+    if (r.status === "fulfilled" && !r.value.error) rows.push(...fromRows(r.value.data));
+    else {
+      failures++;
+      console.error("[orders by email]", r.status === "rejected" ? r.reason : r.value.error?.message);
+    }
+  }
+  if (failures === results.length) throw new Error("Could not load orders");
   const seen = /* @__PURE__ */ new Set();
-  return [...fromRows(must(a)), ...fromRows(must(b))].filter((o) => !seen.has(o.orderNumber) && !!seen.add(o.orderNumber)).sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+  return rows.filter((o) => !seen.has(o.orderNumber) && !!seen.add(o.orderNumber)).sort((x, y) => (y.createdAt ?? "").localeCompare(x.createdAt ?? ""));
 }
 async function listAllOrders() {
   return fromRows(must(await db().from("orders").select("data").order("created_at", { ascending: false })));

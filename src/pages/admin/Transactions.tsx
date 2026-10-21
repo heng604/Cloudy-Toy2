@@ -1,3 +1,4 @@
+import { useI18n } from "@/lib/i18n";
 import { Link, useSearchParams } from "react-router-dom";
 import { methodLabel } from "@shared/delivery";
 import { filterOrders, sortOrders, summarize, usd, stamp } from "@shared/stats";
@@ -11,7 +12,7 @@ import { post } from "@/lib/api";
 import { useTitle } from "@/lib/title";
 import { useAdmin, refreshAdmin, Msg } from "./hooks";
 export default function Transactions() {
-  useTitle("Transactions", true);
+  const { t } = useI18n(); useTitle(t("Transactions"), true);
   const [sp, setSp] = useSearchParams(); const { data } = useAdmin<{ orders: StoredOrder[]; proofs: Record<string, string> }>("/admin/orders?proofs=1");
   if (!data) return <Skeleton />;
   const sortQ = sp.get("sort") ?? ""; const sort = ["low", "high", "new", "oldest"].includes(sortQ) ? sortQ : "high";
@@ -19,7 +20,7 @@ export default function Transactions() {
   const rows = sortOrders(filterOrders(data.orders, f), sort), s = summarize(rows); const urls = data.proofs;
   const cls = "rounded-full border border-sky-border bg-white px-4 py-2", card = "rounded-xl2 border border-sky-border bg-white p-4";
   const clear = async () => { const r = await post("/admin/transactions/clear"); refreshAdmin(); setSp(r.ok ? { cleared: "1" } : { error: "Could not clear the transactions. Please try again." }); };
-  return (<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-3xl font-extrabold">Transactions</h1><div className="flex flex-wrap items-center gap-2"><ExportButtons type="transactions" params={{ ...f, sort }} /><DeleteButton action={clear} label="Clear all transactions" message="Delete ALL transactions and orders permanently? This cannot be undone. Export them first if you need a copy." /></div></div>
+  return (<div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Transactions")}</h1><div className="flex flex-wrap items-center gap-2"><ExportButtons type="transactions" params={{ ...f, sort }} /><DeleteButton action={clear} label="Clear all transactions" message="Delete ALL transactions and orders permanently? This cannot be undone. Export them first if you need a copy." /></div></div>
     <Msg ok={sp.get("cleared") && "All transactions cleared"} err={sp.get("error")} />
     <form key={sp.toString()} onSubmit={getSubmit(setSp)} className="flex flex-wrap items-end gap-2">
       <label className="text-sm">Sort<select name="sort" defaultValue={sort} className={`${cls} block`}><option value="high">Highest first</option><option value="low">Lowest first</option><option value="new">Newest first</option><option value="oldest">Oldest first</option></select></label>
