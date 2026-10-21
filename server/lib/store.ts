@@ -18,7 +18,16 @@ export async function updateOrder(n: string, fn: (o: StoredOrder) => void) {
   const o = await getOrder(n); if (!o) return null;
   fn(o); must(await db().from("orders").update(toRow(o)).eq("order_number", n).select("order_number").single()); return o;
 }
-export async function listOrdersByEmail(email: string) { return fromRows(must(await db().from("orders").select("data").eq("customer_email", email.toLowerCase()).order("created_at", { ascending: false }))); }
+/** Order history for a signed-in customer: orders placed while signed in to this account, plus older ones whose checkout email matches. */
+export async function listOrdersByEmail(email: string) {
+  const e = email.toLowerCase();
+  const [a, b] = await Promise.all([
+    db().from("orders").select("data").eq("customer_email", e).order("created_at", { ascending: false }),
+    db().from("orders").select("data").eq("data->>accountEmail", e).order("created_at", { ascending: false }),
+  ]);
+  const seen = new Set<string>();
+  return [...fromRows(must(a)), ...fromRows(must(b))].filter((o) => !seen.has(o.orderNumber) && !!seen.add(o.orderNumber)).sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+}
 export async function listAllOrders() { return fromRows(must(await db().from("orders").select("data").order("created_at", { ascending: false }))); }
 /** Permanently deletes EVERY order (used by Admin > Transactions > Clear all). Returns how many were removed. */
 export async function deleteAllOrders() {

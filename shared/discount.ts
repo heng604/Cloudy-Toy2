@@ -10,3 +10,8 @@ export function productCodeDiscount(items: { productId: string; lineCents: numbe
   const cents = items.reduce((s, i) => { const pct = percentByProduct.get(i.productId); return pct ? s + Math.round((i.lineCents * pct) / 100) : s; }, 0);
   return cents > 0 ? { ok: true, discountCents: cents } : { ok: false, error: "That discount code is not valid for the items in your cart." };
 }
+/** Store-wide code: the % comes off the whole cart subtotal (delivery is never discounted). */
+export function subtotalCodeDiscount(subtotalCents: number, percent: number): DiscountResult {
+  const cents = Math.round((subtotalCents * percent) / 100);
+  return cents > 0 ? { ok: true, discountCents: cents } : { ok: false, error: "That discount code is not valid for the items in your cart." };
+}

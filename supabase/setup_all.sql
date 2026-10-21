@@ -157,3 +157,15 @@ drop function if exists public.release_discount(text);
 drop table if exists public.discount_codes;
 notify pgrst, 'reload schema';
 
+
+-- Store-wide discount codes (% off the cart subtotal)
+create table if not exists public.store_discounts(
+  code text primary key check (code ~ '^[A-Z0-9_-]{3,30}$'),
+  percent numeric(5,2) not null check (percent >= 10 and percent <= 50),
+  created_at timestamptz default now()
+);
+alter table public.store_discounts enable row level security;
+drop policy if exists "admin read store discounts" on public.store_discounts;
+create policy "admin read store discounts" on public.store_discounts for select using (public.is_admin());
+alter publication supabase_realtime add table public.store_discounts;
+notify pgrst, 'reload schema';

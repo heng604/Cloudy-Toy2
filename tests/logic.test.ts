@@ -72,3 +72,10 @@ describe("per-product discount codes", () => {
 
 import { percentOk } from "../shared/discount";
 describe("percent limits", () => { it("allows 10-50 whole numbers only", () => { expect(percentOk(10)).toBe(true); expect(percentOk(50)).toBe(true); expect(percentOk(9)).toBe(false); expect(percentOk(51)).toBe(false); expect(percentOk(12.5)).toBe(false); }); });
+
+import { subtotalCodeDiscount } from "../shared/discount";
+describe("store-wide discount codes", () => {
+  it("takes the % off the whole subtotal", () => expect(subtotalCodeDiscount(4000, 25)).toEqual({ ok: true, discountCents: 1000 }));
+  it("rounds to whole cents", () => expect(subtotalCodeDiscount(1999, 10)).toEqual({ ok: true, discountCents: 200 }));
+  it("empty cart gives no discount", () => expect(subtotalCodeDiscount(0, 10).ok).toBe(false));
+});

@@ -165,6 +165,10 @@ function productCodeDiscount(items2, percentByProduct) {
   }, 0);
   return cents > 0 ? { ok: true, discountCents: cents } : { ok: false, error: "That discount code is not valid for the items in your cart." };
 }
+function subtotalCodeDiscount(subtotalCents, percent) {
+  const cents = Math.round(subtotalCents * percent / 100);
+  return cents > 0 ? { ok: true, discountCents: cents } : { ok: false, error: "That discount code is not valid for the items in your cart." };
+}
 
 // server/lib/discountStore.ts
 async function getProductDiscount(productId) {
@@ -182,7 +186,36 @@ async function percentByProductForCode(code) {
   const rows = must(await db().from("product_discounts").select("product_id,percent").eq("code", code));
   return new Map(rows.map((r) => [r.product_id, Number(r.percent)]));
 }
-var resolveDiscount = async (code, items2) => productCodeDiscount(items2, await percentByProductForCode(code));
+async function listStoreDiscounts() {
+  const rows = must(await db().from("store_discounts").select("code,percent,created_at").order("created_at", { ascending: true }));
+  return rows.map((r) => ({ code: r.code, percent: Number(r.percent), createdAt: r.created_at }));
+}
+async function getStoreDiscountPercent(code) {
+  const r = must(await db().from("store_discounts").select("percent").eq("code", code).maybeSingle());
+  return r ? Number(r.percent) : null;
+}
+async function createStoreDiscount(code, percent) {
+  if (await getStoreDiscountPercent(code) !== null) return false;
+  const used = must(await db().from("product_discounts").select("product_id").eq("code", code).limit(1));
+  if (used.length) return false;
+  must(await db().from("store_discounts").insert({ code, percent }).select("code"));
+  return true;
+}
+async function deleteStoreDiscount(code) {
+  must(await db().from("store_discounts").delete().eq("code", code).select("code"));
+}
+async function listProductDiscounts() {
+  const rows = must(await db().from("product_discounts").select("product_id,code,percent,products(name,sku)").order("created_at", { ascending: false }));
+  return rows.map((r) => {
+    const p = Array.isArray(r.products) ? r.products[0] : r.products;
+    return { productId: r.product_id, code: r.code, percent: Number(r.percent), name: p?.name ?? "(deleted product)", sku: p?.sku ?? "" };
+  });
+}
+var resolveDiscount = async (code, items2) => {
+  const pct = await getStoreDiscountPercent(code);
+  if (pct !== null) return subtotalCodeDiscount(items2.reduce((s, i) => s + i.lineCents, 0), pct);
+  return productCodeDiscount(items2, await percentByProductForCode(code));
+};
 
 // server/lib/store.ts
 var d = (c) => c / 100;
@@ -219,7 +252,13 @@ async function updateOrder(n, fn) {
   return o;
 }
 async function listOrdersByEmail(email) {
-  return fromRows(must(await db().from("orders").select("data").eq("customer_email", email.toLowerCase()).order("created_at", { ascending: false })));
+  const e = email.toLowerCase();
+  const [a, b] = await Promise.all([
+    db().from("orders").select("data").eq("customer_email", e).order("created_at", { ascending: false }),
+    db().from("orders").select("data").eq("data->>accountEmail", e).order("created_at", { ascending: false })
+  ]);
+  const seen = /* @__PURE__ */ new Set();
+  return [...fromRows(must(a)), ...fromRows(must(b))].filter((o) => !seen.has(o.orderNumber) && !!seen.add(o.orderNumber)).sort((x, y) => y.createdAt.localeCompare(x.createdAt));
 }
 async function listAllOrders() {
   return fromRows(must(await db().from("orders").select("data").order("created_at", { ascending: false })));
@@ -681,7 +720,7 @@ api.post("/checkout", wrap(async (req, res) => {
   if (codeIn && tooMany(`c:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (codeIn && !CODE_RE.test(codeIn)) return res.status(400).json({ error: "That discount code is not valid." });
   if (!methodAllowed(method, area2)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
-  const [settings, products] = await Promise.all([getSettings(), listProducts()]);
+  const [settings, products, acct] = await Promise.all([getSettings(), listProducts(), userFromReq(req)]);
   const catalog = catalogOf(products);
   let usedCode;
   try {
@@ -709,6 +748,7 @@ api.post("/checkout", wrap(async (req, res) => {
       totalCents: t.totalCents,
       currency: "USD",
       ...usedCode ? { discountCode: usedCode } : {},
+      ...acct?.email ? { accountEmail: acct.email.toLowerCase() } : {},
       paymentStatus: "PENDING",
       paymentReference: `PAY-${orderNumber}`,
       email: { status: "NONE", attempts: 0 }
@@ -933,6 +973,26 @@ admin.post("/pages/:slug/restore", wrap(async (req, res) => {
   const d2 = PAGE_DEFS.find((p) => p.slug === req.params.slug);
   if (!d2) return res.json({ error: "Unknown page" });
   await savePage(d2.slug, { deleted: false });
+  res.json({ ok: true });
+}));
+admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts(), products: await listProductDiscounts() })));
+admin.post("/discounts/create", wrap(async (req, res) => {
+  const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
+  if (!CODE_RE.test(code)) return res.json({ error: "Code: 3-30 letters, numbers, - or _ (e.g. SAVE10)" });
+  if (!percentOk(pct)) return res.json({ error: "Discount % must be a whole number from 10 to 50" });
+  if (!await createStoreDiscount(code, pct)) return res.json({ error: "That code already exists" });
+  res.json({ ok: true });
+}));
+admin.post("/discounts/delete", wrap(async (req, res) => {
+  const code = normalizeCode(String(req.body?.code ?? ""));
+  if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" });
+  await deleteStoreDiscount(code);
+  res.json({ ok: true });
+}));
+admin.post("/discounts/product/delete", wrap(async (req, res) => {
+  const id = String(req.body?.productId ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.json({ error: "Unknown product" });
+  await setProductDiscount(id, null);
   res.json({ ok: true });
 }));
 var Url = z.string().trim().max(300).refine((v) => v === "" || /^https:\/\/[^\s]+$/.test(v), "Links must start with https://");

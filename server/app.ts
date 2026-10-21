@@ -6,10 +6,10 @@ import sharp from "sharp";
 import path from "path";
 import fs from "fs";
 import { z } from "zod";
-import { requireAdmin, requireUser, adminOf, userOf } from "./lib/auth";
+import { requireAdmin, requireUser, userFromReq, adminOf, userOf } from "./lib/auth";
 import { tooMany, clientKey } from "./lib/rateLimit";
 import { listProducts, listAllProducts, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
-import { getProductDiscount, setProductDiscount, resolveDiscount } from "./lib/discountStore";
+import { getProductDiscount, setProductDiscount, resolveDiscount, listStoreDiscounts, createStoreDiscount, deleteStoreDiscount, listProductDiscounts } from "./lib/discountStore";
 import { saveOrder, getOrder, updateOrder, listAllOrders, listOrdersByEmail, deleteAllOrders } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
@@ -58,7 +58,7 @@ api.post("/checkout", wrap(async (req, res) => {
   if (codeIn && tooMany(`c:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (codeIn && !CODE_RE.test(codeIn)) return res.status(400).json({ error: "That discount code is not valid." });
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
-  const [settings, products] = await Promise.all([getSettings(), listProducts()]);
+  const [settings, products, acct] = await Promise.all([getSettings(), listProducts(), userFromReq(req)]);
   const catalog = catalogOf(products); let usedCode: string | undefined;
   try {
     const ship = shippingFor(area, settings); let discount = 0;
@@ -71,7 +71,7 @@ api.post("/checkout", wrap(async (req, res) => {
     const orderNumber = `CT-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
     const order = { orderNumber, createdAt: new Date().toISOString(), area, method, customer,
       items: t.items.map((i) => ({ productId: i.productId, sku: products.find((p) => p.id === i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents })),
-      subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}),
+      subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
     const lines2 = t.items.map((i) => ({ productId: i.productId, qty: i.qty }));
     await decrementStock(lines2); // atomic in the database; throws INSUFFICIENT_STOCK without changing anything
@@ -229,6 +229,18 @@ admin.post("/pages/save", wrap(async (req, res) => {
 /** "Delete" hides the page and its footer link and keeps the text, so Restore brings it back. */
 admin.post("/pages/:slug/delete", wrap(async (req, res) => { const d = PAGE_DEFS.find((p) => p.slug === req.params.slug); if (!d || !d.deletable) return res.json({ error: "This page cannot be deleted" }); await savePage(d.slug, { deleted: true }); res.json({ ok: true }); }));
 admin.post("/pages/:slug/restore", wrap(async (req, res) => { const d = PAGE_DEFS.find((p) => p.slug === req.params.slug); if (!d) return res.json({ error: "Unknown page" }); await savePage(d.slug, { deleted: false }); res.json({ ok: true }); }));
+
+// discounts: store-wide codes (% off subtotal) + per-product discounts, each deletable one by one
+admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts(), products: await listProductDiscounts() })));
+admin.post("/discounts/create", wrap(async (req, res) => {
+  const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
+  if (!CODE_RE.test(code)) return res.json({ error: "Code: 3-30 letters, numbers, - or _ (e.g. SAVE10)" });
+  if (!percentOk(pct)) return res.json({ error: "Discount % must be a whole number from 10 to 50" });
+  if (!(await createStoreDiscount(code, pct))) return res.json({ error: "That code already exists" });
+  res.json({ ok: true });
+}));
+admin.post("/discounts/delete", wrap(async (req, res) => { const code = normalizeCode(String(req.body?.code ?? "")); if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" }); await deleteStoreDiscount(code); res.json({ ok: true }); }));
+admin.post("/discounts/product/delete", wrap(async (req, res) => { const id = String(req.body?.productId ?? ""); if (!/^[0-9a-f-]{36}$/i.test(id)) return res.json({ error: "Unknown product" }); await setProductDiscount(id, null); res.json({ ok: true }); }));
 
 // settings
 const Url = z.string().trim().max(300).refine((v) => v === "" || /^https:\/\/[^\s]+$/.test(v), "Links must start with https://");

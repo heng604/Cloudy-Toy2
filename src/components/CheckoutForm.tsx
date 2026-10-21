@@ -8,8 +8,10 @@ import type { Area, Method } from "@shared/delivery";
 import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
 export default function CheckoutForm({ fees, products, telegram = "", facebook = "" }: { fees: { pp: number; prov: number }; products: CartProduct[]; telegram?: string; facebook?: string }) {
-  const { settings: site } = useSettings();
+  const { settings: site } = useSettings(); const { user } = useAuth();
   const { lines, clear } = useCart(); const navigate = useNavigate(); const router = { push: (p: string) => navigate(p) };
   const dlg = useRef<HTMLDialogElement>(null); const [placed, setPlaced] = useState(""); const closing = useRef(false);
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState("");
@@ -35,7 +37,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     if (method === "QR_IMAGE" && !file) { setErr("Please upload your payment screenshot first."); return; }
     setBusy(true);
     const f = new FormData(e.currentTarget); const v = (k: string) => String(f.get(k) ?? "");
-    const res = await fetch("/api/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+    const res = await api("/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       customer: { name: v("name"), email: v("email"), phone: v("phone"), address: v("address"), notes: v("notes") || undefined, facebook: v("facebook") || undefined, telegram: v("telegram") || undefined }, area, method,
       lines: lines.map((l) => ({ productId: l.id, qty: l.qty })), code: code.trim() || undefined }) });
     const data = await res.json().catch(() => ({}));
@@ -57,7 +59,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3"; const opt = "flex items-start gap-3 rounded-xl border border-sky-border bg-white p-4";
   return (<div className="grid gap-8 md:grid-cols-[1fr_320px]"><form onSubmit={submit} className="space-y-3"><h1 className="text-3xl font-extrabold">Checkout</h1>
     <label className="block">Full name<input name="name" required minLength={2} autoComplete="name" placeholder="Example: Sok Dara" className={cls} /></label>
-    <label className="block">Email (optional)<input name="email" type="email" autoComplete="email" placeholder="Example: sokdara@gmail.com" className={cls} /></label>
+    <label className="block">Email (optional)<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
     <label className="block">Phone<input name="phone" type="tel" required minLength={6} autoComplete="tel" placeholder="Example: 012 345 678" className={cls} /></label>
     <div className="grid gap-3 sm:grid-cols-2"><label className="block">Facebook name (optional)<input name="facebook" maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
       <label className="block">Telegram username (optional)<input name="telegram" maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
