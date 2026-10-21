@@ -1,0 +1,5 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+html{background:#F4FAFF}
+body{background:#F4FAFF;color:#243447;font-family:ui-rounded,"Nunito","Segoe UI",system-ui,sans-serif}
+:focus-visible{outline:3px solid #6CB8F5;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
