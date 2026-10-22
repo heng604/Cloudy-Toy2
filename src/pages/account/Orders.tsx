@@ -35,7 +35,7 @@ function List({ email }: { email: string }) {
             {o.discountCents > 0 && <p className="flex justify-between text-green-700"><span>Discount{o.discountCode ? ` (${o.discountCode})` : ""}</span><span>−{usd(o.discountCents)}</span></p>}
             <p className="flex justify-between text-mute"><span>Delivery</span><span>{usd(o.shippingCents)}</span></p>
             <p className="flex justify-between font-extrabold"><span>Total</span><span>{usd(o.totalCents)}</span></p></div>
-          <Link to={`/payment/${o.orderNumber}`} className="inline-block text-sm font-semibold underline">{o.paymentStatus === "PAID" ? "View order" : "View order / pay"}</Link></li>)}</ul>}
+          <Link to={`/payment/${o.orderNumber}`} className="inline-block text-sm font-semibold underline">{o.paymentStatus === "PAID" ? "View order" : "View order / pay"}</Link> <Link to={`/invoice/${o.orderNumber}`} className="ml-3 inline-block text-sm font-semibold underline">🧾 Invoice</Link></li>)}</ul>}
       </>}</div>);
 }
 export default function AccountOrders() { useTitle("Order history"); return <RequireUser>{(u) => <List email={u.email ?? u.id} />}</RequireUser>; }

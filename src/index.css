@@ -49,3 +49,14 @@ button,input,select,textarea{font-family:inherit;color:inherit}
 .menu-in{animation:menuIn .25s ease-out}
 .menu-item{opacity:0;animation:itemIn .3s ease-out forwards}
 .badge-pop{animation:badgePop .4s ease-out}
+
+/* ---------- Invoice: print the invoice only (A4), at full size ---------- */
+@media print{
+  header,footer,.no-print{display:none!important}
+  html,body{background:#fff!important}
+  main{padding:0!important}
+  .invoice-print-box{height:auto!important}
+  .invoice-print-inner{transform:none!important;margin-inline:auto;zoom:.98}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:A4;margin:8mm}
+}

@@ -14,7 +14,7 @@ import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDi
 import { saveOrder, getOrder, updateOrder, listAllOrders, listOrdersByEmail, deleteAllOrders } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
-import { sendAdminEmail, sendPaidOrderEmail } from "./lib/email";
+import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail } from "./lib/email";
 import { uploadProof, deleteProofs, proofUrls } from "./lib/proofStore";
 import { ordersDataset, transactionsDataset, productsDataset, stockDataset } from "./lib/exports";
 import { toCsv } from "../shared/csv";
@@ -103,6 +103,8 @@ api.post("/checkout", wrap(async (req, res) => {
       const r = await sendAdminEmail(order); // order is never lost if email fails; status is recorded (admin can press "Resend email")
       await updateOrder(orderNumber, (x) => { x.email = { status: r.status, detail: r.detail, attempts: 1 }; });
     } catch (e) { console.error("[checkout email]", orderNumber, e); } // the order is already saved and stock reduced: never answer "could not place the order" because of email
+    try { const r = await sendCustomerEmail(order, "placed"); await updateOrder(orderNumber, (x) => { x.customerEmail = { ...r, kind: "placed" }; }); } // personal invoice to the customer; never blocks the order
+    catch (e) { console.error("[customer email]", orderNumber, e); }
     return res.json({ orderNumber });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
@@ -172,12 +174,20 @@ admin.post("/orders/:n/mark-paid", wrap(async (req, res) => {
   const o = await getOrder(String(req.params.n));
   if (!o || !canPay(o.paymentStatus, "PAID")) return res.json({ ok: false });
   await updateOrder(o.orderNumber, (x) => { x.paymentStatus = "PAID"; x.paidAt = new Date().toISOString(); x.paidManuallyBy = adminOf(req).email ?? "admin"; });
+  try { const paid = await getOrder(o.orderNumber); if (paid) { const r = await sendCustomerEmail(paid, "paid"); await updateOrder(o.orderNumber, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); } } // "payment received" receipt
+  catch (e) { console.error("[paid receipt email]", o.orderNumber, e); }
   res.json({ ok: true });
 }));
 admin.post("/orders/:n/resend-email", wrap(async (req, res) => {
   const o = await getOrder(String(req.params.n)); if (!o) return res.status(404).json({ ok: false });
   const r = o.claimedPaidAt ? await sendPaidOrderEmail(o) : await sendAdminEmail(o);
   await updateOrder(o.orderNumber, (x) => { x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; });
+  res.json({ ok: r.status === "SENT", status: r.status, detail: r.detail });
+}));
+admin.post("/orders/:n/resend-invoice", wrap(async (req, res) => {
+  const o = await getOrder(String(req.params.n)); if (!o) return res.status(404).json({ ok: false });
+  const kind = o.paymentStatus === "PAID" ? "paid" : "placed"; const r = await sendCustomerEmail(o, kind);
+  await updateOrder(o.orderNumber, (x) => { x.customerEmail = { ...r, kind }; });
   res.json({ ok: r.status === "SENT", status: r.status, detail: r.detail });
 }));
 admin.post("/transactions/clear", wrap(async (_req, res) => {

@@ -4,7 +4,7 @@ export type StoredOrder = {
   items: { productId: string; sku: string; name: string; qty: number; unitCents: number; lineCents: number }[];
   subtotalCents: number; discountCents: number; shippingCents: number; totalCents: number; currency: "USD";
   discountCode?: string; accountEmail?: string; paymentStatus: "PENDING" | "PAID"; paidAt?: string; paidManuallyBy?: string; paymentReference: string;
-  claimedPaidAt?: string; paymentProof?: string; proofAt?: string; claimEmail?: { status: "SENT" | "SKIPPED" | "FAILED"; detail?: string };
+  claimedPaidAt?: string; paymentProof?: string; proofAt?: string; claimEmail?: { status: "SENT" | "SKIPPED" | "FAILED"; detail?: string }; customerEmail?: { status: "SENT" | "SKIPPED" | "FAILED"; detail?: string; kind?: "placed" | "paid" };
   email: { status: "NONE" | "SENT" | "SKIPPED" | "FAILED"; detail?: string; attempts: number };
 };
 export type Settings = { shipPhnomPenhCents: number; shipProvinceCents: number; telegramUrl: string; facebookUrl: string; logoUrl: string; banners: string[]; qrUrl: string };

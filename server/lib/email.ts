@@ -1,6 +1,7 @@
 import type { StoredOrder } from "../../shared/types";
 import { methodLabel, areaLabel } from "../../shared/delivery";
 import { ADMIN_EMAIL } from "../../shared/admin";
+import { customerHtml, customerSubject, type CustomerMailKind } from "./customerEmail";
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 export function adminSubject(o: StoredOrder) { return `[Cloudy-Toy] New Order #${o.orderNumber} - ${o.method === "COD" ? "PAY WITH DELIVERY" : "QR PAYMENT (verify manually)"}`; }
@@ -34,14 +35,14 @@ const validEmail = (v: string | undefined) => !!v && /^[^\s@<>]+@[^\s@<>]+\.[^\s
  *  - Each request times out after 4s (hosting platforms kill slow functions) and network errors / 429 / 5xx are retried once.
  *  - If the configured sender is rejected (4xx, e.g. domain not verified yet), it retries with Resend's test sender, one recipient at a time,
  *    because the test sender is only allowed to reach the Resend account owner: the admin gets the order if ANY inbox is accepted. */
-async function deliver(subject: string, html: string, o: StoredOrder): Promise<SendResult> {
+async function deliver(subject: string, html: string, o: StoredOrder, customerTo?: string): Promise<SendResult> {
   try {
     const key = process.env.RESEND_API_KEY?.trim();
     if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in your environment variables" };
     const text = plain(html);
     const send = async (from: string, to: string[]): Promise<SendResult> => {
       const body = JSON.stringify({ from, to, subject, html, text,
-        ...(validEmail(o.customer.email) ? { reply_to: o.customer.email } : {}), // admin can reply straight to the customer
+        ...(customerTo ? { reply_to: recipients()[0] } : validEmail(o.customer.email) ? { reply_to: o.customer.email } : {}), // admin mail: reply goes to the customer; customer mail: reply goes to the shop
         headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}` } });
       let detail = "";
       for (let attempt = 1; attempt <= 2; attempt++) {
@@ -55,11 +56,11 @@ async function deliver(subject: string, html: string, o: StoredOrder): Promise<S
       }
       return { status: "FAILED", detail };
     };
-    const to = recipients();
+    const to = customerTo ? [customerTo] : recipients();
     if (!to.length) return { status: "FAILED", detail: "No admin email configured (ADMIN_NOTIFICATION_EMAIL)" };
     const primary = fromAddress(process.env.EMAIL_FROM);
     let r = await send(primary, to);
-    if (r.status === "FAILED" && /HTTP (400|401|403|422)/.test(r.detail ?? "")) {
+    if (!customerTo && r.status === "FAILED" && /HTTP (400|401|403|422)/.test(r.detail ?? "")) { // customers are never sent through the test sender (it can only reach the account owner)
       const first = r.detail;
       if (primary !== TEST_SENDER || to.length > 1) {
         let ok = 0; let last = "";
@@ -87,3 +88,7 @@ export const paidOrderSubject = (o: StoredOrder) => `[Cloudy-Toy] New Order #${o
 const proofNote = (o: StoredOrder) => o.paymentProof ? `<p style="background:#d1f2d1;padding:10px"><b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc(o.orderNumber)}).</p>` : "";
 export const sendPaidOrderEmail = (o: StoredOrder) => deliver(paidOrderSubject(o), claimHtml(o) + proofNote(o) + "<hr>" + adminHtml(o), o);
 export const sendPaidClaimEmail = (o: StoredOrder) => deliver(claimSubject(o), claimHtml(o), o);
+
+/** Personal invoice e-mail to the customer. SKIPPED when they gave no valid address. Never throws. */
+export const sendCustomerEmail = (o: StoredOrder, kind: CustomerMailKind): Promise<SendResult> =>
+  validEmail(o.customer.email) ? deliver(customerSubject(o, kind), customerHtml(o, kind), o, o.customer.email.trim()) : Promise.resolve({ status: "SKIPPED", detail: "Customer gave no email address" });
