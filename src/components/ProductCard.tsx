@@ -9,7 +9,7 @@ export default function ProductCard({p}:{p:Product}) {
   return (
     <article className="group transition-transform duration-200 hover:-translate-y-1.5 overflow-hidden rounded-xl2 border border-sky-border bg-white shadow-soft hover:shadow-lift">
       <Link to={`/product/${p.slug}`} className="relative block overflow-hidden bg-sky-pale">
-        {isNewProduct(p.createdAt) && !out && <span className="absolute left-3 top-3 z-10 rounded-full bg-ink px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-white shadow-soft">{t("New")}</span>}
+        {isNewProduct(p.createdAt) && !out && <span className="absolute left-3 top-3 z-10 rounded-full bg-red-600 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-white shadow-soft">{t("New")}</span>}
         <img src={img?.src??FALLBACK_IMG} alt={img?.alt??p.name} loading="lazy" decoding="async" width={400} height={300} className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-105"/>
       </Link>
       <div className="space-y-1.5 p-3 sm:space-y-2 sm:p-4">

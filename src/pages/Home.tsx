@@ -10,9 +10,9 @@ export default function Home() {
   const { data: products } = useProducts(); const { settings: { banners } } = useSettings();
   return (<>
     <section className="rounded-xl2 bg-sky-pale px-5 py-8 text-center shadow-soft sm:p-10 lg:py-14">
-      <h1 className="text-3xl font-extrabold sm:text-5xl lg:text-6xl">{t("Little Toys, Big Happiness.")}</h1>
-      <p className="mx-auto mt-4 max-w-xl text-mute">{t("Thoughtfully chosen toys for every age, delivered across Cambodia.")}</p>
-      <div className="mt-6 flex flex-wrap justify-center gap-3"><Link to="/shop" className="rounded-full bg-sky px-6 py-3 font-bold hover:bg-sky-hover">{t("Shop Now")}</Link><Link to="/shop" className="rounded-full border border-sky-border bg-white px-6 py-3 font-bold">{t("Explore Toys")}</Link></div>
+      <h1 className="text-3xl font-extrabold sm:text-5xl lg:text-6xl">{t("Collect a little happiness")}</h1>
+      <p className="mx-auto mt-4 max-w-xl text-mute">{t("Handpicked toys from our heart, bringing a little smile to your world.")}</p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3"><Link to="/shop" className="rounded-full bg-sky px-6 py-3 font-bold hover:bg-sky-hover">{t("Shop Now")}</Link><Link to="/shop" className="rounded-full border border-sky-border bg-white px-6 py-3 font-bold">{t("Explore product")}</Link></div>
     </section>
     <BannerSlider images={Array.isArray(banners) ? banners : []} />
     <section className="mt-12"><h2 className="mb-4 text-2xl font-extrabold">{t("Featured toys")}</h2>

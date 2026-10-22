@@ -1,5 +1,5 @@
 export type StoredOrder = {
-  orderNumber: string; createdAt: string; area: "PHNOM_PENH" | "PROVINCE"; method: "COD" | "QR_IMAGE";
+  orderNumber: string; createdAt: string; area: "PHNOM_PENH" | "PROVINCE"; province?: string; method: "COD" | "QR_IMAGE";
   customer: { name: string; email: string; phone: string; address: string; notes?: string; facebook?: string; telegram?: string };
   items: { productId: string; sku: string; name: string; qty: number; unitCents: number; lineCents: number }[];
   subtotalCents: number; discountCents: number; shippingCents: number; totalCents: number; currency: "USD";

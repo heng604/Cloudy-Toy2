@@ -1,12 +1,12 @@
 import type { StoredOrder } from "../../shared/types";
 import type { Product } from "../../shared/products";
-import { methodLabel } from "../../shared/delivery";
+import { methodLabel, areaLabel } from "../../shared/delivery";
 import { stockStatus } from "../../shared/products";
 import { stamp, usd } from "../../shared/stats";
 import type { CsvCol } from "../../shared/csv";
 import type { PdfCol } from "./pdf";
 export type Dataset = { name: string; title: string; csv: CsvCol<any>[]; pdf: PdfCol[]; pdfRow: (r: any) => string[]; rows: any[] };
-const area = (o: StoredOrder) => (o.area === "PHNOM_PENH" ? "Phnom Penh" : "Province");
+const area = (o: StoredOrder) => areaLabel(o);
 const items = (o: StoredOrder) => o.items.map((i) => `${i.name} x${i.qty}`).join("; ");
 const qty = (o: StoredOrder) => o.items.reduce((s, i) => s + i.qty, 0);
 

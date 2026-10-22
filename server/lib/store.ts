@@ -5,7 +5,7 @@ export type { StoredOrder };
 const d = (c: number) => c / 100;
 const toRow = (o: StoredOrder) => ({
   order_number: o.orderNumber, customer_name: o.customer.name, customer_email: o.customer.email.toLowerCase(), customer_phone: o.customer.phone,
-  shipping_address: { address: o.customer.address, area: o.area }, delivery_instructions: o.customer.notes ?? null,
+  shipping_address: { address: o.customer.address, area: o.area, province: o.province ?? null }, delivery_instructions: o.customer.notes ?? null,
   subtotal: d(o.subtotalCents), discount: d(o.discountCents), shipping_fee: d(o.shippingCents), total: d(o.totalCents), currency: o.currency,
   payment_status: o.paymentStatus, created_at: o.createdAt, updated_at: new Date().toISOString(), data: o,
 });

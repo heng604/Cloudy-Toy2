@@ -24,3 +24,30 @@ describe("customer paid-claim email", () => {
 describe("admin inbox list", () => {
   it("accepts several comma separated admin emails", () => { process.env.ADMIN_NOTIFICATION_EMAIL = "a@x.com, b@y.com"; expect(adminInbox()).toContain("b@y.com"); delete process.env.ADMIN_NOTIFICATION_EMAIL; });
 });
+
+import { vi } from "vitest";
+describe("sender fallback", () => {
+  it("retries with the Resend test sender when the domain sender is rejected", async () => {
+    process.env.RESEND_API_KEY = "re_test"; process.env.EMAIL_FROM = "Cloudy-Toy <orders@cloudytoys.com>";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: { body: string }) => { const f = JSON.parse(init.body).from; calls.push(f); return f.includes("resend.dev") ? new Response("{}", { status: 200 }) : new Response("domain not verified", { status: 403 }); }));
+    const r = await sendAdminEmail(o);
+    expect(r.status).toBe("SENT"); expect(calls).toEqual(["Cloudy-Toy <orders@cloudytoys.com>", "Cloudy-Toy <onboarding@resend.dev>"]);
+    vi.unstubAllGlobals(); delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM;
+  });
+});
+
+describe("never throws", () => {
+  it("returns FAILED (not an exception) when the network is down", async () => {
+    process.env.RESEND_API_KEY = "re_test"; process.env.EMAIL_FROM = "Cloudy-Toy <orders@cloudytoys.com>";
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    const r = await sendAdminEmail(o); expect(r.status).toBe("FAILED");
+    vi.unstubAllGlobals(); delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM;
+  });
+  it("test sender: succeeds if at least one admin inbox is accepted", async () => {
+    process.env.RESEND_API_KEY = "re_test"; process.env.EMAIL_FROM = "Cloudy-Toy <orders@cloudytoys.com>"; process.env.ADMIN_NOTIFICATION_EMAIL = "owner@x.com, other@y.com";
+    vi.stubGlobal("fetch", vi.fn(async (_u: string, init: { body: string }) => { const b = JSON.parse(init.body); return b.from.includes("orders@cloudytoys.com") || b.to[0] === "other@y.com" ? new Response("no", { status: 403 }) : new Response("{}", { status: 200 }); }));
+    const r = await sendAdminEmail(o); expect(r.status).toBe("SENT");
+    vi.unstubAllGlobals(); delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM; delete process.env.ADMIN_NOTIFICATION_EMAIL;
+  });
+});

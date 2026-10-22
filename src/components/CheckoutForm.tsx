@@ -11,8 +11,9 @@ import { useSettings } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { PROVINCES } from "@shared/provinces";
 export default function CheckoutForm({ fees, products, telegram = "", facebook = "" }: { fees: { pp: number; prov: number }; products: CartProduct[]; telegram?: string; facebook?: string }) {
-  const { settings: site } = useSettings(); const { user } = useAuth(); const { t } = useI18n();
+  const { settings: site } = useSettings(); const { user } = useAuth(); const { t, lang } = useI18n(); const [province, setProvince] = useState("");
   const { lines, clear } = useCart(); const navigate = useNavigate(); const router = { push: (p: string) => navigate(p) };
   const dlg = useRef<HTMLDialogElement>(null); const [placed, setPlaced] = useState(""); const closing = useRef(false);
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState("");
@@ -39,7 +40,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     setBusy(true);
     const f = new FormData(e.currentTarget); const v = (k: string) => String(f.get(k) ?? "");
     const res = await api("/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-      customer: { name: v("name"), email: v("email"), phone: v("phone"), address: v("address"), notes: v("notes") || undefined, facebook: v("facebook") || undefined, telegram: v("telegram") || undefined }, area, method,
+      customer: { name: v("name"), email: v("email"), phone: v("phone"), address: v("address"), notes: v("notes") || undefined, facebook: v("facebook") || undefined, telegram: v("telegram") || undefined }, area, ...(area === "PROVINCE" ? { province } : {}), method,
       lines: lines.map((l) => ({ productId: l.id, qty: l.qty })), code: code.trim() || undefined }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setErr(data.error ?? "Something went wrong."); setBusy(false); return; }
@@ -60,15 +61,16 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3"; const opt = "flex items-start gap-3 rounded-xl border border-sky-border bg-white p-4";
   return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form onSubmit={submit} className="space-y-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Checkout")}</h1>
     <label className="block">{t("Full name")}<input name="name" required minLength={2} autoComplete="name" placeholder="Example: Sok Dara" className={cls} /></label>
-    <label className="block">{t("Email (optional)")}<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
+    <label className="block">{t("Email")}<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
     <label className="block">{t("Phone")}<input name="phone" type="tel" required minLength={6} autoComplete="tel" placeholder="Example: 012 345 678" className={cls} /></label>
-    <div className="grid gap-3 sm:grid-cols-2"><label className="block">{t("Facebook name (optional)")}<input name="facebook" maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
-      <label className="block">{t("Telegram username (optional)")}<input name="telegram" maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
+    <div className="grid gap-3 sm:grid-cols-2"><label className="block">{t("Facebook name")}<input name="facebook" maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
+      <label className="block">{t("Telegram username")}<input name="telegram" maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
     <fieldset className="space-y-2"><legend className="font-semibold">{t("Delivery area")}</legend>
       <label className={opt}><input type="radio" name="area" checked={area === "PHNOM_PENH"} onChange={() => pickArea("PHNOM_PENH")} />{t("Phnom Penh")} · {money(fees.pp / 100)}</label>
-      <label className={opt}><input type="radio" name="area" checked={area === "PROVINCE"} onChange={() => pickArea("PROVINCE")} />{t("Province")} · {money(fees.prov / 100)}</label></fieldset>
+      <label className={opt}><input type="radio" name="area" checked={area === "PROVINCE"} onChange={() => pickArea("PROVINCE")} />{t("Province")} · {money(fees.prov / 100)}</label>
+      {area === "PROVINCE" && <label className="block">{t("Choose province")}<select name="province" required value={province} onChange={(e) => setProvince(e.target.value)} className={cls}><option value="" disabled>{t("Select your province")}</option>{PROVINCES.map((p) => <option key={p.en} value={p.en}>{lang === "km" ? p.km : p.en}</option>)}</select></label>}</fieldset>
     <label className="block">{t("Delivery address")}<textarea name="address" required minLength={5} rows={3} placeholder="Example: House 12, Street 271, Sangkat Tuol Tumpung 1, Khan Chamkar Mon, Phnom Penh" className={cls} /></label>
-    <label className="block">{t("Delivery instructions (optional)")}<input name="notes" placeholder="Example: Call me before arriving" className={cls} /></label>
+    <label className="block">{t("Delivery instructions")}<input name="notes" placeholder="Example: Call me before arriving" className={cls} /></label>
     <fieldset className="space-y-2"><legend className="font-semibold">{t("Payment")}</legend>
       <label className={`${opt} opacity-50`}><input type="radio" name="pay" disabled />Scan with Bakong (KHQR) · Coming soon</label>
       <label className={opt}><input type="radio" name="pay" checked={method === "QR_IMAGE"} onChange={() => setMethod("QR_IMAGE")} />Scan QR image and pay. We verify it with you on Telegram or Facebook.</label>
@@ -79,7 +81,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       <div className="mx-auto max-w-sm space-y-2 text-left"><label className="block text-sm font-semibold">Upload your payment screenshot (required)
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => pickProof(e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-xl border border-sky-border bg-white px-3 py-2 text-sm font-normal" /></label>
         {preview && <img src={preview} alt="Your payment screenshot" className="mx-auto max-h-48 rounded-lg border border-sky-border" />}</div></div>}
-    <div><label className="block">{t("Discount code (optional)")}<span className="mt-1 flex gap-2"><input value={code} placeholder="Example: TOY10" onChange={(e) => { setCode(e.target.value.toUpperCase()); setApplied(null); setCodeMsg(""); }} maxLength={40} autoComplete="off" className={`${cls} font-mono uppercase`} />
+    <div><label className="block">{t("Discount code")}<span className="mt-1 flex gap-2"><input value={code} placeholder="Example: TOY10" onChange={(e) => { setCode(e.target.value.toUpperCase()); setApplied(null); setCodeMsg(""); }} maxLength={40} autoComplete="off" className={`${cls} font-mono uppercase`} />
       <button type="button" onClick={applyCode} disabled={checking || !code.trim()} className="rounded-full border border-sky-border bg-white px-5 font-bold hover:bg-sky-pale disabled:opacity-50">{checking ? "…" : t("Apply")}</button></span></label>
       <p className="mt-1 text-xs text-mute">{t("Takes 10% to 50% off your subtotal.")}</p>{applied && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div>
     {err && <p role="alert" className="text-red-700">{err}</p>}

@@ -1,3 +1,4 @@
+import { PROVINCE_NAMES } from "../shared/provinces";
 import "./env";
 import express, { type Request, type Response } from "express";
 import compression from "compression";
@@ -55,7 +56,7 @@ const catalogOf = (products: Awaited<ReturnType<typeof listProducts>>) => new Ma
 const Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
   lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99) })).min(1).max(50),
-  area: z.enum(["PHNOM_PENH", "PROVINCE"]), method: z.enum(["COD", "QR_IMAGE"]), code: z.string().trim().max(40).optional(),
+  area: z.enum(["PHNOM_PENH", "PROVINCE"]), province: z.enum(PROVINCE_NAMES).optional(), method: z.enum(["COD", "QR_IMAGE"]), code: z.string().trim().max(40).optional(),
 });
 const LABELS: Record<string, string> = { name: "Full name (at least 2 characters)", email: "Email (a valid address)", phone: "Phone (at least 6 digits)", address: "Delivery address (5 to 400 characters)", notes: "Delivery instructions (max 300 characters)", area: "Delivery area", method: "Payment method" };
 api.post("/checkout", wrap(async (req, res) => {
@@ -67,6 +68,7 @@ api.post("/checkout", wrap(async (req, res) => {
   const { customer, lines, area, method } = parsed.data; const codeIn = normalizeCode(parsed.data.code ?? "");
   if (codeIn && tooMany(`c:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (codeIn && !CODE_RE.test(codeIn)) return res.status(400).json({ error: "That discount code is not valid." });
+  if (area === "PROVINCE" && !parsed.data.province) return res.status(400).json({ error: "Please choose your province." });
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const [settings, products, acct] = await Promise.all([getSettings(), listProducts(), userFromReq(req)]);
   const catalog = catalogOf(products); let usedCode: string | undefined;
@@ -79,17 +81,17 @@ api.post("/checkout", wrap(async (req, res) => {
     }
     const t = computeTotals(lines, catalog, ship, discount);
     const orderNumber = `CT-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
-    const order = { orderNumber, createdAt: new Date().toISOString(), area, method, customer,
+    const order = { orderNumber, createdAt: new Date().toISOString(), area, ...(area === "PROVINCE" ? { province: parsed.data.province } : {}), method, customer,
       items: t.items.map((i) => ({ productId: i.productId, sku: products.find((p) => p.id === i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents })),
       subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
     const lines2 = t.items.map((i) => ({ productId: i.productId, qty: i.qty }));
     await decrementStock(lines2); // atomic in the database; throws INSUFFICIENT_STOCK without changing anything
     try { await saveOrder(order); } catch (e) { await restoreStock(lines2); throw e; }
-    { // EVERY new order (pay with delivery AND QR) is emailed to the admin right away; QR orders get a second email when the customer presses "I have paid"
+    try { // EVERY new order (pay with delivery AND QR) is emailed to the admin right away; QR orders get a second email when the customer presses "I have paid"
       const r = await sendAdminEmail(order); // order is never lost if email fails; status is recorded (admin can press "Resend email")
       await updateOrder(orderNumber, (x) => { x.email = { status: r.status, detail: r.detail, attempts: 1 }; });
-    }
+    } catch (e) { console.error("[checkout email]", orderNumber, e); } // the order is already saved and stock reduced: never answer "could not place the order" because of email
     return res.json({ orderNumber });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";

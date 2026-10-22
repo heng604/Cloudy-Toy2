@@ -1,5 +1,34 @@
 import{createRequire as __cr}from'module';const require=__cr(import.meta.url);
 
+// shared/provinces.ts
+var PROVINCES = [
+  { en: "Banteay Meanchey", km: "\u1794\u1793\u17D2\u1791\u17B6\u1799\u1798\u17B6\u1793\u1787\u17D0\u1799" },
+  { en: "Battambang", km: "\u1794\u17B6\u178F\u17CB\u178A\u17C6\u1794\u1784" },
+  { en: "Kampong Cham", km: "\u1780\u17C6\u1796\u1784\u17CB\u1785\u17B6\u1798" },
+  { en: "Kampong Chhnang", km: "\u1780\u17C6\u1796\u1784\u17CB\u1786\u17D2\u1793\u17B6\u17C6\u1784" },
+  { en: "Kampong Speu", km: "\u1780\u17C6\u1796\u1784\u17CB\u179F\u17D2\u1796\u17BA" },
+  { en: "Kampong Thom", km: "\u1780\u17C6\u1796\u1784\u17CB\u1792\u17C6" },
+  { en: "Kampot", km: "\u1780\u17C6\u1796\u178F" },
+  { en: "Kandal", km: "\u1780\u178E\u17D2\u178A\u17B6\u179B" },
+  { en: "Kep", km: "\u1780\u17C2\u1794" },
+  { en: "Koh Kong", km: "\u1780\u17C4\u17C7\u1780\u17BB\u1784" },
+  { en: "Kratie", km: "\u1780\u17D2\u179A\u1785\u17C1\u17C7" },
+  { en: "Mondulkiri", km: "\u1798\u178E\u17D2\u178C\u179B\u1782\u17B7\u179A\u17B8" },
+  { en: "Oddar Meanchey", km: "\u17A7\u178F\u17D2\u178F\u179A\u1798\u17B6\u1793\u1787\u17D0\u1799" },
+  { en: "Pailin", km: "\u1794\u17C9\u17C3\u179B\u17B7\u1793" },
+  { en: "Preah Sihanouk", km: "\u1796\u17D2\u179A\u17C7\u179F\u17B8\u17A0\u1793\u17BB" },
+  { en: "Preah Vihear", km: "\u1796\u17D2\u179A\u17C7\u179C\u17B7\u17A0\u17B6\u179A" },
+  { en: "Prey Veng", km: "\u1796\u17D2\u179A\u17C3\u179C\u17C2\u1784" },
+  { en: "Pursat", km: "\u1796\u17C4\u1792\u17B7\u17CD\u179F\u17B6\u178F\u17CB" },
+  { en: "Ratanakiri", km: "\u179A\u178F\u1793\u1782\u17B7\u179A\u17B8" },
+  { en: "Siem Reap", km: "\u179F\u17C0\u1798\u179A\u17B6\u1794" },
+  { en: "Stung Treng", km: "\u179F\u17D2\u1791\u17B9\u1784\u178F\u17D2\u179A\u17C2\u1784" },
+  { en: "Svay Rieng", km: "\u179F\u17D2\u179C\u17B6\u1799\u179A\u17C0\u1784" },
+  { en: "Takeo", km: "\u178F\u17B6\u1780\u17C2\u179C" },
+  { en: "Tbong Khmum", km: "\u178F\u17D2\u1794\u17BC\u1784\u1783\u17D2\u1798\u17BB\u17C6" }
+];
+var PROVINCE_NAMES = PROVINCES.map((p) => p.en);
+
 // server/env.ts
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
@@ -158,34 +187,12 @@ var MAX_PERCENT = 50;
 var percentOk = (n) => Number.isInteger(n) && n >= MIN_PERCENT && n <= MAX_PERCENT;
 var CODE_RE = /^[A-Z0-9_-]{3,30}$/;
 var normalizeCode = (s) => s.trim().toUpperCase();
-function productCodeDiscount(items2, percentByProduct) {
-  const cents = items2.reduce((s, i) => {
-    const pct = percentByProduct.get(i.productId);
-    return pct ? s + Math.round(i.lineCents * pct / 100) : s;
-  }, 0);
-  return cents > 0 ? { ok: true, discountCents: cents } : { ok: false, error: "That discount code is not valid for the items in your cart." };
-}
 function subtotalCodeDiscount(subtotalCents, percent) {
   const cents = Math.round(subtotalCents * percent / 100);
   return cents > 0 ? { ok: true, discountCents: cents } : { ok: false, error: "That discount code is not valid for the items in your cart." };
 }
 
 // server/lib/discountStore.ts
-async function getProductDiscount(productId) {
-  const r = must(await db().from("product_discounts").select("code,percent").eq("product_id", productId).maybeSingle());
-  return r ? { code: r.code, percent: Number(r.percent) } : null;
-}
-async function setProductDiscount(productId, d2) {
-  if (!d2) {
-    must(await db().from("product_discounts").delete().eq("product_id", productId).select("product_id"));
-    return;
-  }
-  must(await db().from("product_discounts").upsert({ product_id: productId, code: d2.code, percent: d2.percent }).select("product_id"));
-}
-async function percentByProductForCode(code) {
-  const rows = must(await db().from("product_discounts").select("product_id,percent").eq("code", code));
-  return new Map(rows.map((r) => [r.product_id, Number(r.percent)]));
-}
 async function listStoreDiscounts() {
   const rows = must(await db().from("store_discounts").select("code,percent,created_at").order("created_at", { ascending: true }));
   return rows.map((r) => ({ code: r.code, percent: Number(r.percent), createdAt: r.created_at }));
@@ -196,25 +203,20 @@ async function getStoreDiscountPercent(code) {
 }
 async function createStoreDiscount(code, percent) {
   if (await getStoreDiscountPercent(code) !== null) return false;
-  const used = must(await db().from("product_discounts").select("product_id").eq("code", code).limit(1));
-  if (used.length) return false;
   must(await db().from("store_discounts").insert({ code, percent }).select("code"));
   return true;
+}
+async function updateStoreDiscount(code, percent) {
+  const rows = must(await db().from("store_discounts").update({ percent }).eq("code", code).select("code"));
+  return rows.length > 0;
 }
 async function deleteStoreDiscount(code) {
   must(await db().from("store_discounts").delete().eq("code", code).select("code"));
 }
-async function listProductDiscounts() {
-  const rows = must(await db().from("product_discounts").select("product_id,code,percent,products(name,sku)").order("created_at", { ascending: false }));
-  return rows.map((r) => {
-    const p = Array.isArray(r.products) ? r.products[0] : r.products;
-    return { productId: r.product_id, code: r.code, percent: Number(r.percent), name: p?.name ?? "(deleted product)", sku: p?.sku ?? "" };
-  });
-}
 var resolveDiscount = async (code, items2) => {
   const pct = await getStoreDiscountPercent(code);
-  if (pct !== null) return subtotalCodeDiscount(items2.reduce((s, i) => s + i.lineCents, 0), pct);
-  return productCodeDiscount(items2, await percentByProductForCode(code));
+  if (pct === null) return { ok: false, error: "That discount code is not valid." };
+  return subtotalCodeDiscount(items2.reduce((s, i) => s + i.lineCents, 0), pct);
 };
 
 // server/lib/store.ts
@@ -224,7 +226,7 @@ var toRow = (o) => ({
   customer_name: o.customer.name,
   customer_email: o.customer.email.toLowerCase(),
   customer_phone: o.customer.phone,
-  shipping_address: { address: o.customer.address, area: o.area },
+  shipping_address: { address: o.customer.address, area: o.area, province: o.province ?? null },
   delivery_instructions: o.customer.notes ?? null,
   subtotal: d(o.subtotalCents),
   discount: d(o.discountCents),
@@ -354,6 +356,7 @@ async function savePage(slug, patch) {
 // shared/delivery.ts
 var shippingFor = (a, s) => a === "PHNOM_PENH" ? s.shipPhnomPenhCents : s.shipProvinceCents;
 var methodAllowed = (m, a) => m === "QR_IMAGE" || m === "COD" && a === "PHNOM_PENH";
+var areaLabel = (o) => o.area === "PHNOM_PENH" ? "Phnom Penh" : o.province ? `Province: ${o.province}` : "Province";
 var methodLabel = (m) => m === "COD" ? "Pay with delivery" : "QR image payment";
 
 // server/lib/email.ts
@@ -366,7 +369,7 @@ function adminHtml(o) {
   const note = o.method === "COD" ? `<p style="background:#fff3cd;padding:10px"><b>PAY WITH DELIVERY (Phnom Penh):</b> collect <b>${usd(o.totalCents)}</b> in cash when delivering. Not paid yet.</p>` : `<p style="background:#fff3cd;padding:10px"><b>QR IMAGE PAYMENT, NOT VERIFIED.</b> The customer may have scanned your QR. Check your bank/Bakong app for <b>${usd(o.totalCents)}</b> with order number ${esc(o.orderNumber)}, then mark it paid in Admin &gt; Orders.</p>`;
   const rows = o.items.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.sku)}</td><td>${i.qty}</td><td>${usd(i.unitCents)}</td><td>${usd(i.lineCents)}</td></tr>`).join("");
   return `<h2>New order #${esc(o.orderNumber)}</h2>${note}<p>Created: ${esc(o.createdAt)}<br>Method: ${methodLabel(o.method)}<br>Payment status: ${o.paymentStatus}<br>Reference: ${esc(o.paymentReference)}</p>
-<h3>Customer</h3><p>${esc(o.customer.name)}<br>${esc(o.customer.email || "-")}<br>${esc(o.customer.phone)}<br>Facebook: ${esc(o.customer.facebook ?? "-")}<br>Telegram: ${esc(o.customer.telegram ?? "-")}<br>${o.area === "PHNOM_PENH" ? "Phnom Penh" : "Province"}: ${esc(o.customer.address)}<br>Notes: ${esc(o.customer.notes ?? "-")}</p>
+<h3>Customer</h3><p>${esc(o.customer.name)}<br>${esc(o.customer.email || "-")}<br>${esc(o.customer.phone)}<br>Facebook: ${esc(o.customer.facebook ?? "-")}<br>Telegram: ${esc(o.customer.telegram ?? "-")}<br>${esc(areaLabel(o))}: ${esc(o.customer.address)}<br>Notes: ${esc(o.customer.notes ?? "-")}</p>
 <table border="1" cellpadding="6" cellspacing="0"><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Unit</th><th>Line</th></tr>${rows}</table>
 <p>Subtotal ${usd(o.subtotalCents)}<br>Discount ${usd(o.discountCents)}${o.discountCode ? ` (code ${esc(o.discountCode)})` : ""}<br>Delivery ${usd(o.shippingCents)}<br><b>Total ${usd(o.totalCents)} ${o.currency}</b></p>`;
 }
@@ -379,29 +382,69 @@ function fromAddress(v) {
   return !domain || FREE_MAIL.includes(domain) ? TEST_SENDER : addr;
 }
 var adminInbox = () => process.env.ADMIN_NOTIFICATION_EMAIL || ADMIN_EMAIL;
+var recipients = () => adminInbox().split(",").map((x) => x.trim()).filter(Boolean);
 var plain = (h) => h.replace(/<\/(p|h[1-6]|tr|table)>|<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
-async function deliver(subject, html) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in .env.local" };
+var wait = (ms) => new Promise((r) => setTimeout(r, ms));
+var validEmail = (v) => !!v && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v);
+async function deliver(subject, html, o) {
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: fromAddress(process.env.EMAIL_FROM), to: [adminInbox()], subject, html, text: plain(html) })
-    });
-    return res.ok ? { status: "SENT" } : { status: "FAILED", detail: `Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}` };
+    const key = process.env.RESEND_API_KEY?.trim();
+    if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in your environment variables" };
+    const text = plain(html);
+    const send = async (from, to2) => {
+      const body = JSON.stringify({
+        from, to: to2, subject, html, text,
+        ...validEmail(o.customer.email) ? { reply_to: o.customer.email } : {},
+        headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}` }
+      });
+      let detail = "";
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const res = await fetch("https://api.resend.com/emails", { method: "POST", signal: AbortSignal.timeout(4e3), headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body });
+          if (res.ok) return { status: "SENT" };
+          detail = `Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
+          if (res.status !== 429 && res.status < 500) break;
+        } catch (e) {
+          detail = e instanceof Error ? e.message : "network error";
+        }
+        if (attempt < 2) await wait(500);
+      }
+      return { status: "FAILED", detail };
+    };
+    const to = recipients();
+    if (!to.length) return { status: "FAILED", detail: "No admin email configured (ADMIN_NOTIFICATION_EMAIL)" };
+    const primary = fromAddress(process.env.EMAIL_FROM);
+    let r = await send(primary, to);
+    if (r.status === "FAILED" && /HTTP (400|401|403|422)/.test(r.detail ?? "")) {
+      const first = r.detail;
+      if (primary !== TEST_SENDER || to.length > 1) {
+        let ok = 0;
+        let last = "";
+        for (const one of to) {
+          const x = await send(TEST_SENDER, [one]);
+          if (x.status === "SENT") ok++;
+          else last = x.detail ?? "";
+        }
+        if (ok > 0) return { status: "SENT", detail: `Sent with Resend test sender (${ok}/${to.length} inbox) because the normal sender was rejected (${first}). Verify your domain in Resend to reach every inbox.` };
+        r = { status: "FAILED", detail: `${first} | test sender: ${last}` };
+      }
+    }
+    if (r.status === "FAILED") console.error("[email]", o.orderNumber, r.detail);
+    return r;
   } catch (e) {
-    return { status: "FAILED", detail: e instanceof Error ? e.message : "network error" };
+    const detail = e instanceof Error ? e.message : "unexpected email error";
+    console.error("[email]", o.orderNumber, detail);
+    return { status: "FAILED", detail };
   }
 }
-var sendAdminEmail = (o) => deliver(adminSubject(o), adminHtml(o));
+var sendAdminEmail = (o) => deliver(adminSubject(o), adminHtml(o), o);
 function claimHtml(o) {
   return `<p style="background:#fff3cd;padding:10px"><b>CUSTOMER SAYS THEY PAID (NOT VERIFIED).</b> Check your ABA app for <b>${usd(o.totalCents)}</b> with order number <b>${esc(o.orderNumber)}</b>. Expect a screenshot on Telegram/Facebook. When confirmed, open Admin &gt; Orders &gt; Mark as paid.</p>
-<p>Order: <b>${esc(o.orderNumber)}</b><br>Total: <b>${usd(o.totalCents)} ${o.currency}</b><br>Customer: ${esc(o.customer.name)}<br>Phone: ${esc(o.customer.phone)}<br>Email: ${esc(o.customer.email)}<br>${o.area === "PHNOM_PENH" ? "Phnom Penh" : "Province"}: ${esc(o.customer.address)}<br>Items: ${esc(o.items.map((i) => `${i.name} x${i.qty}`).join(", "))}</p>`;
+<p>Order: <b>${esc(o.orderNumber)}</b><br>Total: <b>${usd(o.totalCents)} ${o.currency}</b><br>Customer: ${esc(o.customer.name)}<br>Phone: ${esc(o.customer.phone)}<br>Email: ${esc(o.customer.email)}<br>${esc(areaLabel(o))}: ${esc(o.customer.address)}<br>Items: ${esc(o.items.map((i) => `${i.name} x${i.qty}`).join(", "))}</p>`;
 }
 var paidOrderSubject = (o) => `[Cloudy-Toy] New Order #${o.orderNumber} - QR PAYMENT, CUSTOMER SAYS PAID (verify)`;
 var proofNote = (o) => o.paymentProof ? `<p style="background:#d1f2d1;padding:10px"><b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc(o.orderNumber)}).</p>` : "";
-var sendPaidOrderEmail = (o) => deliver(paidOrderSubject(o), claimHtml(o) + proofNote(o) + "<hr>" + adminHtml(o));
+var sendPaidOrderEmail = (o) => deliver(paidOrderSubject(o), claimHtml(o) + proofNote(o) + "<hr>" + adminHtml(o), o);
 
 // server/lib/proofStore.ts
 var BUCKET2 = "payment-proofs";
@@ -461,7 +504,7 @@ function sortOrders(orders, sort) {
 }
 
 // server/lib/exports.ts
-var area = (o) => o.area === "PHNOM_PENH" ? "Phnom Penh" : "Province";
+var area = (o) => areaLabel(o);
 var items = (o) => o.items.map((i) => `${i.name} x${i.qty}`).join("; ");
 var qty = (o) => o.items.reduce((s, i) => s + i.qty, 0);
 function ordersDataset(rows) {
@@ -693,10 +736,13 @@ app.use(express.json({ limit: "1mb" }));
 var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 8 } });
 var api = express.Router();
 api.get("/health", (_req, res) => res.json({ ok: true, db: !!(process.env.SUPABASE_SERVICE_ROLE_KEY && (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) }));
+var hint = (m) => /relation .* does not exist|could not find the table|schema cache|column .* does not exist|function .* does not exist|Could not find the function/i.test(m) ? "Database tables are missing or out of date. Open Supabase > SQL Editor, paste supabase/setup_all.sql and click Run (it is safe to run again), then reload." : /not configured|SUPABASE_SERVICE_ROLE_KEY/i.test(m) ? "SUPABASE_SERVICE_ROLE_KEY (or the Supabase URL) is missing in .env.local. Add it and restart npm run dev." : /invalid api key|jwt|apikey/i.test(m) ? "The Supabase key is wrong. Copy the service_role / secret key from Supabase > Project Settings > API into SUPABASE_SERVICE_ROLE_KEY." : /fetch failed|ENOTFOUND|ECONNREFUSED|network/i.test(m) ? "The server cannot reach Supabase. Check VITE_SUPABASE_URL and your internet connection." : "";
 var wrap = (fn) => (req, res) => {
   fn(req, res).catch((e) => {
     console.error("[api]", req.path, e);
-    if (!res.headersSent) res.status(500).json({ error: "Server error" });
+    const msg = e instanceof Error ? e.message : String(e);
+    const body = req.path.startsWith("/admin") ? { error: "Server error", detail: msg, hint: hint(msg) } : { error: "Server error" };
+    if (!res.headersSent) res.status(500).json(body);
   });
 };
 var files = (req, name) => (req.files ?? []).filter((f) => f.fieldname === name && f.size > 0);
@@ -710,6 +756,7 @@ var Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
   lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99) })).min(1).max(50),
   area: z.enum(["PHNOM_PENH", "PROVINCE"]),
+  province: z.enum(PROVINCE_NAMES).optional(),
   method: z.enum(["COD", "QR_IMAGE"]),
   code: z.string().trim().max(40).optional()
 });
@@ -729,6 +776,7 @@ api.post("/checkout", wrap(async (req, res) => {
   const codeIn = normalizeCode(parsed.data.code ?? "");
   if (codeIn && tooMany(`c:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (codeIn && !CODE_RE.test(codeIn)) return res.status(400).json({ error: "That discount code is not valid." });
+  if (area2 === "PROVINCE" && !parsed.data.province) return res.status(400).json({ error: "Please choose your province." });
   if (!methodAllowed(method, area2)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const [settings, products, acct] = await Promise.all([getSettings(), listProducts(), userFromReq(req)]);
   const catalog = catalogOf(products);
@@ -749,6 +797,7 @@ api.post("/checkout", wrap(async (req, res) => {
       orderNumber,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       area: area2,
+      ...area2 === "PROVINCE" ? { province: parsed.data.province } : {},
       method,
       customer,
       items: t.items.map((i) => ({ productId: i.productId, sku: products.find((p) => p.id === i.productId).sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents })),
@@ -771,11 +820,13 @@ api.post("/checkout", wrap(async (req, res) => {
       await restoreStock(lines2);
       throw e;
     }
-    if (method === "COD") {
+    try {
       const r = await sendAdminEmail(order);
       await updateOrder(orderNumber, (x) => {
         x.email = { status: r.status, detail: r.detail, attempts: 1 };
       });
+    } catch (e) {
+      console.error("[checkout email]", orderNumber, e);
     }
     return res.json({ orderNumber });
   } catch (e) {
@@ -813,7 +864,7 @@ api.post("/payment/claim", wrap(async (req, res) => {
   await updateOrder(n, (x) => {
     x.claimedPaidAt = x.claimedPaidAt ?? (/* @__PURE__ */ new Date()).toISOString();
     x.claimEmail = r;
-    x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 };
+    x.email = r.status !== "SENT" && x.email.status === "SENT" ? { ...x.email, attempts: x.email.attempts + 1 } : { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 };
   });
   if (r.status !== "SENT") console.error("[claim email]", n, r.status, r.detail);
   return res.json({ ok: r.status === "SENT", status: r.status, detail: r.detail });
@@ -869,6 +920,15 @@ admin.post("/orders/:n/mark-paid", wrap(async (req, res) => {
   });
   res.json({ ok: true });
 }));
+admin.post("/orders/:n/resend-email", wrap(async (req, res) => {
+  const o = await getOrder(String(req.params.n));
+  if (!o) return res.status(404).json({ ok: false });
+  const r = o.claimedPaidAt ? await sendPaidOrderEmail(o) : await sendAdminEmail(o);
+  await updateOrder(o.orderNumber, (x) => {
+    x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 };
+  });
+  res.json({ ok: r.status === "SENT", status: r.status, detail: r.detail });
+}));
 admin.post("/transactions/clear", wrap(async (_req, res) => {
   try {
     const proofs = (await listAllOrders()).map((o) => o.paymentProof ?? "");
@@ -897,7 +957,7 @@ admin.get("/export", wrap(async (req, res) => {
 var MAX_IMAGES = 6;
 var Schema = z.object({
   name: z.string().trim().min(2, "Name needs at least 2 characters").max(120),
-  sku: z.string().trim().min(2, "SKU needs at least 2 characters").max(40).regex(/^[A-Za-z0-9-_]+$/, "SKU: letters, numbers, - and _ only"),
+  sku: z.string().trim().min(2, "SKU needs at least 2 characters").max(40).regex(/^[A-Za-z0-9_#*-]+$/, "SKU: letters, numbers and the symbols # * _ - only (no spaces)"),
   category: z.string().trim().min(1, "Category is required").max(40),
   description: z.string().trim().max(2e3),
   price: z.coerce.number().min(0).max(1e5),
@@ -907,7 +967,7 @@ admin.get("/products", wrap(async (_req, res) => res.json({ products: await list
 admin.get("/products/:id", wrap(async (req, res) => {
   const p = await getProductById(String(req.params.id));
   if (!p) return res.status(404).json({ error: "Not found" });
-  res.json({ product: p, discount: await getProductDiscount(p.id), categories: categoriesOf(await listAllProducts()) });
+  res.json({ product: p, categories: categoriesOf(await listAllProducts()) });
 }));
 admin.get("/product-form-meta", wrap(async (_req, res) => res.json({ categories: categoriesOf(await listAllProducts()) })));
 admin.post("/products/save", upload.any(), wrap(async (req, res) => {
@@ -917,15 +977,6 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
   if (!p.success) return fail(p.error.issues[0]?.message ?? "Invalid input");
   const d2 = p.data;
   if (await skuTaken(d2.sku, id || void 0)) return fail("That SKU is already used by another product");
-  const pctRaw = fld(req, "discountPercent").trim(), codeRaw = normalizeCode(fld(req, "discountCode"));
-  let discount = null;
-  if (pctRaw || codeRaw) {
-    const pct = Number(pctRaw);
-    if (!pctRaw || !codeRaw) return fail("Discount needs both a % and a code (or leave both empty)");
-    if (!percentOk(pct)) return fail("Discount % must be a whole number from 10 to 50");
-    if (!CODE_RE.test(codeRaw)) return fail("Discount code: 3-30 letters, numbers, - or _ (e.g. TOY10)");
-    discount = { code: codeRaw, percent: pct };
-  }
   const old = id ? await getProductById(id) : null;
   const keep = new Set(all(req, "keep"));
   const images = (old?.images ?? []).filter((i) => keep.has(i.src));
@@ -946,8 +997,7 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
     images.push({ src, alt: d2.name });
   }
   try {
-    const savedId = await upsertProduct({ id: id || void 0, name: d2.name, sku: d2.sku, category: d2.category, description: d2.description, price: d2.price, stock: d2.stock, images, active: fld(req, "active") === "on" });
-    await setProductDiscount(savedId, discount);
+    await upsertProduct({ id: id || void 0, name: d2.name, sku: d2.sku, category: d2.category, description: d2.description, price: d2.price, stock: d2.stock, images, active: fld(req, "active") === "on" });
   } catch {
     await deleteProductImages(uploaded);
     return fail("Could not save to the database. Nothing was lost; please try again.");
@@ -985,7 +1035,7 @@ admin.post("/pages/:slug/restore", wrap(async (req, res) => {
   await savePage(d2.slug, { deleted: false });
   res.json({ ok: true });
 }));
-admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts(), products: await listProductDiscounts() })));
+admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts() })));
 admin.post("/discounts/create", wrap(async (req, res) => {
   const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
   if (!CODE_RE.test(code)) return res.json({ error: "Code: 3-30 letters, numbers, - or _ (e.g. SAVE10)" });
@@ -993,16 +1043,17 @@ admin.post("/discounts/create", wrap(async (req, res) => {
   if (!await createStoreDiscount(code, pct)) return res.json({ error: "That code already exists" });
   res.json({ ok: true });
 }));
+admin.post("/discounts/update", wrap(async (req, res) => {
+  const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
+  if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" });
+  if (!percentOk(pct)) return res.json({ error: "Discount % must be a whole number from 10 to 50" });
+  if (!await updateStoreDiscount(code, pct)) return res.json({ error: "Unknown code" });
+  res.json({ ok: true });
+}));
 admin.post("/discounts/delete", wrap(async (req, res) => {
   const code = normalizeCode(String(req.body?.code ?? ""));
   if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" });
   await deleteStoreDiscount(code);
-  res.json({ ok: true });
-}));
-admin.post("/discounts/product/delete", wrap(async (req, res) => {
-  const id = String(req.body?.productId ?? "");
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.json({ error: "Unknown product" });
-  await setProductDiscount(id, null);
   res.json({ ok: true });
 }));
 var Url = z.string().trim().max(300).refine((v) => v === "" || /^https:\/\/[^\s]+$/.test(v), "Links must start with https://");

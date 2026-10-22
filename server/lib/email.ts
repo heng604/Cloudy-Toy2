@@ -1,5 +1,5 @@
 import type { StoredOrder } from "../../shared/types";
-import { methodLabel } from "../../shared/delivery";
+import { methodLabel, areaLabel } from "../../shared/delivery";
 import { ADMIN_EMAIL } from "../../shared/admin";
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
@@ -10,7 +10,7 @@ export function adminHtml(o: StoredOrder) {
     : `<p style="background:#fff3cd;padding:10px"><b>QR IMAGE PAYMENT, NOT VERIFIED.</b> The customer may have scanned your QR. Check your bank/Bakong app for <b>${usd(o.totalCents)}</b> with order number ${esc(o.orderNumber)}, then mark it paid in Admin &gt; Orders.</p>`;
   const rows = o.items.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.sku)}</td><td>${i.qty}</td><td>${usd(i.unitCents)}</td><td>${usd(i.lineCents)}</td></tr>`).join("");
   return `<h2>New order #${esc(o.orderNumber)}</h2>${note}<p>Created: ${esc(o.createdAt)}<br>Method: ${methodLabel(o.method)}<br>Payment status: ${o.paymentStatus}<br>Reference: ${esc(o.paymentReference)}</p>
-<h3>Customer</h3><p>${esc(o.customer.name)}<br>${esc(o.customer.email || "-")}<br>${esc(o.customer.phone)}<br>Facebook: ${esc(o.customer.facebook ?? "-")}<br>Telegram: ${esc(o.customer.telegram ?? "-")}<br>${o.area === "PHNOM_PENH" ? "Phnom Penh" : "Province"}: ${esc(o.customer.address)}<br>Notes: ${esc(o.customer.notes ?? "-")}</p>
+<h3>Customer</h3><p>${esc(o.customer.name)}<br>${esc(o.customer.email || "-")}<br>${esc(o.customer.phone)}<br>Facebook: ${esc(o.customer.facebook ?? "-")}<br>Telegram: ${esc(o.customer.telegram ?? "-")}<br>${esc(areaLabel(o))}: ${esc(o.customer.address)}<br>Notes: ${esc(o.customer.notes ?? "-")}</p>
 <table border="1" cellpadding="6" cellspacing="0"><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Unit</th><th>Line</th></tr>${rows}</table>
 <p>Subtotal ${usd(o.subtotalCents)}<br>Discount ${usd(o.discountCents)}${o.discountCode ? ` (code ${esc(o.discountCode)})` : ""}<br>Delivery ${usd(o.shippingCents)}<br><b>Total ${usd(o.totalCents)} ${o.currency}</b></p>`;
 }
@@ -30,32 +30,57 @@ const recipients = () => adminInbox().split(",").map((x) => x.trim()).filter(Boo
 const plain = (h: string) => h.replace(/<\/(p|h[1-6]|tr|table)>|<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const validEmail = (v: string | undefined) => !!v && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(v);
-/** Returns SENT only when Resend confirms with a 2xx. Retries up to 3 times on network errors, 429 and 5xx. Never claims success otherwise. */
+/** Returns SENT only when Resend confirms with a 2xx. Never throws, and never claims success otherwise.
+ *  - Each request times out after 4s (hosting platforms kill slow functions) and network errors / 429 / 5xx are retried once.
+ *  - If the configured sender is rejected (4xx, e.g. domain not verified yet), it retries with Resend's test sender, one recipient at a time,
+ *    because the test sender is only allowed to reach the Resend account owner: the admin gets the order if ANY inbox is accepted. */
 async function deliver(subject: string, html: string, o: StoredOrder): Promise<SendResult> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in .env.local" };
-  const body = JSON.stringify({ from: fromAddress(process.env.EMAIL_FROM), to: recipients(), subject, html, text: plain(html),
-    ...(validEmail(o.customer.email) ? { reply_to: o.customer.email } : {}), // admin can reply straight to the customer
-    headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}` } });
-  let detail = "";
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const res = await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body });
-      if (res.ok) return { status: "SENT" };
-      detail = `Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
-      if (res.status !== 429 && res.status < 500) break; // permanent error (bad key, unverified sender...): retrying will not help
-    } catch (e) { detail = e instanceof Error ? e.message : "network error"; }
-    if (attempt < 3) await wait(attempt * 500);
+  try {
+    const key = process.env.RESEND_API_KEY?.trim();
+    if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in your environment variables" };
+    const text = plain(html);
+    const send = async (from: string, to: string[]): Promise<SendResult> => {
+      const body = JSON.stringify({ from, to, subject, html, text,
+        ...(validEmail(o.customer.email) ? { reply_to: o.customer.email } : {}), // admin can reply straight to the customer
+        headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}` } });
+      let detail = "";
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const res = await fetch("https://api.resend.com/emails", { method: "POST", signal: AbortSignal.timeout(4000), headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body });
+          if (res.ok) return { status: "SENT" };
+          detail = `Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
+          if (res.status !== 429 && res.status < 500) break; // permanent error (bad key, unverified sender...): retrying the same request will not help
+        } catch (e) { detail = e instanceof Error ? e.message : "network error"; }
+        if (attempt < 2) await wait(500);
+      }
+      return { status: "FAILED", detail };
+    };
+    const to = recipients();
+    if (!to.length) return { status: "FAILED", detail: "No admin email configured (ADMIN_NOTIFICATION_EMAIL)" };
+    const primary = fromAddress(process.env.EMAIL_FROM);
+    let r = await send(primary, to);
+    if (r.status === "FAILED" && /HTTP (400|401|403|422)/.test(r.detail ?? "")) {
+      const first = r.detail;
+      if (primary !== TEST_SENDER || to.length > 1) {
+        let ok = 0; let last = "";
+        for (const one of to) { const x = await send(TEST_SENDER, [one]); if (x.status === "SENT") ok++; else last = x.detail ?? ""; }
+        if (ok > 0) return { status: "SENT", detail: `Sent with Resend test sender (${ok}/${to.length} inbox) because the normal sender was rejected (${first}). Verify your domain in Resend to reach every inbox.` };
+        r = { status: "FAILED", detail: `${first} | test sender: ${last}` };
+      }
+    }
+    if (r.status === "FAILED") console.error("[email]", o.orderNumber, r.detail);
+    return r;
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : "unexpected email error"; console.error("[email]", o.orderNumber, detail);
+    return { status: "FAILED", detail };
   }
-  console.error("[email]", o.orderNumber, detail);
-  return { status: "FAILED", detail };
 }
 export const sendAdminEmail = (o: StoredOrder) => deliver(adminSubject(o), adminHtml(o), o);
 
 export const claimSubject = (o: StoredOrder) => `[Cloudy-Toy] Customer says PAID #${o.orderNumber} - ${usd(o.totalCents)} - please verify`;
 export function claimHtml(o: StoredOrder) {
   return `<p style="background:#fff3cd;padding:10px"><b>CUSTOMER SAYS THEY PAID (NOT VERIFIED).</b> Check your ABA app for <b>${usd(o.totalCents)}</b> with order number <b>${esc(o.orderNumber)}</b>. Expect a screenshot on Telegram/Facebook. When confirmed, open Admin &gt; Orders &gt; Mark as paid.</p>
-<p>Order: <b>${esc(o.orderNumber)}</b><br>Total: <b>${usd(o.totalCents)} ${o.currency}</b><br>Customer: ${esc(o.customer.name)}<br>Phone: ${esc(o.customer.phone)}<br>Email: ${esc(o.customer.email)}<br>${o.area === "PHNOM_PENH" ? "Phnom Penh" : "Province"}: ${esc(o.customer.address)}<br>Items: ${esc(o.items.map((i) => `${i.name} x${i.qty}`).join(", "))}</p>`;
+<p>Order: <b>${esc(o.orderNumber)}</b><br>Total: <b>${usd(o.totalCents)} ${o.currency}</b><br>Customer: ${esc(o.customer.name)}<br>Phone: ${esc(o.customer.phone)}<br>Email: ${esc(o.customer.email)}<br>${esc(areaLabel(o))}: ${esc(o.customer.address)}<br>Items: ${esc(o.items.map((i) => `${i.name} x${i.qty}`).join(", "))}</p>`;
 }
 /** Full order details + "customer says paid" banner. Sent when the customer presses "I have paid" on a QR order. */
 export const paidOrderSubject = (o: StoredOrder) => `[Cloudy-Toy] New Order #${o.orderNumber} - QR PAYMENT, CUSTOMER SAYS PAID (verify)`;

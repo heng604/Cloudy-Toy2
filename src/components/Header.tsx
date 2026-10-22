@@ -69,7 +69,7 @@ export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string
       )}
       {open && (
         <form onSubmit={search} role="search" className="menu-in page-wrap pb-3">
-          <input ref={input} type="search" name="q" placeholder={t("Search toys")} aria-label={t("Search toys")} className="w-full rounded-full border border-sky-border bg-page px-5 py-3" />
+          <input ref={input} type="search" name="q" placeholder={t("Search products")} aria-label={t("Search products")} className="w-full rounded-full border border-sky-border bg-page px-5 py-3" />
         </form>
       )}
     </header>
