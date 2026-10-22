@@ -39,5 +39,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "public/img/invoice-logo.jpg"
+    }
+  }
 }

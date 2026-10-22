@@ -174,10 +174,9 @@ admin.post("/orders/:n/mark-paid", wrap(async (req, res) => {
   const o = await getOrder(String(req.params.n));
   if (!o || !canPay(o.paymentStatus, "PAID")) return res.json({ ok: false });
   await updateOrder(o.orderNumber, (x) => { x.paymentStatus = "PAID"; x.paidAt = new Date().toISOString(); x.paidManuallyBy = adminOf(req).email ?? "admin"; });
-  let mail: { status: string; detail?: string } = { status: "SKIPPED", detail: "Receipt not sent" };
-  try { const paid = await getOrder(o.orderNumber); if (paid) { const r = await sendCustomerEmail(paid, "paid"); mail = r; await updateOrder(o.orderNumber, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); } } // new e-mail with the green PAID stamp (the earlier "awaiting payment" e-mail stays in the customer's inbox: sent e-mails cannot be edited)
-  catch (e) { console.error("[paid receipt email]", o.orderNumber, e); mail = { status: "FAILED", detail: e instanceof Error ? e.message : "email error" }; }
-  res.json({ ok: true, mail });
+  try { const paid = await getOrder(o.orderNumber); if (paid) { const r = await sendCustomerEmail(paid, "paid"); await updateOrder(o.orderNumber, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); } } // "payment received" receipt
+  catch (e) { console.error("[paid receipt email]", o.orderNumber, e); }
+  res.json({ ok: true });
 }));
 admin.post("/orders/:n/resend-email", wrap(async (req, res) => {
   const o = await getOrder(String(req.params.n)); if (!o) return res.status(404).json({ ok: false });

@@ -7,6 +7,7 @@ import type { StoredOrder } from "../../shared/types";
 import { areaLabel, methodLabel } from "../../shared/delivery";
 import { BRAND, INVOICE_LOGO, usd, invoiceNo, firstName, dateLong, timeShort, invoiceState, nextStep } from "../../shared/invoice";
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+export const LOGO_CID = "invoice-logo";
 export type CustomerMailKind = "placed" | "paid";
 /** Public address of the shop, e.g. https://cloudytoys.com (no trailing slash). Needed for the logo and the admin invoice button. */
 export const siteUrl = () => (process.env.SITE_URL ?? "").trim().replace(/\/+$/, "");
@@ -18,15 +19,14 @@ const hand = "'Caveat','Segoe Print','Bradley Hand','Comic Sans MS',cursive";
 const body = "'Nunito','Segoe UI',ui-rounded,Arial,'Helvetica Neue',sans-serif";
 const khmer = "'Nokora','Noto Sans Khmer','Khmer UI',Arial,sans-serif";
 const FONTS = "https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito:wght@400;700;900&family=Nokora:wght@400;700&display=swap";
-/** Content-ID of the logo attached to the e-mail (see deliver() in email.ts). */
-export const LOGO_CID = "invoice-logo";
-type Opts = { mode: "customer" | "admin"; kind?: CustomerMailKind; base: string; banner?: string; contact?: string[]; cid?: boolean };
-function invoiceEmail(o: StoredOrder, { mode, kind = "placed", base, banner = "", contact = [], cid = false }: Opts): string {
+type Opts = { mode: "customer" | "admin"; kind?: CustomerMailKind; base: string; banner?: string; contact?: string[]; inlineLogo?: boolean };
+function invoiceEmail(o: StoredOrder, { mode, kind = "placed", base, banner = "", contact = [], inlineLogo = false }: Opts): string {
   const admin = mode === "admin", st = invoiceState(o), [tb, tf] = TONE[st.tone], c = o.customer;
   const headline = admin ? `New order ${esc(o.orderNumber)} 🧸` : kind === "paid" ? `We got your payment, ${esc(firstName(c.name))}! 💙` : `Hello, ${esc(firstName(c.name))}! 🧸`;
   const intro = admin ? "A new order just came in. Details are below, in the same layout as the invoice."
     : kind === "paid" ? "Thank you! Your payment is confirmed and we are packing your toys with love. Here is your receipt." : "Thank you so much for shopping with us. Every toy is packed with care, just for you. Here is your invoice.";
-  const logoSrc = cid ? `cid:${LOGO_CID}` : base ? `${esc(base)}${INVOICE_LOGO}` : "";
+  // inlineLogo: the same invoice-logo.jpg is attached to the mail and referenced by cid, so it shows even without SITE_URL (and when Gmail blocks remote images).
+  const logoSrc = inlineLogo ? `cid:${LOGO_CID}` : base ? `${esc(base)}${INVOICE_LOGO}` : "";
   const logo = logoSrc
     ? `<img src="${logoSrc}" alt="Cloudy Toys" width="118" height="118" style="display:block;width:118px;height:118px;border-radius:18px;border:5px solid #fff;background:#fff;box-shadow:0 6px 16px rgba(47,65,86,.15)">`
     : `<div style="background:#fff;border-radius:22px;padding:34px 16px;font:900 20px ${body};color:${BRAND.ink};letter-spacing:1px;text-align:center;width:118px">CLOUDY TOYS</div>`;
@@ -45,7 +45,7 @@ function invoiceEmail(o: StoredOrder, { mode, kind = "placed", base, banner = ""
   const nextBox = admin ? "" : `<tr><td style="padding:16px 36px 0"><div style="background:${BRAND.skyPale};border-radius:16px;padding:12px 16px;font-size:14px;line-height:1.55">💌 ${esc(nextStep(o))}</div></td></tr>`;
   const footRight = `${contact.length ? contact.map((x) => `${esc(x)}<br>`).join("") : admin ? "" : "Questions? Just reply to this email.<br>"}${admin ? "Open <b>Admin &gt; Orders</b> to confirm, print or download this invoice." : "Please keep this invoice for your records."}`;
   const stamp = `<div style="display:inline-block;transform:rotate(-6deg);border:4px double ${tf};color:${tf};border-radius:14px;padding:6px 18px;font-weight:900;letter-spacing:3px;font-size:22px;white-space:nowrap;margin-top:14px">${st.label}</div>`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><link href="${FONTS}" rel="stylesheet"></head>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><link href="${FONTS}" rel="stylesheet"><style>@import url('${FONTS}');</style></head>
 <body style="margin:0;padding:0;background:#F4FAFF;font-family:${body}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(admin ? `${usd(o.totalCents)} · ${st.label}` : nextStep(o))}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4FAFF"><tr><td align="center" style="padding:20px 10px">
@@ -82,6 +82,6 @@ ${adminBtn ? `<tr><td style="padding:0 36px">${adminBtn}</td></tr>` : ""}
   <td valign="middle" align="right" style="font-size:12.5px;line-height:1.6;color:${BRAND.ink}">${footRight}</td></tr></table></td></tr>
 </table></td></tr></table></body></html>`;
 }
-export const customerHtml = (o: StoredOrder, kind: CustomerMailKind = "placed", base: string = siteUrl(), contact: string[] = [], cid = false) => invoiceEmail(o, { mode: "customer", kind, base, contact, cid });
+export const customerHtml = (o: StoredOrder, kind: CustomerMailKind = "placed", base: string = siteUrl(), contact: string[] = [], inlineLogo = false) => invoiceEmail(o, { mode: "customer", kind, base, contact, inlineLogo });
 /** The "New Order" e-mail for the shop owner: same design as the invoice; `banner` holds the red/yellow payment instructions. */
-export const adminInvoiceHtml = (o: StoredOrder, banner: string, base: string = siteUrl(), contact: string[] = [], cid = false) => invoiceEmail(o, { mode: "admin", base, banner, contact, cid });
+export const adminInvoiceHtml = (o: StoredOrder, banner: string, base: string = siteUrl(), contact: string[] = [], inlineLogo = false) => invoiceEmail(o, { mode: "admin", base, banner, contact, inlineLogo });
