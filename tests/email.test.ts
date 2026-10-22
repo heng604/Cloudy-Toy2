@@ -52,3 +52,5 @@ describe("never throws", () => {
     vi.unstubAllGlobals(); delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM; delete process.env.ADMIN_NOTIFICATION_EMAIL;
   });
 });
+import { friendlyMailError } from "../server/lib/email";
+describe("resend test-mode error", () => { it("is explained in plain words", () => { const m = friendlyMailError(403, '{"message":"You can only send testing emails to your own email address (toyscloudy@gmail.com). To send emails to other recipients, please verify a domain at resend.com/domains"}'); expect(m).toContain("resend.com/domains"); expect(m).toContain("EMAIL_FROM"); }); });

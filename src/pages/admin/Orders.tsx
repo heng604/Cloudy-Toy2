@@ -37,8 +37,8 @@ export default function AdminOrders() {
   // every action reports success or the real reason it failed, instead of silently doing nothing
   const act = async (key: string, path: string, okText: string) => {
     setBusy(key); setMsg(null);
-    try { const r = await post(path); const j = await r.json().catch(() => ({})) as { ok?: boolean; detail?: string; status?: string };
-      if (r.ok && j.ok !== false && j.status !== "SKIPPED" && j.status !== "FAILED") setMsg({ ok: true, text: okText });
+    try { const r = await post(path); const j = await r.json().catch(() => ({})) as { ok?: boolean; detail?: string; status?: string; mail?: { status: string; detail?: string } };
+      if (r.ok && j.ok !== false && j.status !== "SKIPPED" && j.status !== "FAILED") setMsg(j.mail && j.mail.status === "FAILED" ? { ok: false, text: `Marked as paid, but the customer email was not sent${j.mail.detail ? `: ${j.mail.detail}` : ""}` } : { ok: true, text: j.mail && j.mail.status === "SKIPPED" ? `${okText.replace(" Receipt sent to the customer.", "")} (no customer email: ${j.mail.detail ?? "skipped"})` : okText });
       else setMsg({ ok: false, text: `Could not do that${j.detail ? `: ${j.detail}` : j.status ? ` (${j.status.toLowerCase()})` : ` (server error ${r.status})`}.` });
     } catch { setMsg({ ok: false, text: "Network error. Please try again." }); }
     setBusy(""); refreshAdmin();

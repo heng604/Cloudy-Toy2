@@ -22,3 +22,5 @@ describe("e-mail copies the invoice design", () => {
     expect(h).toContain("អរគុណ"); expect(h).toContain("with love, Cloudy Toys"); expect(h).toContain("Telegram: t.me/x"); expect(h).toContain("Caveat"); expect(h).toContain("Nunito");
   });
 });
+it("inline logo (cid) shows the same logo image even without SITE_URL", () => { const h = customerHtml(o, "placed", "", [], true); expect(h).toContain('src="cid:invoice-logo"'); expect(h).not.toContain("CLOUDY TOYS</div>"); });
+it("paid e-mail carries the PAID stamp and not AWAITING PAYMENT", () => { const q = { ...o, method: "QR_IMAGE" as const, paymentStatus: "PAID" as const, paidAt: "2026-10-23T05:00:00Z" }; const h = customerHtml(q, "paid", "", [], true); expect(h).toContain("PAID"); expect(h).not.toContain("AWAITING PAYMENT"); });

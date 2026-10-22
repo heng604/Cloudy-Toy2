@@ -18,14 +18,17 @@ const hand = "'Caveat','Segoe Print','Bradley Hand','Comic Sans MS',cursive";
 const body = "'Nunito','Segoe UI',ui-rounded,Arial,'Helvetica Neue',sans-serif";
 const khmer = "'Nokora','Noto Sans Khmer','Khmer UI',Arial,sans-serif";
 const FONTS = "https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito:wght@400;700;900&family=Nokora:wght@400;700&display=swap";
-type Opts = { mode: "customer" | "admin"; kind?: CustomerMailKind; base: string; banner?: string; contact?: string[] };
-function invoiceEmail(o: StoredOrder, { mode, kind = "placed", base, banner = "", contact = [] }: Opts): string {
+/** Content-ID of the logo attached to the e-mail (see deliver() in email.ts). */
+export const LOGO_CID = "invoice-logo";
+type Opts = { mode: "customer" | "admin"; kind?: CustomerMailKind; base: string; banner?: string; contact?: string[]; cid?: boolean };
+function invoiceEmail(o: StoredOrder, { mode, kind = "placed", base, banner = "", contact = [], cid = false }: Opts): string {
   const admin = mode === "admin", st = invoiceState(o), [tb, tf] = TONE[st.tone], c = o.customer;
   const headline = admin ? `New order ${esc(o.orderNumber)} 🧸` : kind === "paid" ? `We got your payment, ${esc(firstName(c.name))}! 💙` : `Hello, ${esc(firstName(c.name))}! 🧸`;
   const intro = admin ? "A new order just came in. Details are below, in the same layout as the invoice."
     : kind === "paid" ? "Thank you! Your payment is confirmed and we are packing your toys with love. Here is your receipt." : "Thank you so much for shopping with us. Every toy is packed with care, just for you. Here is your invoice.";
-  const logo = base
-    ? `<img src="${esc(base)}${INVOICE_LOGO}" alt="Cloudy Toys" width="118" height="118" style="display:block;width:118px;height:118px;border-radius:18px;border:5px solid #fff;background:#fff;box-shadow:0 6px 16px rgba(47,65,86,.15)">`
+  const logoSrc = cid ? `cid:${LOGO_CID}` : base ? `${esc(base)}${INVOICE_LOGO}` : "";
+  const logo = logoSrc
+    ? `<img src="${logoSrc}" alt="Cloudy Toys" width="118" height="118" style="display:block;width:118px;height:118px;border-radius:18px;border:5px solid #fff;background:#fff;box-shadow:0 6px 16px rgba(47,65,86,.15)">`
     : `<div style="background:#fff;border-radius:22px;padding:34px 16px;font:900 20px ${body};color:${BRAND.ink};letter-spacing:1px;text-align:center;width:118px">CLOUDY TOYS</div>`;
   const hdrBg = base ? `background-image:url('${esc(base)}/img/email/header.png');background-repeat:no-repeat;background-position:center top;background-size:100% 208px;` : "";
   const scallop = base ? "" : `<tr><td style="height:18px;background:#fff;border-radius:18px 18px 0 0;font-size:0;line-height:0">&nbsp;</td></tr>`;
@@ -79,6 +82,6 @@ ${adminBtn ? `<tr><td style="padding:0 36px">${adminBtn}</td></tr>` : ""}
   <td valign="middle" align="right" style="font-size:12.5px;line-height:1.6;color:${BRAND.ink}">${footRight}</td></tr></table></td></tr>
 </table></td></tr></table></body></html>`;
 }
-export const customerHtml = (o: StoredOrder, kind: CustomerMailKind = "placed", base: string = siteUrl(), contact: string[] = []) => invoiceEmail(o, { mode: "customer", kind, base, contact });
+export const customerHtml = (o: StoredOrder, kind: CustomerMailKind = "placed", base: string = siteUrl(), contact: string[] = [], cid = false) => invoiceEmail(o, { mode: "customer", kind, base, contact, cid });
 /** The "New Order" e-mail for the shop owner: same design as the invoice; `banner` holds the red/yellow payment instructions. */
-export const adminInvoiceHtml = (o: StoredOrder, banner: string, base: string = siteUrl(), contact: string[] = []) => invoiceEmail(o, { mode: "admin", base, banner, contact });
+export const adminInvoiceHtml = (o: StoredOrder, banner: string, base: string = siteUrl(), contact: string[] = [], cid = false) => invoiceEmail(o, { mode: "admin", base, banner, contact, cid });
