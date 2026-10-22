@@ -6,4 +6,4 @@ export function tooMany(key: string, max = 15, windowMs = 60_000) {
   recent.push(now); hits.set(key, recent); if (hits.size > 5000) hits.clear();
   return recent.length > max;
 }
-export const clientKey = (req: Request) => String(req.headers["x-forwarded-for"] ?? req.ip ?? "local").split(",")[0].trim();
+export const clientKey = (req: Request) => req.ip ?? "local" // Express resolves the real client through "trust proxy"; a forged X-Forwarded-For can no longer dodge the limits;

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Product } from "@shared/products";
 import { api } from "@/lib/api";
+import FilePicker from "./FilePicker";
 import { compressFormData } from "@/lib/compress";
 const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3";
 export default function ProductForm({ p, error: initialError, categories }: { p?: Product; error?: string; categories: string[] }) {
@@ -27,7 +28,7 @@ export default function ProductForm({ p, error: initialError, categories }: { p?
     <label className="block">Description<textarea name="description" rows={4} defaultValue={p?.description} className={cls} /></label>
     <fieldset><legend className="font-semibold">Images (JPG, PNG, WebP, max 5 MB each, up to 6)</legend>
       {p && p.images.length > 0 && <div className="my-2 flex flex-wrap gap-3">{p.images.map((i) => <label key={i.src} className="w-28 text-center text-xs"><img src={i.src} alt={i.alt} className="h-24 w-28 rounded-lg border border-sky-border object-cover" /><input type="checkbox" name="keep" value={i.src} defaultChecked /> keep</label>)}</div>}
-      <input name="images" type="file" multiple accept="image/png,image/jpeg,image/webp" className={cls} /></fieldset>
+      <FilePicker name="images" multiple /></fieldset>
     <label className="flex items-center gap-2"><input type="checkbox" name="active" defaultChecked={p ? p.active !== false : true} /> Visible in the shop</label>
     <button disabled={busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy ? "Saving…" : p ? "Save changes" : "Create product"}</button></form>);
 }

@@ -1,8 +1,8 @@
 export type Product = { id: string; slug: string; name: string; sku: string; price: number; salePrice?: number; stock: number; category: string; description: string; images: { src: string; alt: string }[]; active?: boolean; createdAt?: string };
 export const FALLBACK_IMG = "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'><rect width='400' height='300' fill='#EAF5FF'/><path d='M110 190a40 40 0 0 1 12-78 55 55 0 0 1 106-8 45 45 0 0 1 58 86z' fill='#8ECCFF'/></svg>");
 export const money = (n: number) => `$${n.toFixed(2)}`;
-/** A product counts as "New" for 14 days after the admin adds it. */
-export const NEW_DAYS = 14;
+/** A product counts as "New" for 1 week (7 days) after the admin adds it. */
+export const NEW_DAYS = 7;
 export const isNewProduct = (createdAt?: string, now = Date.now()) => !!createdAt && now - new Date(createdAt).getTime() < NEW_DAYS * 86400000;
 export const LOW_STOCK = 5;
 export const stockStatus = (stock: number): "OUT" | "LOW" | "OK" => (stock <= 0 ? "OUT" : stock <= LOW_STOCK ? "LOW" : "OK");

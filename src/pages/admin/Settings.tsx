@@ -2,6 +2,7 @@ import { useI18n } from "@/lib/i18n";
 import { useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import Skeleton from "@/components/Skeleton";
+import FilePicker from "@/components/admin/FilePicker";
 import { useSettings } from "@/lib/store";
 import { api, post } from "@/lib/api";
 import { compressFormData } from "@/lib/compress";
@@ -31,18 +32,18 @@ export default function Settings() {
     <form onSubmit={run("logo", multi("/admin/settings/logo"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Shop logo</p>
       <p className="text-sm text-mute">Shown in the shop header, footer and admin. JPG, PNG or WebP, max 5 MB. A PNG with a transparent background looks best.</p>
       <img src={s.logoUrl} alt="Current logo" className="h-20 w-auto rounded-xl border border-sky-border bg-page p-1" />
-      <input name="logo" type="file" accept="image/png,image/jpeg,image/webp" className={cls} />
+      <FilePicker name="logo" />
       <div className="flex flex-wrap gap-2"><button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "logo" ? "Saving…" : "Update logo"}</button>
       {s.logoUrl !== "/img/logo.png" && <button type="button" disabled={!!busy} onClick={() => del("logo", "Delete this logo and go back to the default logo?", async () => api("/admin/settings/logo", { method: "POST", body: reset() }))} className={btnDel}>Delete logo</button>}</div></form>
     <form onSubmit={run("banners", multi("/admin/settings/banners"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Home page banners</p>
-      <p className="text-sm text-mute">Shown above &quot;Featured toys&quot; and change every 2 seconds. Up to 6 images (JPG, PNG, WebP, max 5 MB each). Best size: wide, about 1600 × 600.</p>
+      <p className="text-sm text-mute">Shown above &quot;Featured products&quot; and change every 2 seconds. Up to 6 images (JPG, PNG, WebP, max 5 MB each). Best size: wide, about 1600 × 600.</p>
       {(s.banners ?? []).length > 0 && <div className="flex flex-wrap gap-3">{s.banners.map((b) => <div key={b} className="w-40 space-y-1 text-center"><img src={b} alt="Banner" className="h-20 w-40 rounded-lg border border-sky-border object-cover" /><input type="hidden" name="keep" value={b} /><button type="button" disabled={!!busy} onClick={() => del("banner", "Delete this banner image?", () => post("/admin/settings/banners/delete", { url: b }))} className={btnDel + " w-full"}>Delete</button></div>)}</div>}
-      <input name="banners" type="file" multiple accept="image/png,image/jpeg,image/webp" className={cls} />
+      <FilePicker name="banners" multiple />
       <button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "banners" ? "Saving…" : "Save banners"}</button></form>
     <form onSubmit={run("qr", multi("/admin/settings/qr"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Payment QR (ABA PAY)</p>
       <p className="text-sm text-mute">Shown to customers at checkout. JPG, PNG or WebP, max 5 MB.</p>
       <img src={s.qrUrl || "/img/qr-pay.png"} alt="Current payment QR" className="w-48 rounded-xl border border-sky-border" />
-      <input name="qr" type="file" accept="image/png,image/jpeg,image/webp" className={cls} />
+      <FilePicker name="qr" />
       <div className="flex flex-wrap gap-2"><button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "qr" ? "Saving…" : "Update QR"}</button>
       {s.qrUrl && s.qrUrl !== "/img/qr-pay.png" && <button type="button" disabled={!!busy} onClick={() => del("qr", "Delete this QR image and go back to the built-in QR?", async () => api("/admin/settings/qr", { method: "POST", body: reset() }))} className={btnDel}>Delete QR</button>}</div></form>
     <form key={`${s.shipPhnomPenhCents}-${s.shipProvinceCents}-${s.telegramUrl}-${s.facebookUrl}`} onSubmit={run("store", json)} className="space-y-3">

@@ -15,7 +15,7 @@ export default function Home() {
       <div className="mt-6 flex flex-wrap justify-center gap-3"><Link to="/shop" className="rounded-full bg-sky px-6 py-3 font-bold hover:bg-sky-hover">{t("Shop Now")}</Link><Link to="/shop" className="rounded-full border border-sky-border bg-white px-6 py-3 font-bold">{t("Explore product")}</Link></div>
     </section>
     <BannerSlider images={Array.isArray(banners) ? banners : []} />
-    <section className="mt-12"><h2 className="mb-4 text-2xl font-extrabold">{t("Featured toys")}</h2>
+    <section className="mt-12"><h2 className="mb-4 text-2xl font-extrabold">{t("Featured products")}</h2>
       {!products ? <Skeleton /> : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">{products.slice(0, 8).map((p) => <ProductCard key={p.id} p={p} />)}</div>}</section>
   </>);
 }

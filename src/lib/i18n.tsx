@@ -8,7 +8,7 @@ const KM: Record<string, string> = {
   "All Product": "ផលិតផលទាំងអស់", "My account": "គណនីរបស់ខ្ញុំ", "Company": "ក្រុមហ៊ុន", "About": "អំពីយើង", "Contact": "ទំនាក់ទំនង", "Admin login": "ចូលជាអ្នកគ្រប់គ្រង", "All rights reserved.": "រក្សាសិទ្ធិគ្រប់យ៉ាង។",
   "Collect a little happiness": "ប្រមូលក្ដីសុខតូចៗរបស់អ្នក",
   "Handpicked toys from our heart, bringing a little smile to your world.": "ប្រដាប់ក្មេងលេងដែលជ្រើសរើសដោយក្ដីស្រឡាញ់ នាំយកស្នាមញញឹមតូចមួយមកកាន់ពិភពលោករបស់អ្នកពី Cloudy Toys។",
-  "Shop Now": "ទិញឥឡូវនេះ", "Explore product": "ស្វែងរកផលិតផល", "Featured toys": "ផលិតផលពិសេស", "All": "ទាំងអស់", "Price ↑": "តម្លៃ ↑", "Price ↓": "តម្លៃ ↓", "No products match.": "មិនមានផលិតផលត្រូវគ្នាទេ។", "Clear filters": "សម្អាតជ្រើសរើស",
+  "Shop Now": "ទិញឥឡូវនេះ", "Explore product": "ស្វែងរកផលិតផល", "Featured products": "ផលិតផលពិសេស", "All": "ទាំងអស់", "Price ↑": "តម្លៃ ↑", "Price ↓": "តម្លៃ ↓", "No products match.": "មិនមានផលិតផលត្រូវគ្នាទេ។", "Clear filters": "សម្អាតជ្រើសរើស",
   "Choose province": "ជ្រើសរើសខេត្ត", "Select your province": "សូមជ្រើសរើសខេត្តរបស់អ្នក", "New": "ថ្មី", "Add to cart": "ដាក់ចូលកន្ត្រក", "Out of stock": "អស់ស្តុក", "Your cart": "កន្ត្រករបស់អ្នក", "Clear cart": "សម្អាតកន្ត្រក", "Your cart is empty": "កន្ត្រករបស់អ្នកទទេ", "Browse toys": "មើលផលិតផល", "Remove": "ដកចេញ",
   "Order summary": "សង្ខេបការបញ្ជាទិញ", "Delivery": "ដឹកជញ្ជូន", "Calculated at checkout": "គណនានៅពេលទូទាត់", "Subtotal": "សរុបរង", "Checkout": "ទូទាត់", "← Continue shopping": "← បន្តទិញទំនិញ", "You save": "អ្នកសន្សំបាន", "Total": "សរុប",
   "Full name": "ឈ្មោះពេញ", "Email": "អ៊ីមែល", "Phone": "លេខទូរស័ព្ទ", "Delivery area": "តំបន់ដឹកជញ្ជូន", "Phnom Penh": "ភ្នំពេញ", "Province": "ខេត្ត", "Delivery address": "អាសយដ្ឋានដឹកជញ្ជូន",

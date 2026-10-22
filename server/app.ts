@@ -31,10 +31,21 @@ import { categoriesOf } from "../shared/products";
 const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+/** Security headers on every response (clickjacking, MIME sniffing, XSS, HTTPS downgrade, leaky referrers). */
+const CSP = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob: https://*.supabase.co", "connect-src 'self' https://*.supabase.co wss://*.supabase.co", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"].join("; ");
+app.use((_req, res, next) => {
+  res.set({ "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()", "Strict-Transport-Security": "max-age=31536000; includeSubDomains", "Cross-Origin-Opener-Policy": "same-origin" });
+  next();
+});
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 8 } });
 const api = express.Router();
+api.use((req, res, next) => { // overall brake per visitor: stops scripted flooding / scanning of the API
+  if (tooMany(`all:${clientKey(req)}`, 300)) return res.status(429).json({ error: "Too many requests. Please wait a minute." });
+  next(); });
 api.get("/health", (_req, res) => res.json({ ok: true, db: !!(process.env.SUPABASE_SERVICE_ROLE_KEY && (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) }));
 /** Plain-language hint for the most common setup problems (shown to the admin only). */
 const hint = (m: string) => /relation .* does not exist|could not find the table|schema cache|column .* does not exist|function .* does not exist|Could not find the function/i.test(m) ? "Database tables are missing or out of date. Open Supabase > SQL Editor, paste supabase/setup_all.sql and click Run (it is safe to run again), then reload."
@@ -113,7 +124,10 @@ api.post("/discount/validate", wrap(async (req, res) => {
 }));
 
 /** Payment page data (same exposure as before: whoever has the order number can see it). */
-api.get("/orders/:n", wrap(async (req, res) => { const o = await getOrder(String(req.params.n)); return o ? res.json({ order: o }) : res.status(404).json({ error: "Not found" }); }));
+api.get("/orders/:n", wrap(async (req, res) => {
+  if (!/^CT-[0-9]{6}-[A-Z0-9]{5}$/.test(String(req.params.n))) return res.status(404).json({ error: "Not found" }); // wrong format: never hits the database
+  if (tooMany(`o:${clientKey(req)}`, 30)) return res.status(429).json({ error: "Too many tries. Please wait a minute." }); // blocks order-number guessing
+  const o = await getOrder(String(req.params.n)); return o ? res.json({ order: o }) : res.status(404).json({ error: "Not found" }); }));
 
 /** Customer pressed "I have paid": email the full order to the admin (once). */
 api.post("/payment/claim", wrap(async (req, res) => {
