@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { areaLabel, methodLabel } from "@shared/delivery";
-import { BRAND, INVOICE_LOGO, usd, invoiceNo, firstName, dateLong, timeShort, invoiceState, nextStep } from "@shared/invoice";
+import { BRAND, INVOICE_LOGO, contactLines, usd, invoiceNo, firstName, dateLong, timeShort, invoiceState, nextStep } from "@shared/invoice";
 import type { Settings, StoredOrder } from "@shared/types";
 /** Fixed 760px wide, inline styles only, so the exported image/print looks exactly like the screen on every device. */
 export const INVOICE_WIDTH = 760;
@@ -11,23 +11,23 @@ const Cloud = ({ w = 90, o = 0.55 }: { w?: number; o?: number }) => <svg width={
 const label: React.CSSProperties = { fontSize: 11, letterSpacing: 1.6, textTransform: "uppercase", color: BRAND.mute, fontWeight: 800, margin: "0 0 6px" };
 const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Settings }>(function Invoice({ order: o, settings }, ref) {
   const st = invoiceState(o), tone = TONES[st.tone], c = o.customer;
-  const contact = [settings.telegramUrl && `Telegram: ${settings.telegramUrl.replace(/^https?:\/\//, "")}`, settings.facebookUrl && `Facebook: ${settings.facebookUrl.replace(/^https?:\/\//, "")}`].filter(Boolean) as string[];
+  const contact = contactLines(settings);
   return (
     <div ref={ref} style={{ width: INVOICE_WIDTH, background: "#fff", color: BRAND.ink, fontFamily: body, borderRadius: 28, overflow: "hidden", boxShadow: "0 10px 40px rgba(108,184,245,.35)", position: "relative" }}>
       {/* header: sky band with the mascot logo and soft clouds */}
       <div style={{ background: `linear-gradient(135deg,${BRAND.sky},#BFE3FF)`, padding: "28px 36px 52px", position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ position: "absolute", top: 10, right: 190 }}><Cloud w={70} o={0.5} /></div><div style={{ position: "absolute", bottom: 14, left: 250 }}><Cloud w={54} o={0.4} /></div>
-        <div style={{ background: "#fff", borderRadius: 22, padding: 5, width: 128, height: 128, display: "grid", placeItems: "center", boxShadow: "0 6px 16px rgba(47,65,86,.15)", position: "relative" }}>
+        <div style={{ background: "#fff", borderRadius: 22, padding: 5, width: 128, height: 128, flexShrink: 0, display: "grid", placeItems: "center", boxShadow: "0 6px 16px rgba(47,65,86,.15)", position: "relative" }}>
           <img src={INVOICE_LOGO} alt="Cloudy Toys" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 18 }} />
         </div>
-        <div style={{ textAlign: "right", position: "relative" }}>
+        <div style={{ textAlign: "right", position: "relative", whiteSpace: "nowrap", flexShrink: 0 }}>
           <p style={{ fontFamily: hand, fontSize: 24, margin: 0, color: BRAND.ink }}>{BRAND.tagline} ✨</p>
           <h1 style={{ margin: "2px 0 4px", fontSize: 40, fontWeight: 900, letterSpacing: 3, color: BRAND.ink }}>INVOICE</h1>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>{invoiceNo(o.orderNumber)}</p>
         </div>
       </div>
-      {/* scalloped cloud edge */}
-      <svg viewBox="0 0 760 30" width="100%" height="30" preserveAspectRatio="none" style={{ display: "block", marginTop: -29 }} aria-hidden="true"><path d={`M0 30V14${Array.from({ length: 19 }, (_, i) => ` a20 20 0 0 1 40 0`).join("")}V30z`} fill="#fff" /></svg>
+      {/* scalloped cloud edge (CSS circles, so the PNG export keeps it) */}
+      <div aria-hidden="true" style={{ height: 20, marginTop: -20, position: "relative", backgroundImage: "radial-gradient(circle at 20px 20px, #fff 19.5px, rgba(255,255,255,0) 20px)", backgroundSize: "40px 20px", backgroundRepeat: "repeat-x" }} />
 
       <div style={{ padding: "6px 36px 30px" }}>
         {/* personal greeting */}
@@ -45,7 +45,7 @@ const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Setti
             <table style={{ fontSize: 13.5, borderCollapse: "collapse", width: "100%" }}><tbody>
               {([["Date", `${dateLong(o.createdAt)}, ${timeShort(o.createdAt)}`], ["Order no.", o.orderNumber], ["Payment", methodLabel(o.method)], ...(o.paidAt ? [["Paid on", dateLong(o.paidAt)]] : [])] as string[][]).map(([k, v]) => <tr key={k}><td style={{ padding: "2px 10px 2px 0", color: BRAND.mute, whiteSpace: "nowrap", verticalAlign: "top" }}>{k}</td><td style={{ padding: "2px 0", fontWeight: 700 }}>{v}</td></tr>)}
             </tbody></table>
-            <span style={{ display: "inline-block", marginTop: 8, background: tone.bg, color: tone.fg, fontWeight: 900, fontSize: 12, letterSpacing: 1.2, padding: "5px 14px", borderRadius: 999 }}>{st.label}</span>
+            <span style={{ display: "inline-block", marginTop: 8, background: tone.bg, color: tone.fg, fontWeight: 900, fontSize: 12, letterSpacing: 1.2, padding: "5px 14px", borderRadius: 999, whiteSpace: "nowrap" }}>{st.label}</span>
           </div>
         </div>
 
@@ -61,10 +61,10 @@ const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Setti
 
         {/* totals */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 24, marginTop: 16 }}>
-          <div style={{ flex: 1, position: "relative", minHeight: 110 }}>
-            <div style={{ transform: "rotate(-6deg)", display: "inline-block", border: `4px double ${tone.fg}`, color: tone.fg, borderRadius: 14, padding: "6px 18px", fontWeight: 900, letterSpacing: 3, fontSize: 22, opacity: 0.8, marginTop: 14 }}>{st.label}</div>
+          <div style={{ flex: 1, minWidth: 0, position: "relative", minHeight: 110 }}>
+            <div style={{ transform: "rotate(-6deg)", display: "inline-block", border: `4px double ${tone.fg}`, color: tone.fg, borderRadius: 14, padding: "6px 18px", fontWeight: 900, letterSpacing: 3, fontSize: 22, opacity: 0.8, marginTop: 14, whiteSpace: "nowrap" }}>{st.label}</div>
           </div>
-          <div style={{ width: 290, fontSize: 14.5 }}>
+          <div style={{ width: 290, flexShrink: 0, fontSize: 14.5, whiteSpace: "nowrap" }}>
             <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: BRAND.mute }}><span>Subtotal</span><span>{usd(o.subtotalCents)}</span></p>
             {o.discountCents > 0 && <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: BRAND.mute }}><span>Discount{o.discountCode ? ` (${o.discountCode})` : ""}</span><span style={{ color: BRAND.red, fontWeight: 800 }}>−{usd(o.discountCents)}</span></p>}
             <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: BRAND.mute }}><span>Delivery</span><span>{usd(o.shippingCents)}</span></p>

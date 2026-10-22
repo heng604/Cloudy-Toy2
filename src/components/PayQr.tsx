@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings } from "@/lib/store";
+import ProofPicker from "./ProofPicker";
 /** QR payment. "I have paid" opens the popup; when the popup is closed (Close button or Esc) the order is emailed to the admin, then the customer goes to the home page. */
 export default function PayQr({ orderNumber, total, telegram, facebook }: { orderNumber: string; total: string; telegram: string; facebook: string }) {
   const { settings } = useSettings(); const d = useRef<HTMLDialogElement>(null); const navigate = useNavigate(); const router = { push: (p: string) => navigate(p), replace: (p: string) => navigate(p, { replace: true }) };
@@ -10,7 +11,7 @@ export default function PayQr({ orderNumber, total, telegram, facebook }: { orde
   const [mail, setMail] = useState<"" | "sending" | "sent" | string>("");
   const clicked = useRef(false);
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState(""); const [up, setUp] = useState<"" | "uploading" | string>("");
-  const pick = (f: File | null) => { setUp(""); if (f && f.size > 25 * 1024 * 1024) { setFile(null); setPreview(""); setUp("Image is too large (max 25 MB)."); return; } setFile(f); setPreview(f ? URL.createObjectURL(f) : ""); };
+  const pick = (f: File | null) => { setUp(""); if (preview) URL.revokeObjectURL(preview); if (f && f.size > 25 * 1024 * 1024) { setFile(null); setPreview(""); setUp("Image is too large (max 25 MB)."); return; } setFile(f); setPreview(f ? URL.createObjectURL(f) : ""); };
   const paid = async () => { // the payment screenshot must be uploaded first; only then the popup opens
     if (!file || up === "uploading") return; setUp("uploading");
     const fd = new FormData(); fd.set("orderNumber", orderNumber); fd.set("proof", file);
@@ -36,9 +37,7 @@ export default function PayQr({ orderNumber, total, telegram, facebook }: { orde
   return (<div className="space-y-3 rounded-xl2 border border-sky-border bg-white p-5 text-center">
     <img src={settings.qrUrl || "/img/qr-pay.png"} alt="ABA PAY QR code for Cloudy Toys (YIHOR THENG)" className="mx-auto w-full max-w-md rounded-xl2 border border-sky-border" />
     <p>Scan, pay exactly <b>{total}</b>, and write <b>{orderNumber}</b> in the note.</p>
-    <div className="mx-auto max-w-md space-y-2 rounded-xl border border-dashed border-sky-border p-3 text-left"><label className="block text-sm font-semibold">1. Upload your payment screenshot (required)
-      <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => pick(e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-xl border border-sky-border bg-white px-3 py-2 text-sm font-normal" /></label>
-      {preview && <img src={preview} alt="Your payment screenshot" className="mx-auto max-h-48 rounded-lg border border-sky-border" />}</div>
+    <div className="mx-auto max-w-md"><ProofPicker file={file} preview={preview} onPick={pick} disabled={up === "uploading"} /></div>
     <button type="button" onClick={paid} disabled={!file || up === "uploading"} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{up === "uploading" ? "Uploading…" : "2. I have paid"}</button>
     {!file && <p className="text-xs text-mute">Upload your payment screenshot to enable this button.</p>}{up && up !== "uploading" && <p role="alert" className="text-sm text-red-700">{up}</p>}
     {mail === "sent" ? <p className="text-sm font-semibold text-green-700">Order emailed to admin ✓</p> : mail === "sending" ? <p className="text-sm text-mute">Sending order to admin…</p> : mail ? <p role="alert" className="text-sm text-red-700">{mail}</p> : null}

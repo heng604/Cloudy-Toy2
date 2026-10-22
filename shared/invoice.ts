@@ -22,3 +22,7 @@ export function nextStep(o: StoredOrder): string {
 export const BRAND = { name: "Cloudy Toys", tagline: "Little Toys, Big Happiness", sky: "#8ECCFF", skyDeep: "#6CB8F5", skyPale: "#EAF5FF", border: "#D8EAFE", ink: "#2F4156", red: "#D62828", redPale: "#FDE4E4", mute: "#64748B", pink: "#FFB6C8" };
 /** Header logo used on the invoice and in the invoice e-mails. */
 export const INVOICE_LOGO = "/img/invoice-logo.jpg";
+
+/** Footer contact lines ("Telegram: t.me/x", "Facebook: ..."), shared by the invoice, the receipt and the e-mails. */
+export const contactLines = (s: { telegramUrl?: string; facebookUrl?: string }): string[] =>
+  [s.telegramUrl && `Telegram: ${s.telegramUrl.replace(/^https?:\/\//, "")}`, s.facebookUrl && `Facebook: ${s.facebookUrl.replace(/^https?:\/\//, "")}`].filter(Boolean) as string[];

@@ -14,3 +14,11 @@ describe("customer invoice email", () => {
   it("is skipped when the customer has no email", async () => expect((await sendCustomerEmail({ ...o, customer: { ...o.customer, email: "" } }, "placed")).status).toBe("SKIPPED"));
   it("helpers", () => { expect(invoiceNo(o.orderNumber)).toBe("INV-261023-AB12C"); expect(firstName("  ")).toBe("friend"); });
 });
+describe("e-mail copies the invoice design", () => {
+  const h = customerHtml(o, "placed", "https://shop.test", ["Telegram: t.me/x"]);
+  it("has the sky header, clouds, scalloped edge, stamp and footer like the invoice", () => {
+    expect(h).toContain("linear-gradient(135deg,#8ECCFF,#BFE3FF)"); expect(h).toContain("/img/email/header.png"); 
+    expect(h).toContain("INVOICE DETAILS"); expect(h).toContain("MADE FOR"); expect(h).toContain("border:4px double #8a5a00".replace("#8a5a00", "#D62828")); expect(h).toContain("Little Toys, Big Happiness");
+    expect(h).toContain("អរគុណ"); expect(h).toContain("with love, Cloudy Toys"); expect(h).toContain("Telegram: t.me/x"); expect(h).toContain("Caveat"); expect(h).toContain("Nunito");
+  });
+});

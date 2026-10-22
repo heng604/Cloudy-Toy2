@@ -1,17 +1,19 @@
 import type { StoredOrder } from "../../shared/types";
 import { methodLabel, areaLabel } from "../../shared/delivery";
 import { ADMIN_EMAIL } from "../../shared/admin";
+import { getSettings } from "./settings";
+import { contactLines } from "../../shared/invoice";
 import { customerHtml, customerSubject, adminInvoiceHtml, type CustomerMailKind } from "./customerEmail";
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 export function adminSubject(o: StoredOrder) { return `[Cloudy-Toy] New Order #${o.orderNumber} - ${o.method === "COD" ? "PAY WITH DELIVERY" : "QR PAYMENT (verify manually)"}`; }
 const box = (bg: string, html: string) => `<div style="background:${bg};border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.6;margin-top:8px">${html}</div>`;
 /** "New Order" e-mail to the shop owner. Same design as the invoice (see customerEmail.ts). `extra` = more banners shown above the order. */
-export function adminHtml(o: StoredOrder, extra = "") {
+export function adminHtml(o: StoredOrder, extra = "", contact: string[] = []) {
   const note = o.method === "COD"
     ? box("#fff3cd", `<b>PAY WITH DELIVERY (Phnom Penh):</b> collect <b>${usd(o.totalCents)}</b> in cash when delivering. Not paid yet.`)
     : box("#fff3cd", `<b>QR IMAGE PAYMENT, NOT VERIFIED.</b> The customer may have scanned your QR. Check your bank/Bakong app for <b>${usd(o.totalCents)}</b> with order number ${esc(o.orderNumber)}, then mark it paid in Admin &gt; Orders.`);
-  return adminInvoiceHtml(o, extra + note);
+  return adminInvoiceHtml(o, extra + note, undefined, contact);
 }
 const TEST_SENDER = "Cloudy-Toy <onboarding@resend.dev>";
 const FREE_MAIL = ["gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "live.com"];
@@ -74,7 +76,8 @@ async function deliver(subject: string, html: string, o: StoredOrder, customerTo
     return { status: "FAILED", detail };
   }
 }
-export const sendAdminEmail = (o: StoredOrder) => deliver(adminSubject(o), adminHtml(o), o);
+const contact = async () => contactLines(await getSettings());
+export const sendAdminEmail = async (o: StoredOrder) => deliver(adminSubject(o), adminHtml(o, "", await contact()), o);
 
 export const claimSubject = (o: StoredOrder) => `[Cloudy-Toy] Customer says PAID #${o.orderNumber} - ${usd(o.totalCents)} - please verify`;
 export function claimHtml(o: StoredOrder) {
@@ -85,9 +88,9 @@ export function claimHtml(o: StoredOrder) {
 export const paidOrderSubject = (o: StoredOrder) => `[Cloudy-Toy] New Order #${o.orderNumber} - QR PAYMENT, CUSTOMER SAYS PAID (verify)`;
 const proofNote = (o: StoredOrder) => o.paymentProof ? box("#d1f2d1", `<b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc(o.orderNumber)}).`) : "";
 const claimNote = (o: StoredOrder) => box("#fff3cd", `<b>CUSTOMER SAYS THEY PAID (NOT VERIFIED).</b> Check your ABA app for <b>${usd(o.totalCents)}</b> with order number <b>${esc(o.orderNumber)}</b>. Expect a screenshot on Telegram/Facebook. When confirmed, open Admin &gt; Orders &gt; Mark as paid.`);
-export const sendPaidOrderEmail = (o: StoredOrder) => deliver(paidOrderSubject(o), adminHtml(o, claimNote(o) + proofNote(o)), o);
+export const sendPaidOrderEmail = async (o: StoredOrder) => deliver(paidOrderSubject(o), adminHtml(o, claimNote(o) + proofNote(o), await contact()), o);
 export const sendPaidClaimEmail = (o: StoredOrder) => deliver(claimSubject(o), claimHtml(o), o);
 
 /** Personal invoice e-mail to the customer. SKIPPED when they gave no valid address. Never throws. */
-export const sendCustomerEmail = (o: StoredOrder, kind: CustomerMailKind): Promise<SendResult> =>
-  validEmail(o.customer.email) ? deliver(customerSubject(o, kind), customerHtml(o, kind), o, o.customer.email.trim()) : Promise.resolve({ status: "SKIPPED", detail: "Customer gave no email address" });
+export const sendCustomerEmail = async (o: StoredOrder, kind: CustomerMailKind): Promise<SendResult> =>
+  validEmail(o.customer.email) ? deliver(customerSubject(o, kind), customerHtml(o, kind, undefined, await contact()), o, o.customer.email.trim()) : { status: "SKIPPED", detail: "Customer gave no email address" };

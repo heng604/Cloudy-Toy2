@@ -55,10 +55,13 @@ button,input,select,textarea{font-family:inherit;color:inherit}
   header,footer,aside,.no-print{display:none!important}
   .admin-shell{box-shadow:none!important;background:#fff!important;border-radius:0!important;min-height:0!important;display:block!important}
   .admin-main{padding:0!important}
-  html,body{background:#fff!important}
+  html,body{background:#fff!important;min-height:0!important;height:auto!important}
+  .admin-theme{min-height:0!important;background:#fff!important}
   main{padding:0!important}
   .invoice-print-box{height:auto!important}
   .invoice-print-inner{transform:none!important;margin-inline:auto;zoom:.98}
+  .invoice-print-inner.receipt-print{zoom:1;margin:0 auto}
+  .invoice-print-box{background:none!important;box-shadow:none!important;padding:0!important;margin:0!important}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   @page{size:A4;margin:8mm}
 }
