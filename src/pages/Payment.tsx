@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { areaLabel } from "@shared/delivery";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import PayQr from "@/components/PayQr";
 import NotFound from "@/components/NotFound";
 import { useSettings } from "@/lib/store";
@@ -20,7 +20,6 @@ export default function Payment() {
         <li className="flex justify-between font-semibold text-green-700"><span>Discount{o.discountCode ? ` (${o.discountCode})` : ""}</span><span>−{usd(o.discountCents)}</span></li></>}
       <li className={`${o.discountCents > 0 ? "" : "mt-2 border-t border-sky-border pt-2 "}flex justify-between text-mute`}><span>Delivery ({areaLabel(o)})</span><span>{usd(o.shippingCents)}</span></li>
       <li className="flex justify-between text-lg font-extrabold"><span>Total</span><span>{usd(o.totalCents)} {o.currency}</span></li></ul>
-    <Link to={`/invoice/${o.orderNumber}`} className="inline-block rounded-full bg-sky px-5 py-3 font-bold hover:bg-sky-hover">🧾 View &amp; download my invoice</Link>
     {o.paymentStatus === "PENDING" && o.method === "COD" && <p className="rounded-xl2 bg-sky-pale p-5">Please prepare <b>{usd(o.totalCents)}</b> in cash for the delivery driver.</p>}
     {o.paymentStatus === "PENDING" && o.method === "QR_IMAGE" && <PayQr orderNumber={o.orderNumber} total={usd(o.totalCents)} telegram={s.telegramUrl} facebook={s.facebookUrl} />}
     <p className="text-xs text-mute">Admin email: {o.email.status === "SENT" ? "sent" : o.email.status === "SKIPPED" ? `not sent (${o.email.detail})` : o.email.status === "FAILED" ? `failed (${o.email.detail})` : o.method === "QR_IMAGE" ? "will be sent when you press “I have paid”" : "pending"}</p></div>);

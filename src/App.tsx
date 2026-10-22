@@ -16,7 +16,6 @@ import Cart from "@/pages/Cart";
 // Less-visited pages are loaded on demand so the first visit downloads less code.
 const Checkout = lazy(() => import("@/pages/Checkout"));
 const Payment = lazy(() => import("@/pages/Payment"));
-const InvoicePage = lazy(() => import("@/pages/InvoicePage"));
 const Login = lazy(() => import("@/pages/Login"));
 const AuthCallback = lazy(() => import("@/pages/AuthCallback"));
 const Account = lazy(() => import("@/pages/account/Account"));
@@ -41,7 +40,6 @@ function Shell() {
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment/:orderNumber" element={<Payment />} />
-          <Route path="/invoice/:orderNumber" element={<InvoicePage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/account" element={<Account />} />

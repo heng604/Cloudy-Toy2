@@ -12,6 +12,7 @@ import { refreshAdmin, AdminErrorBanner } from "./hooks";
 import AdminLogin from "./Login";
 import Dashboard from "./Dashboard";
 import Orders from "./Orders";
+import Invoice from "./Invoice";
 import Transactions from "./Transactions";
 import Products from "./Products";
 import ProductEdit from "./ProductEdit";
@@ -25,9 +26,9 @@ function Layout() {
   if (!ready) return <Skeleton />;
   if (!isAdmin) return <NotFound />; // unauthorized => branded 404, no data revealed
   const search = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const q = String(new FormData(e.currentTarget).get("q") ?? "").trim(); navigate(q ? `/admin/orders?q=${encodeURIComponent(q)}` : "/admin/orders"); };
-  return (<div className="mx-auto flex w-full max-w-[110rem] flex-col overflow-hidden rounded-[1.75rem] bg-[#EAF6FA] shadow-xl md:min-h-[calc(100vh-2rem)] md:flex-row">
+  return (<div className="admin-shell mx-auto flex w-full max-w-[110rem] flex-col overflow-hidden rounded-[1.75rem] bg-[#EAF6FA] shadow-xl md:min-h-[calc(100vh-2rem)] md:flex-row">
     <AdminNav initial={(user?.email ?? "A").slice(0, 1)} onSignOut={async () => { await signOut(); navigate("/"); }} />
-    <div className="min-w-0 flex-1 space-y-4 p-3 sm:p-5 lg:p-6">
+    <div className="admin-main min-w-0 flex-1 space-y-4 p-3 sm:p-5 lg:p-6">
       <header className="flex flex-wrap items-center gap-2 sm:gap-3">
         <Link to="/admin" className="flex items-center gap-2 font-extrabold"><img src={settings.logoUrl} alt="" className="h-9 w-auto rounded-lg" /><span className="hidden sm:inline">Cloudy-Toy Admin</span></Link>
         <form onSubmit={search} role="search" className="order-last flex min-w-0 basis-full items-center rounded-full bg-white p-1 pl-4 shadow-soft sm:order-none sm:ml-auto sm:basis-auto sm:w-72 lg:w-96">
@@ -43,6 +44,7 @@ export default function AdminRoutes() {
     <Route path="/admin" element={<Layout />}>
       <Route index element={<Dashboard />} />
       <Route path="orders" element={<Orders />} />
+      <Route path="invoice/:orderNumber" element={<Invoice />} />
       <Route path="transactions" element={<Transactions />} />
       <Route path="products" element={<Products />} />
       <Route path="products/new" element={<ProductEdit />} />

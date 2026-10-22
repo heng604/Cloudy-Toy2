@@ -8,9 +8,9 @@ export const firstName = (full: string) => { const w = full.trim().split(/\s+/)[
 /** 23 October 2026 (Cambodia time, so the date never shifts for the shop owner). */
 export const dateLong = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Phnom_Penh" });
 export const timeShort = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Phnom_Penh" });
-export type InvoiceState = { label: "PAID" | "PAY ON DELIVERY" | "AWAITING PAYMENT"; tone: "green" | "amber" | "blue" };
+export type InvoiceState = { label: "PAID" | "PAY ON DELIVERY" | "AWAITING PAYMENT"; tone: "green" | "amber" | "red" };
 export const invoiceState = (o: StoredOrder): InvoiceState =>
-  o.paymentStatus === "PAID" ? { label: "PAID", tone: "green" } : o.method === "COD" ? { label: "PAY ON DELIVERY", tone: "blue" } : { label: "AWAITING PAYMENT", tone: "amber" };
+  o.paymentStatus === "PAID" ? { label: "PAID", tone: "green" } : o.method === "COD" ? { label: "PAY ON DELIVERY", tone: "red" } : { label: "AWAITING PAYMENT", tone: "amber" };
 /** One warm sentence that tells the customer what happens next. */
 export function nextStep(o: StoredOrder): string {
   if (o.paymentStatus === "PAID") return "Your payment is confirmed. We are packing your toys with love and will deliver them soon.";
@@ -19,4 +19,6 @@ export function nextStep(o: StoredOrder): string {
     ? "Thank you for sending your payment screenshot. We are checking it now and will confirm your order very soon."
     : `Please pay ${usd(o.totalCents)} by scanning our QR code and write ${o.orderNumber} in the note. Then send us the screenshot so we can confirm.`;
 }
-export const BRAND = { name: "Cloudy Toys", tagline: "Little Toys, Big Happiness", sky: "#8ECCFF", skyDeep: "#6CB8F5", skyPale: "#EAF5FF", border: "#D8EAFE", ink: "#2f4156", mute: "#64748B", pink: "#FFB6C8" };
+export const BRAND = { name: "Cloudy Toys", tagline: "Little Toys, Big Happiness", sky: "#8ECCFF", skyDeep: "#6CB8F5", skyPale: "#EAF5FF", border: "#D8EAFE", ink: "#2F4156", red: "#D62828", redPale: "#FDE4E4", mute: "#64748B", pink: "#FFB6C8" };
+/** Header logo used on the invoice and in the invoice e-mails. */
+export const INVOICE_LOGO = "/img/invoice-logo.jpg";

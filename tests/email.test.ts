@@ -7,6 +7,7 @@ describe("admin email", () => {
   it("COD subject and note say pay with delivery", () => { expect(adminSubject(o)).toContain("PAY WITH DELIVERY"); expect(adminHtml(o)).toContain("collect <b>$31.50</b>"); });
   it("QR order is flagged NOT VERIFIED", () => { const q = { ...o, method: "QR_IMAGE" as const }; expect(adminSubject(q)).toContain("verify manually"); expect(adminHtml(q)).toContain("NOT VERIFIED"); });
   it("escapes customer HTML", () => { const h = adminHtml(o); expect(h).not.toContain("<b>Sok"); expect(h).toContain("&lt;b&gt;"); });
+  it("uses the invoice design, with an admin-only invoice button", () => { const h = adminHtml(o); expect(h).toContain("INVOICE"); expect(h).toContain("PRODUCT"); expect(h).toContain("INV-1"); expect(h).not.toContain("<img"); });
   it("never claims SENT without credentials", async () => { delete process.env.RESEND_API_KEY; expect((await sendAdminEmail(o)).status).toBe("SKIPPED"); });
   it("ignores gmail sender, keeps verified-domain sender", () => {
     expect(fromAddress("toyscloudy@gmail.com")).toContain("onboarding@resend.dev"); expect(fromAddress("")).toContain("onboarding@resend.dev"); expect(fromAddress(undefined)).toContain("onboarding@resend.dev");

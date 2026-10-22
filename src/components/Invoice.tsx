@@ -1,12 +1,12 @@
 import { forwardRef } from "react";
 import { areaLabel, methodLabel } from "@shared/delivery";
-import { BRAND, usd, invoiceNo, firstName, dateLong, timeShort, invoiceState, nextStep } from "@shared/invoice";
+import { BRAND, INVOICE_LOGO, usd, invoiceNo, firstName, dateLong, timeShort, invoiceState, nextStep } from "@shared/invoice";
 import type { Settings, StoredOrder } from "@shared/types";
 /** Fixed 760px wide, inline styles only, so the exported image/print looks exactly like the screen on every device. */
 export const INVOICE_WIDTH = 760;
 const hand = '"Caveat","Segoe Print","Bradley Hand","Comic Sans MS",cursive';
 const body = '"Nunito","Segoe UI",ui-rounded,system-ui,"Noto Sans Khmer","Nokora",sans-serif';
-const TONES = { green: { bg: "#DDF6E3", fg: "#1f7a3a" }, amber: { bg: "#FFF1CC", fg: "#8a5a00" }, blue: { bg: "#E1F0FF", fg: "#1d5fa8" } };
+const TONES = { green: { bg: "#DDF6E3", fg: "#1f7a3a" }, amber: { bg: "#FFF1CC", fg: "#8a5a00" }, red: { bg: BRAND.redPale, fg: BRAND.red } };
 const Cloud = ({ w = 90, o = 0.55 }: { w?: number; o?: number }) => <svg width={w} viewBox="0 0 120 60" aria-hidden="true" style={{ opacity: o }}><path d="M30 55a20 20 0 0 1-2-40 26 26 0 0 1 49-6 22 22 0 0 1 21 14 17 17 0 0 1-4 32z" fill="#fff" /></svg>;
 const label: React.CSSProperties = { fontSize: 11, letterSpacing: 1.6, textTransform: "uppercase", color: BRAND.mute, fontWeight: 800, margin: "0 0 6px" };
 const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Settings }>(function Invoice({ order: o, settings }, ref) {
@@ -17,11 +17,11 @@ const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Setti
       {/* header: sky band with the mascot logo and soft clouds */}
       <div style={{ background: `linear-gradient(135deg,${BRAND.sky},#BFE3FF)`, padding: "28px 36px 52px", position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ position: "absolute", top: 10, right: 190 }}><Cloud w={70} o={0.5} /></div><div style={{ position: "absolute", bottom: 14, left: 250 }}><Cloud w={54} o={0.4} /></div>
-        <div style={{ background: "#fff", borderRadius: 22, padding: 6, width: 190, height: 112, display: "grid", placeItems: "center", boxShadow: "0 6px 16px rgba(47,65,86,.15)", position: "relative" }}>
-          <img src={settings.logoUrl} alt="Cloudy Toys" crossOrigin="anonymous" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 16 }} />
+        <div style={{ background: "#fff", borderRadius: 22, padding: 5, width: 128, height: 128, display: "grid", placeItems: "center", boxShadow: "0 6px 16px rgba(47,65,86,.15)", position: "relative" }}>
+          <img src={INVOICE_LOGO} alt="Cloudy Toys" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 18 }} />
         </div>
         <div style={{ textAlign: "right", position: "relative" }}>
-          <p style={{ fontFamily: hand, fontSize: 24, margin: 0, color: "#fff", textShadow: "0 1px 2px rgba(47,65,86,.25)" }}>{BRAND.tagline} ✨</p>
+          <p style={{ fontFamily: hand, fontSize: 24, margin: 0, color: BRAND.ink }}>{BRAND.tagline} ✨</p>
           <h1 style={{ margin: "2px 0 4px", fontSize: 40, fontWeight: 900, letterSpacing: 3, color: BRAND.ink }}>INVOICE</h1>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 15 }}>{invoiceNo(o.orderNumber)}</p>
         </div>
@@ -31,7 +31,7 @@ const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Setti
 
       <div style={{ padding: "6px 36px 30px" }}>
         {/* personal greeting */}
-        <p style={{ fontFamily: hand, fontSize: 34, margin: "0 0 2px", color: BRAND.skyDeep, lineHeight: 1.1 }}>Hello, {firstName(c.name)}! 🧸</p>
+        <p style={{ fontFamily: hand, fontSize: 34, margin: "0 0 2px", color: BRAND.ink, lineHeight: 1.1 }}>Hello, {firstName(c.name)}! 🧸</p>
         <p style={{ margin: "0 0 20px", fontSize: 15, color: BRAND.mute, lineHeight: 1.5 }}>Thank you so much for shopping with us. Every toy is packed with care, just for you.</p>
 
         <div style={{ display: "flex", gap: 18, marginBottom: 22 }}>
@@ -51,7 +51,7 @@ const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Setti
 
         {/* items */}
         <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 14.5 }}>
-          <thead><tr>{["Toy", "Qty", "Price", "Amount"].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? "left" : "right", padding: "10px 12px", background: BRAND.sky, color: BRAND.ink, fontSize: 12, letterSpacing: 1.2, textTransform: "uppercase", borderRadius: i === 0 ? "14px 0 0 14px" : i === 3 ? "0 14px 14px 0" : 0 }}>{h}</th>)}</tr></thead>
+          <thead><tr>{["Product", "Qty", "Price", "Amount"].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? "left" : "right", padding: "10px 12px", background: BRAND.sky, color: BRAND.ink, fontSize: 12, letterSpacing: 1.2, textTransform: "uppercase", borderRadius: i === 0 ? "14px 0 0 14px" : i === 3 ? "0 14px 14px 0" : 0 }}>{h}</th>)}</tr></thead>
           <tbody>{o.items.map((i, n) => <tr key={`${i.productId}-${n}`}>
             <td style={{ padding: "11px 12px", borderBottom: `1px dashed ${BRAND.border}` }}><b>{i.name}</b><br /><span style={{ fontSize: 11.5, color: BRAND.mute }}>SKU {i.sku}</span></td>
             <td style={{ padding: "11px 12px", textAlign: "right", borderBottom: `1px dashed ${BRAND.border}` }}>{i.qty}</td>
@@ -66,7 +66,7 @@ const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Setti
           </div>
           <div style={{ width: 290, fontSize: 14.5 }}>
             <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: BRAND.mute }}><span>Subtotal</span><span>{usd(o.subtotalCents)}</span></p>
-            {o.discountCents > 0 && <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: "#1f7a3a", fontWeight: 700 }}><span>Discount{o.discountCode ? ` (${o.discountCode})` : ""}</span><span>−{usd(o.discountCents)}</span></p>}
+            {o.discountCents > 0 && <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: BRAND.mute }}><span>Discount{o.discountCode ? ` (${o.discountCode})` : ""}</span><span style={{ color: BRAND.red, fontWeight: 800 }}>−{usd(o.discountCents)}</span></p>}
             <p style={{ display: "flex", justifyContent: "space-between", margin: "4px 0", color: BRAND.mute }}><span>Delivery</span><span>{usd(o.shippingCents)}</span></p>
             <p style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "10px 0 0", background: BRAND.ink, color: "#fff", borderRadius: 18, padding: "12px 18px", fontWeight: 900, fontSize: 20 }}><span>Total</span><span>{usd(o.totalCents)} {o.currency}</span></p>
           </div>
@@ -78,8 +78,8 @@ const Invoice = forwardRef<HTMLDivElement, { order: StoredOrder; settings: Setti
 
       {/* footer with a hand written thank-you */}
       <div style={{ background: BRAND.skyPale, padding: "18px 36px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, borderTop: `2px dashed ${BRAND.border}` }}>
-        <div><p style={{ fontFamily: hand, fontSize: 30, margin: 0, color: BRAND.skyDeep, lineHeight: 1.2, whiteSpace: "nowrap" }}><span style={{ fontFamily: '"Nokora","Noto Sans Khmer","Khmer UI",sans-serif', fontSize: 24 }}>អរគុណ</span> · Thank you! 💙</p><p style={{ margin: "4px 0 0", fontFamily: hand, fontSize: 22, color: BRAND.ink }}>with love, {BRAND.name}</p></div>
-        <p style={{ margin: 0, fontSize: 12.5, color: BRAND.mute, textAlign: "right", lineHeight: 1.6 }}>{contact.length ? contact.map((x) => <span key={x}>{x}<br /></span>) : <>Questions? Just reply to our email.<br /></>}Please keep this invoice for your records.</p>
+        <div><p style={{ fontFamily: hand, fontSize: 30, margin: 0, color: BRAND.ink, lineHeight: 1.2, whiteSpace: "nowrap" }}><span style={{ fontFamily: '"Nokora","Noto Sans Khmer","Khmer UI",sans-serif', fontSize: 24 }}>អរគុណ</span> · Thank you! 💙</p><p style={{ margin: "4px 0 0", fontFamily: hand, fontSize: 22, color: BRAND.ink }}>with love, {BRAND.name}</p></div>
+        <p style={{ margin: 0, fontSize: 12.5, color: BRAND.ink, textAlign: "right", lineHeight: 1.6 }}>{contact.length ? contact.map((x) => <span key={x}>{x}<br /></span>) : <>Questions? Just reply to our email.<br /></>}Please keep this invoice for your records.</p>
       </div>
     </div>
   );
