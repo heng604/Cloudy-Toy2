@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useCart } from "@/components/CartProvider";
@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PROVINCES } from "@shared/provinces";
+import { methodOn, modeOf } from "@shared/payOptions";
 export default function CheckoutForm({ fees, products, telegram = "", facebook = "" }: { fees: { pp: number; prov: number }; products: CartProduct[]; telegram?: string; facebook?: string }) {
   const { settings: site } = useSettings(); const { user } = useAuth(); const { t, lang } = useI18n(); const [province, setProvince] = useState("");
   const { lines, clear } = useCart(); const navigate = useNavigate(); const router = { push: (p: string) => navigate(p) };
@@ -20,7 +21,12 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const pickProof = (f: File | null) => { setErr(""); if (f && f.size > 25 * 1024 * 1024) { setFile(null); setPreview(""); setErr("Screenshot is too large (max 25 MB)."); return; } setFile(f); setPreview(f ? URL.createObjectURL(f) : ""); };
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const [code, setCode] = useState(""); const [applied, setApplied] = useState<{ code: string; cents: number } | null>(null); const [codeMsg, setCodeMsg] = useState(""); const [checking, setChecking] = useState(false);
-  const [area, setArea] = useState<Area>("PHNOM_PENH"); const [method, setMethod] = useState<Method>("QR_IMAGE");
+  const [area, setArea] = useState<Area>("PHNOM_PENH"); const [pick, setPick] = useState<Method | null>(null); const setMethod = (m: Method) => setPick(m);
+  const [bakong, setBakong] = useState(false);
+  useEffect(() => { let live = true; fetch("/api/payment/bakong/enabled").then((r) => r.json()).then((j) => { if (live && j?.enabled) setBakong(true); }).catch(() => {}); return () => { live = false; }; }, []);
+  const avail: Record<Method, boolean> = { BAKONG: bakong && methodOn(site, "BAKONG"), QR_IMAGE: methodOn(site, "QR_IMAGE"), COD: methodOn(site, "COD") && area === "PHNOM_PENH" };
+  const firstOn = (["BAKONG", "QR_IMAGE", "COD"] as Method[]).find((m) => avail[m]);
+  const method: Method = pick && avail[pick] ? pick : firstOn ?? "QR_IMAGE"; // the customer's own choice wins while it is available; otherwise the first option that is on
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const ship = (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
@@ -33,7 +39,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     setApplied({ code: d.code, cents: d.discountCents }); setCodeMsg("");
   }
   const discount = applied ? applied.cents / 100 : 0;
-  function pickArea(a: Area) { setArea(a); if (a === "PROVINCE" && method === "COD") setMethod("QR_IMAGE"); }
+  function pickArea(a: Area) { setArea(a); }
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); if (busy || placed) return; setErr("");
     if (method === "QR_IMAGE" && !file) { setErr("Please upload your payment screenshot first."); return; }
@@ -72,9 +78,9 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     <label className="block">{t("Delivery address")}<textarea name="address" required minLength={5} rows={3} placeholder="Example: House 12, Street 271, Sangkat Tuol Tumpung 1, Khan Chamkar Mon, Phnom Penh" className={cls} /></label>
     <label className="block">{t("Delivery instructions")}<input name="notes" placeholder="Example: Call me before arriving" className={cls} /></label>
     <fieldset className="space-y-2"><legend className="font-semibold">{t("Payment")}</legend>
-      <label className={`${opt} opacity-50`}><input type="radio" name="pay" disabled />Scan with Bakong (KHQR) · Coming soon</label>
-      <label className={opt}><input type="radio" name="pay" checked={method === "QR_IMAGE"} onChange={() => setMethod("QR_IMAGE")} />Scan QR image and pay. We verify it with you on Telegram or Facebook.</label>
-      <label className={`${opt} ${area !== "PHNOM_PENH" ? "opacity-50" : ""}`}><input type="radio" name="pay" disabled={area !== "PHNOM_PENH"} checked={method === "COD"} onChange={() => setMethod("COD")} />Pay with delivery (Phnom Penh only)</label></fieldset>
+      <label className={`${opt} ${avail.BAKONG ? "" : "opacity-50"}`}><input type="radio" name="pay" disabled={!avail.BAKONG} checked={method === "BAKONG"} onChange={() => { setMethod("BAKONG"); }} /><span>Pay with Bakong KHQR <span className="text-mute">· {avail.BAKONG ? "scan with any banking app, confirmed automatically" : modeOf(site, "BAKONG") === "soon" || !bakong ? "coming soon" : "temporarily unavailable"}</span></span></label>
+      <label className={`${opt} ${avail.QR_IMAGE ? "" : "opacity-50"}`}><input type="radio" name="pay" disabled={!avail.QR_IMAGE} checked={method === "QR_IMAGE"} onChange={() => { setMethod("QR_IMAGE"); }} />Scan QR image and pay. We verify it with you on Telegram or Facebook.{!avail.QR_IMAGE && (modeOf(site, "QR_IMAGE") === "soon" ? " · Coming soon" : " (temporarily unavailable)")}</label>
+      <label className={`${opt} ${!avail.COD ? "opacity-50" : ""}`}><input type="radio" name="pay" disabled={!avail.COD} checked={method === "COD"} onChange={() => { setMethod("COD"); }} />Pay with delivery (Phnom Penh only){!methodOn(site, "COD") && (modeOf(site, "COD") === "soon" ? " · Coming soon" : " (temporarily unavailable)")}</label></fieldset>
     {method === "QR_IMAGE" && <div className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4 text-center">
       <img src={site.qrUrl || "/img/qr-pay.png"} alt="ABA PAY QR code for Cloudy Toys (YIHOR THENG)" className="mx-auto w-full max-w-sm rounded-xl2 border border-sky-border" />
       <p>Scan and pay exactly <b>{money(subtotal - discount + ship)}</b>.</p>
@@ -85,7 +91,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       <button type="button" onClick={applyCode} disabled={checking || !code.trim()} className="rounded-full border border-sky-border bg-white px-5 font-bold hover:bg-sky-pale disabled:opacity-50">{checking ? "…" : t("Apply")}</button></span></label>
       <p className="mt-1 text-xs text-mute">{t("Takes 10% to 50% off your subtotal.")}</p>{applied && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div>
     {err && <p role="alert" className="text-red-700">{err}</p>}
-    <button disabled={busy || !!placed || (method === "QR_IMAGE" && !file)} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{busy ? t("Sending…") : method === "QR_IMAGE" ? t("I have paid") : t("Place order")}</button>
+    <button disabled={busy || !!placed || !firstOn || (method === "QR_IMAGE" && !file)} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{busy ? t("Sending…") : method === "QR_IMAGE" ? t("I have paid") : method === "BAKONG" ? "Continue to KHQR" : t("Place order")}</button>
     {method === "QR_IMAGE" && !file && <p className="text-xs text-mute">Upload your payment screenshot to enable &quot;I have paid&quot;.</p>}
 </form>
     <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5 lg:sticky lg:top-24"><h2 className="font-extrabold">{t("Order summary")}</h2>

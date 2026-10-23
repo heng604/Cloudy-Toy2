@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import Skeleton from "@/components/Skeleton";
 import FilePicker from "@/components/admin/FilePicker";
 import { useSettings } from "@/lib/store";
+import { modeOf, type PayMode } from "@shared/payOptions";
 import { api, post } from "@/lib/api";
 import { compressFormData } from "@/lib/compress";
 import { useTitle } from "@/lib/title";
@@ -19,7 +20,7 @@ export default function Settings() {
     catch { setSp({ error: "Could not reach the server. Please try again." }); } finally { setBusy(""); }
   };
   const del = async (name: string, msg: string, send: () => Promise<Response>) => {
-    if (busy || !confirm(msg)) return; setBusy(name);
+    if (busy || (msg && !confirm(msg))) return; setBusy(name);
     try { const j = await (await send()).json().catch(() => ({})) as { ok?: boolean; error?: string }; refreshAdmin(); setSp(j.ok ? { saved: "1" } : { error: j.error ?? "Could not delete. Please try again." }); window.scrollTo({ top: 0 }); }
     catch { setSp({ error: "Could not reach the server. Please try again." }); } finally { setBusy(""); }
   };
@@ -29,6 +30,15 @@ export default function Settings() {
   const json = (f: FormData) => post("/admin/settings", { pp: f.get("pp"), prov: f.get("prov"), tg: f.get("tg"), fb: f.get("fb") });
   return (<div className="max-w-xl space-y-6"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Store settings")}</h1>
     <Msg ok={sp.get("saved") ? "Saved" : null} err={sp.get("error")} />
+    <section className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Payment options</p>
+      <p className="text-sm text-mute"><b>Start</b> = customers can pay with it. <b>Pause</b> = hidden for now (shown as unavailable). <b>Coming soon</b> = shown as &quot;Coming soon&quot;. Orders already placed can still be paid. Keep at least one on Start.</p>
+      {([["payBakong", "Bakong KHQR", "Scan to pay, confirmed automatically"], ["payQr", "QR image + screenshot", "Customer uploads a payment screenshot"], ["payCod", "Pay with delivery", "Cash on delivery, Phnom Penh only"]] as const).map(([k, name, hint]) => {
+        const cur = modeOf(s, k === "payBakong" ? "BAKONG" : k === "payQr" ? "QR_IMAGE" : "COD");
+        const set = (m: PayMode) => del("pay", "", async () => post("/admin/settings/payments", { payBakong: modeOf(s, "BAKONG"), payQr: modeOf(s, "QR_IMAGE"), payCod: modeOf(s, "COD"), [k]: m }));
+        const opts: [PayMode, string, string][] = [["on", "Start", "bg-green-500 text-white"], ["paused", "Pause", "bg-red-500 text-white"], ["soon", "Coming soon", "bg-amber-400 text-black"]];
+        return (<div key={k} className="space-y-2 rounded-xl border border-sky-border p-3"><div><p className="font-bold">{name}</p><p className="text-xs text-mute">{hint}</p></div>
+          <div role="radiogroup" aria-label={name} className="grid grid-cols-3 gap-1 rounded-full bg-sky-pale p-1">{opts.map(([m, label, on]) => <button key={m} type="button" role="radio" aria-checked={cur === m} disabled={!!busy} onClick={() => cur !== m && set(m)} className={`min-h-10 rounded-full px-2 text-sm font-bold transition disabled:opacity-60 ${cur === m ? on : "hover:bg-white"}`}>{label}</button>)}</div></div>);
+      })}</section>
     <form onSubmit={run("logo", multi("/admin/settings/logo"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Shop logo</p>
       <p className="text-sm text-mute">Shown in the shop header, footer and admin. JPG, PNG or WebP, max 5 MB. A PNG with a transparent background looks best.</p>
       <img src={s.logoUrl} alt="Current logo" className="h-20 w-auto rounded-xl border border-sky-border bg-page p-1" />

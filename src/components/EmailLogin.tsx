@@ -14,7 +14,7 @@ export default function EmailLogin({ next = "/account", allowSignUp = true }: { 
     setBusy(true);
     try {
       if (mode === "up") {
-        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${location.origin}/auth/callback?next=${encodeURIComponent(next)}` } });
         if (error) return setErr(error.message);
         if (data.session) return navigate(next, { replace: true });
         return setInfo("Account created. Check your email to confirm it, then sign in.");

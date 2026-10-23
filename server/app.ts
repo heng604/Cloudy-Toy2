@@ -11,10 +11,12 @@ import { requireAdmin, requireUser, userFromReq, adminOf, userOf } from "./lib/a
 import { tooMany, clientKey } from "./lib/rateLimit";
 import { listProducts, listAllProducts, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
 import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
-import { saveOrder, getOrder, updateOrder, listAllOrders, listOrdersByEmail, deleteAllOrders } from "./lib/store";
+import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
-import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail } from "./lib/email";
+import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendBakongPaidEmail } from "./lib/email";
+import { methodOn } from "../shared/payOptions";
+import { bakongEnabled, makeKhqr, checkPaid, bakongName } from "./lib/bakong";
 import { uploadProof, deleteProofs, proofUrls } from "./lib/proofStore";
 import { ordersDataset, transactionsDataset, productsDataset, stockDataset } from "./lib/exports";
 import { toCsv } from "../shared/csv";
@@ -67,10 +69,10 @@ const catalogOf = (products: Awaited<ReturnType<typeof listProducts>>) => new Ma
 const Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
   lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99) })).min(1).max(50),
-  area: z.enum(["PHNOM_PENH", "PROVINCE"]), province: z.enum(PROVINCE_NAMES).optional(), method: z.enum(["COD", "QR_IMAGE"]), code: z.string().trim().max(40).optional(),
+  area: z.enum(["PHNOM_PENH", "PROVINCE"]), province: z.enum(PROVINCE_NAMES).optional(), method: z.enum(["COD", "QR_IMAGE", "BAKONG"]), code: z.string().trim().max(40).optional(),
 });
 const LABELS: Record<string, string> = { name: "Full name (at least 2 characters)", email: "Email (a valid address)", phone: "Phone (at least 6 digits)", address: "Delivery address (5 to 400 characters)", notes: "Delivery instructions (max 300 characters)", area: "Delivery area", method: "Payment method" };
-api.post("/checkout", wrap(async (req, res) => {
+api.post("/checkout", requireUser, wrap(async (req, res) => {
   const raw = req.body; const parsed = Body.safeParse(raw);
   if (!parsed.success) {
     const bad = [...new Set(parsed.error.issues.map((i) => { const k = String(i.path[0] === "customer" ? i.path[1] : i.path[0]); const v = raw?.customer?.[k]; return (LABELS[k] ?? "Cart items") + (i.path[0] === "customer" ? `, ${typeof v === "string" ? `you entered ${v.trim().length}` : "nothing received"}` : ""); }))];
@@ -80,8 +82,10 @@ api.post("/checkout", wrap(async (req, res) => {
   if (codeIn && tooMany(`c:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (codeIn && !CODE_RE.test(codeIn)) return res.status(400).json({ error: "That discount code is not valid." });
   if (area === "PROVINCE" && !parsed.data.province) return res.status(400).json({ error: "Please choose your province." });
+  if (method === "BAKONG" && !bakongEnabled()) return res.status(400).json({ error: "Bakong payment is not available right now. Please choose another payment method." });
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
-  const [settings, products, acct] = await Promise.all([getSettings(), listProducts(), userFromReq(req)]);
+  const acct = userOf(req); const [settings, products] = await Promise.all([getSettings(), listProducts()]);
+  if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   const catalog = catalogOf(products); let usedCode: string | undefined;
   try {
     const ship = shippingFor(area, settings); let discount = 0;
@@ -99,6 +103,7 @@ api.post("/checkout", wrap(async (req, res) => {
     const lines2 = t.items.map((i) => ({ productId: i.productId, qty: i.qty }));
     await decrementStock(lines2); // atomic in the database; throws INSUFFICIENT_STOCK without changing anything
     try { await saveOrder(order); } catch (e) { await restoreStock(lines2); throw e; }
+    if (method === "BAKONG") return res.json({ orderNumber }); // Bakong: the admin is emailed once the bank confirms the payment (see /payment/bakong/status)
     try { // EVERY new order (pay with delivery AND QR) is emailed to the admin right away; QR orders get a second email when the customer presses "I have paid"
       const r = await sendAdminEmail(order); // order is never lost if email fails; status is recorded (admin can press "Resend email")
       await updateOrder(orderNumber, (x) => { x.email = { status: r.status, detail: r.detail, attempts: 1 }; });
@@ -130,6 +135,42 @@ api.get("/orders/:n", wrap(async (req, res) => {
   if (!/^CT-[0-9]{6}-[A-Z0-9]{5}$/.test(String(req.params.n))) return res.status(404).json({ error: "Not found" }); // wrong format: never hits the database
   if (tooMany(`o:${clientKey(req)}`, 30)) return res.status(429).json({ error: "Too many tries. Please wait a minute." }); // blocks order-number guessing
   const o = await getOrder(String(req.params.n)); return o ? res.json({ order: o }) : res.status(404).json({ error: "Not found" }); }));
+
+/* ---------------- Bakong KHQR ---------------- */
+const ORDER_RE = /^CT-[0-9]{6}-[A-Z0-9]{5}$/;
+api.get("/payment/bakong/enabled", wrap(async (_req, res) => res.json({ enabled: bakongEnabled() && methodOn(await getSettings(), "BAKONG") })));
+/** Creates (or renews) the KHQR for this order's exact total. */
+api.post("/payment/bakong/qr", wrap(async (req, res) => {
+  const n = typeof req.body?.orderNumber === "string" ? req.body.orderNumber.trim() : "";
+  if (!ORDER_RE.test(n)) return res.status(400).json({ error: "Invalid order" });
+  if (tooMany(`bkqr:${clientKey(req)}`, 20)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  if (!bakongEnabled()) return res.status(503).json({ error: "Bakong payment is not set up yet." });
+  const o = await getOrder(n);
+  if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Order not found" });
+  if (o.paymentStatus === "PAID") return res.json({ paid: true });
+  const k = await makeKhqr(n, o.totalCents);
+  await updateOrder(n, (x) => { x.bakongMd5s = [...(x.bakongMd5s ?? []), k.md5].slice(-10); }); // older QR codes stay valid for checking
+  res.json({ paid: false, image: k.image, expiresAt: k.expiresAt, amountCents: o.totalCents, merchant: bakongName() });
+}));
+/** The page polls this. When Bakong confirms the transfer (amount + account match) the order becomes PAID exactly once and the admin is emailed. */
+api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
+  const n = String(req.params.n);
+  if (!ORDER_RE.test(n)) return res.status(404).json({ error: "Not found" });
+  if (tooMany(`bks:${clientKey(req)}`, 60)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  const o = await getOrder(n);
+  if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Not found" });
+  if (o.paymentStatus === "PAID") return res.json({ paid: true });
+  let hash: string | undefined;
+  for (const md5 of [...(o.bakongMd5s ?? [])].reverse()) { const r = await checkPaid(md5, o.totalCents); if (r.ok) { hash = r.hash ?? md5; break; } if (r.reason === "ERROR") console.error("[bakong check]", n, r.detail); }
+  if (!hash) return res.json({ paid: false });
+  const won = await markPaidOnce(n, (x) => { x.paidAt = new Date().toISOString(); x.paidManuallyBy = undefined; x.bakongHash = hash; });
+  if (won) { // only the request that flipped PENDING -> PAID sends the emails
+    try { const r = await sendBakongPaidEmail(won); await updateOrder(n, (x) => { x.claimEmail = r; x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; }); if (r.status !== "SENT") console.error("[bakong paid email]", n, r.status, r.detail); }
+    catch (e) { console.error("[bakong paid email]", n, e); }
+    try { const r = await sendCustomerEmail(won, "paid"); await updateOrder(n, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); } catch (e) { console.error("[bakong receipt]", n, e); }
+  }
+  res.json({ paid: true });
+}));
 
 /** Customer pressed "I have paid": email the full order to the admin (once). */
 api.post("/payment/claim", wrap(async (req, res) => {
@@ -288,6 +329,13 @@ admin.post("/settings", wrap(async (req, res) => {
   const p = z.object({ pp: Fee, prov: Fee, tg: Url, fb: Url }).safeParse({ pp: req.body?.pp, prov: req.body?.prov, tg: req.body?.tg ?? "", fb: req.body?.fb ?? "" });
   if (!p.success) return res.json({ error: p.error.issues[0]?.message ?? "Invalid input" });
   await saveSettings({ shipPhnomPenhCents: Math.round(p.data.pp * 100), shipProvinceCents: Math.round(p.data.prov * 100), telegramUrl: p.data.tg, facebookUrl: p.data.fb }); res.json({ ok: true });
+}));
+/** Admin sets each payment option to on / paused / coming soon (at least one must stay on). */
+admin.post("/settings/payments", wrap(async (req, res) => {
+  const p = z.object({ payBakong: z.enum(["on", "paused", "soon"]), payQr: z.enum(["on", "paused", "soon"]), payCod: z.enum(["on", "paused", "soon"]) }).safeParse(req.body);
+  if (!p.success) return res.json({ error: "Invalid input" });
+  if (![p.data.payBakong, p.data.payQr, p.data.payCod].includes("on")) return res.json({ error: "Keep at least one payment option on (working), or customers cannot check out." });
+  await saveSettings(p.data); res.json({ ok: true });
 }));
 /** Admin uploads a new logo (or resets to the built-in one). */
 admin.post("/settings/logo", upload.any(), wrap(async (req, res) => {

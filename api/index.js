@@ -253,6 +253,14 @@ async function updateOrder(n, fn) {
   must(await db().from("orders").update(toRow(o)).eq("order_number", n).select("order_number").single());
   return o;
 }
+async function markPaidOnce(n, fn) {
+  const o = await getOrder(n);
+  if (!o || o.paymentStatus !== "PENDING") return null;
+  o.paymentStatus = "PAID";
+  fn(o);
+  const r = await db().from("orders").update(toRow(o)).eq("order_number", n).eq("payment_status", "PENDING").select("order_number");
+  return must(r)?.length ? o : null;
+}
 async function listOrdersByEmail(email) {
   const e = email.toLowerCase();
   const results = await Promise.allSettled([
@@ -281,7 +289,7 @@ async function deleteAllOrders() {
 }
 
 // shared/types.ts
-var DEFAULT_SETTINGS = { shipPhnomPenhCents: 150, shipProvinceCents: 200, telegramUrl: "", facebookUrl: "", logoUrl: "/img/logo.png", banners: [], qrUrl: "/img/qr-pay.png" };
+var DEFAULT_SETTINGS = { shipPhnomPenhCents: 150, shipProvinceCents: 200, telegramUrl: "", facebookUrl: "", logoUrl: "/img/logo.png", banners: [], qrUrl: "/img/qr-pay.png", payBakong: "on", payQr: "on", payCod: "on" };
 
 // server/lib/settings.ts
 var cache = null;
@@ -355,9 +363,9 @@ async function savePage(slug, patch) {
 
 // shared/delivery.ts
 var shippingFor = (a, s) => a === "PHNOM_PENH" ? s.shipPhnomPenhCents : s.shipProvinceCents;
-var methodAllowed = (m, a) => m === "QR_IMAGE" || m === "COD" && a === "PHNOM_PENH";
+var methodAllowed = (m, a) => m === "QR_IMAGE" || m === "BAKONG" || m === "COD" && a === "PHNOM_PENH";
 var areaLabel = (o) => o.area === "PHNOM_PENH" ? "Phnom Penh" : o.province ? `Province: ${o.province}` : "Province";
-var methodLabel = (m) => m === "COD" ? "Pay with delivery" : "QR image payment";
+var methodLabel = (m) => m === "COD" ? "Pay with delivery" : m === "BAKONG" ? "Bakong KHQR" : "QR image payment";
 
 // shared/invoice.ts
 var usd = (c) => `$${(c / 100).toFixed(2)}`;
@@ -367,65 +375,102 @@ var firstName = (full) => {
   return w ? w.charAt(0).toUpperCase() + w.slice(1) : "friend";
 };
 var dateLong = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Phnom_Penh" });
-var invoiceState = (o) => o.paymentStatus === "PAID" ? { label: "PAID", tone: "green" } : o.method === "COD" ? { label: "PAY ON DELIVERY", tone: "blue" } : { label: "AWAITING PAYMENT", tone: "amber" };
+var timeShort = (iso) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Phnom_Penh" });
+var invoiceState = (o) => o.paymentStatus === "PAID" ? { label: "PAID", tone: "green" } : o.method === "COD" ? { label: "PAY ON DELIVERY", tone: "red" } : { label: "AWAITING PAYMENT", tone: "amber" };
 function nextStep(o) {
   if (o.paymentStatus === "PAID") return "Your payment is confirmed. We are packing your toys with love and will deliver them soon.";
   if (o.method === "COD") return `Please keep ${usd(o.totalCents)} in cash ready for our delivery driver. We will call you before we arrive.`;
   return o.paymentProof || o.claimedPaidAt ? "Thank you for sending your payment screenshot. We are checking it now and will confirm your order very soon." : `Please pay ${usd(o.totalCents)} by scanning our QR code and write ${o.orderNumber} in the note. Then send us the screenshot so we can confirm.`;
 }
-var BRAND = { name: "Cloudy Toys", tagline: "Little Toys, Big Happiness", sky: "#8ECCFF", skyDeep: "#6CB8F5", skyPale: "#EAF5FF", border: "#D8EAFE", ink: "#2f4156", mute: "#64748B", pink: "#FFB6C8" };
+var BRAND = { name: "Cloudy Toys", tagline: "Little Toys, Big Happiness", sky: "#8ECCFF", skyDeep: "#6CB8F5", skyPale: "#EAF5FF", border: "#D8EAFE", ink: "#2F4156", red: "#D62828", redPale: "#FDE4E4", mute: "#64748B", pink: "#FFB6C8" };
+var INVOICE_LOGO = "/img/invoice-logo.jpg";
+var contactLines = (s) => [s.telegramUrl && `Telegram: ${s.telegramUrl.replace(/^https?:\/\//, "")}`, s.facebookUrl && `Facebook: ${s.facebookUrl.replace(/^https?:\/\//, "")}`].filter(Boolean);
+
+// server/lib/email.ts
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // server/lib/customerEmail.ts
 var esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var LOGO_CID = "invoice-logo";
 var siteUrl = () => (process.env.SITE_URL ?? "").trim().replace(/\/+$/, "");
 var customerSubject = (o, kind) => kind === "paid" ? `Payment received, thank you ${firstName(o.customer.name)}! \u{1F499} (${o.orderNumber})` : `Thank you, ${firstName(o.customer.name)}! Your Cloudy Toys invoice ${invoiceNo(o.orderNumber)} \u{1F9F8}`;
-var TONE = { green: ["#DDF6E3", "#1f7a3a"], amber: ["#FFF1CC", "#8a5a00"], blue: ["#E1F0FF", "#1d5fa8"] };
-function customerHtml(o, kind = "placed", base = siteUrl()) {
-  const st = invoiceState(o), [tb, tf] = TONE[st.tone], c = o.customer, hand = "'Segoe Print','Bradley Hand','Comic Sans MS',cursive";
-  const headline = kind === "paid" ? `We got your payment, ${esc(firstName(c.name))}! \u{1F499}` : `Hello, ${esc(firstName(c.name))}! \u{1F9F8}`;
-  const intro = kind === "paid" ? "Thank you! Your payment is confirmed and we are packing your toys with love. Here is your receipt." : "Thank you so much for your order. We are so happy you chose Cloudy Toys! Here is your invoice.";
-  const logo = base ? `<img src="${esc(base)}/img/logo.png" alt="Cloudy Toys" width="150" style="display:block;margin:0 auto;border-radius:16px;background:#fff;max-width:150px;height:auto">` : `<div style="font:900 26px Arial,sans-serif;color:${BRAND.ink};letter-spacing:1px">CLOUDY TOYS</div>`;
-  const rows = o.items.map((i) => `<tr><td style="padding:10px 8px;border-bottom:1px dashed ${BRAND.border};font-size:14px"><b>${esc(i.name)}</b><br><span style="color:${BRAND.mute};font-size:12px">${esc(i.sku)} \xB7 ${usd(i.unitCents)} each</span></td><td align="center" style="padding:10px 8px;border-bottom:1px dashed ${BRAND.border};font-size:14px">\xD7${i.qty}</td><td align="right" style="padding:10px 8px;border-bottom:1px dashed ${BRAND.border};font-size:14px;font-weight:bold">${usd(i.lineCents)}</td></tr>`).join("");
-  const line = (k, v, extra = "") => `<tr><td style="padding:3px 0;color:${BRAND.mute};font-size:14px;${extra}">${k}</td><td align="right" style="padding:3px 0;font-size:14px;${extra}">${v}</td></tr>`;
-  const button = base ? `<table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:22px auto 4px"><tr><td style="background:${BRAND.sky};border-radius:999px"><a href="${esc(base)}/invoice/${encodeURIComponent(o.orderNumber)}" style="display:inline-block;padding:13px 26px;font:bold 15px Arial,sans-serif;color:${BRAND.ink};text-decoration:none">\u{1F9FE} View &amp; download my invoice</a></td></tr></table>` : "";
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#F4FAFF">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(nextStep(o))}</div>
+var TONE = { green: ["#DDF6E3", "#1f7a3a"], amber: ["#FFF1CC", "#8a5a00"], red: [BRAND.redPale, BRAND.red] };
+var hand = "'Caveat','Segoe Print','Bradley Hand','Comic Sans MS',cursive";
+var body = "'Nunito','Segoe UI',ui-rounded,Arial,'Helvetica Neue',sans-serif";
+var khmer = "'Nokora','Noto Sans Khmer','Khmer UI',Arial,sans-serif";
+var FONTS = "https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Nunito:wght@400;700;900&family=Nokora:wght@400;700&display=swap";
+function invoiceEmail(o, { mode, kind = "placed", base, banner = "", contact: contact2 = [], inlineLogo = false }) {
+  const admin2 = mode === "admin", st = invoiceState(o), [tb, tf] = TONE[st.tone], c = o.customer;
+  const headline = admin2 ? `New order ${esc(o.orderNumber)} \u{1F9F8}` : kind === "paid" ? `We got your payment, ${esc(firstName(c.name))}! \u{1F499}` : `Hello, ${esc(firstName(c.name))}! \u{1F9F8}`;
+  const intro = admin2 ? "A new order just came in. Details are below, in the same layout as the invoice." : kind === "paid" ? "Thank you! Your payment is confirmed and we are packing your toys with love. Here is your receipt." : "Thank you so much for shopping with us. Every toy is packed with care, just for you. Here is your invoice.";
+  const logoSrc = inlineLogo ? `cid:${LOGO_CID}` : base ? `${esc(base)}${INVOICE_LOGO}` : "";
+  const logo = logoSrc ? `<img src="${logoSrc}" alt="Cloudy Toys" width="118" height="118" style="display:block;width:118px;height:118px;border-radius:18px;border:5px solid #fff;background:#fff;box-shadow:0 6px 16px rgba(47,65,86,.15)">` : `<div style="background:#fff;border-radius:22px;padding:34px 16px;font:900 20px ${body};color:${BRAND.ink};letter-spacing:1px;text-align:center;width:118px">CLOUDY TOYS</div>`;
+  const hdrBg = base ? `background-image:url('${esc(base)}/img/email/header.png');background-repeat:no-repeat;background-position:center top;background-size:100% 208px;` : "";
+  const scallop = base ? "" : `<tr><td style="height:18px;background:#fff;border-radius:18px 18px 0 0;font-size:0;line-height:0">&nbsp;</td></tr>`;
+  const label = (t, col = BRAND.mute) => `<div style="font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:${col};font-weight:800;margin:0 0 6px">${t}</div>`;
+  const th = (t, a, r = "") => `<td align="${a}" style="background:${BRAND.sky};color:${BRAND.ink};padding:10px 12px;font-size:12px;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase;${r}">${t}</td>`;
+  const td = (v, a, x = "") => `<td align="${a}" style="padding:11px 12px;border-bottom:1px dashed ${BRAND.border};font-size:14.5px;${x}">${v}</td>`;
+  const rows = o.items.map((i) => `<tr>${td(`<b>${esc(i.name)}</b><br><span style="color:${BRAND.mute};font-size:11.5px">SKU ${esc(i.sku)}</span>`, "left")}${td(String(i.qty), "right")}${td(usd(i.unitCents), "right")}${td(usd(i.lineCents), "right", "font-weight:800;")}</tr>`).join("");
+  const line = (k, v, vs = "") => `<tr><td style="padding:4px 12px 4px 0;color:${BRAND.mute};font-size:14.5px;white-space:nowrap">${k}</td><td align="right" style="padding:4px 0;font-size:14.5px;color:${BRAND.mute};white-space:nowrap;${vs}">${v}</td></tr>`;
+  const kv = (k, v) => `<tr><td style="padding:2px 10px 2px 0;color:${BRAND.mute};font-size:13.5px;white-space:nowrap;vertical-align:top">${k}</td><td style="padding:2px 0;font-size:13.5px;font-weight:bold">${v}</td></tr>`;
+  const who = [esc(c.phone), c.email ? esc(c.email) : "", ...admin2 ? [`Facebook: ${esc(c.facebook ?? "-")}`, `Telegram: ${esc(c.telegram ?? "-")}`] : [], esc(areaLabel(o)), esc(c.address)].filter(Boolean).join("<br>");
+  const details = [kv("Date", `${esc(dateLong(o.createdAt))}, ${esc(timeShort(o.createdAt))}`), kv("Order no.", esc(o.orderNumber)), kv("Payment", esc(methodLabel(o.method))), ...o.paidAt ? [kv("Paid on", esc(dateLong(o.paidAt)))] : [], ...admin2 ? [kv("Status", esc(o.paymentStatus)), kv("Reference", esc(o.paymentReference))] : []].join("");
+  const note = c.notes ? `<tr><td style="padding:16px 36px 0"><div style="background:#FFFBEA;border-radius:14px;padding:10px 14px;font-size:13.5px;line-height:1.55"><b>${admin2 ? "Customer note" : "Your note"}:</b> ${esc(c.notes)}</div></td></tr>` : "";
+  const adminBtn = admin2 && base ? `<table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:18px auto 0"><tr><td style="background:${BRAND.sky};border-radius:999px"><a href="${esc(base)}/admin/invoice/${encodeURIComponent(o.orderNumber)}" style="display:inline-block;padding:13px 26px;font:bold 15px ${body};color:${BRAND.ink};text-decoration:none">\u{1F9FE} Open invoice (print / download)</a></td></tr></table>` : "";
+  const nextBox = admin2 ? "" : `<tr><td style="padding:16px 36px 0"><div style="background:${BRAND.skyPale};border-radius:16px;padding:12px 16px;font-size:14px;line-height:1.55">\u{1F48C} ${esc(nextStep(o))}</div></td></tr>`;
+  const footRight = `${contact2.length ? contact2.map((x) => `${esc(x)}<br>`).join("") : admin2 ? "" : "Questions? Just reply to this email.<br>"}${admin2 ? "Open <b>Admin &gt; Orders</b> to confirm, print or download this invoice." : "Please keep this invoice for your records."}`;
+  const stamp2 = `<div style="display:inline-block;transform:rotate(-6deg);border:4px double ${tf};color:${tf};border-radius:14px;padding:6px 18px;font-weight:900;letter-spacing:3px;font-size:22px;white-space:nowrap;margin-top:14px">${st.label}</div>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><link href="${FONTS}" rel="stylesheet"><style>@import url('${FONTS}');</style></head>
+<body style="margin:0;padding:0;background:#F4FAFF;font-family:${body}">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(admin2 ? `${usd(o.totalCents)} \xB7 ${st.label}` : nextStep(o))}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4FAFF"><tr><td align="center" style="padding:20px 10px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:24px;overflow:hidden;font-family:Arial,'Helvetica Neue',sans-serif;color:${BRAND.ink}">
-<tr><td align="center" style="background:${BRAND.sky};padding:26px 20px 22px">${logo}<div style="font-family:${hand};font-size:19px;color:#ffffff;margin-top:10px">${BRAND.tagline} \u2728</div></td></tr>
-<tr><td style="padding:26px 28px 6px">
-  <div style="font-family:${hand};font-size:30px;color:${BRAND.skyDeep};line-height:1.2">${headline}</div>
-  <p style="margin:8px 0 0;font-size:15px;line-height:1.6;color:${BRAND.ink}">${intro}</p>
-  <p style="margin:14px 0 0"><span style="display:inline-block;background:${tb};color:${tf};font-weight:bold;font-size:12px;letter-spacing:1px;padding:5px 14px;border-radius:999px">${st.label}</span></p>
+<table role="presentation" width="760" cellpadding="0" cellspacing="0" style="width:100%;max-width:760px;background:#ffffff;border-radius:28px;overflow:hidden;font-family:${body};color:${BRAND.ink};box-shadow:0 10px 40px rgba(108,184,245,.35)">
+<tr><td style="padding:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${BRAND.sky}" style="background-color:${BRAND.sky};background-image:linear-gradient(135deg,${BRAND.sky},#BFE3FF)">
+  <tr><td height="208" valign="top" style="height:208px;padding:0 36px;${hdrBg}"><table role="presentation" width="100%" height="180" cellpadding="0" cellspacing="0"><tr>
+    <td valign="middle" align="left" width="128">${logo}</td>
+    <td valign="middle" align="right" style="color:${BRAND.ink};white-space:nowrap"><div style="font-family:${hand};font-size:24px;line-height:1.2;color:${BRAND.ink};white-space:nowrap">${BRAND.tagline} \u2728</div>
+      <div style="font-size:40px;font-weight:900;letter-spacing:3px;line-height:1.15;color:${BRAND.ink};margin:2px 0 4px">INVOICE</div>
+      <div style="font-weight:800;font-size:15px;color:${BRAND.ink}">${esc(invoiceNo(o.orderNumber))}</div></td></tr></table></td></tr>
+  ${scallop}</table></td></tr>
+<tr><td style="padding:6px 36px 0">
+  <div style="font-family:${hand};font-size:34px;line-height:1.1;color:#2F4156">${headline}</div>
+  <p style="margin:2px 0 0;font-size:15px;line-height:1.5;color:${BRAND.mute}">${intro}</p>
 </td></tr>
-<tr><td style="padding:16px 28px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${BRAND.skyPale};border-radius:16px"><tr><td style="padding:14px 16px;font-size:13.5px;line-height:1.6">
-  <b style="font-size:12px;letter-spacing:1px;color:${BRAND.mute}">INVOICE</b><br><b>${esc(invoiceNo(o.orderNumber))}</b> \xB7 ${esc(dateLong(o.createdAt))}<br>
-  Order ${esc(o.orderNumber)} \xB7 ${esc(methodLabel(o.method))}</td>
-  <td style="padding:14px 16px;font-size:13.5px;line-height:1.6" align="right"><b style="font-size:12px;letter-spacing:1px;color:${BRAND.mute}">DELIVER TO</b><br><b style="text-transform:capitalize">${esc(c.name)}</b><br>${esc(c.phone)}<br>${esc(areaLabel(o))}: ${esc(c.address)}</td></tr></table></td></tr>
-<tr><td style="padding:14px 28px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-  <tr><td style="background:${BRAND.sky};padding:8px;font-size:12px;font-weight:bold;letter-spacing:1px;border-radius:12px 0 0 12px">TOY</td><td align="center" style="background:${BRAND.sky};padding:8px;font-size:12px;font-weight:bold;letter-spacing:1px">QTY</td><td align="right" style="background:${BRAND.sky};padding:8px;font-size:12px;font-weight:bold;letter-spacing:1px;border-radius:0 12px 12px 0">AMOUNT</td></tr>${rows}</table></td></tr>
-<tr><td style="padding:10px 28px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-  ${line("Subtotal", usd(o.subtotalCents))}${o.discountCents > 0 ? line(`Discount${o.discountCode ? ` (${esc(o.discountCode)})` : ""}`, `\u2212${usd(o.discountCents)}`, "color:#1f7a3a;font-weight:bold;") : ""}${line("Delivery", usd(o.shippingCents))}</table>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px"><tr><td style="background:${BRAND.ink};color:#ffffff;border-radius:14px;padding:13px 18px;font-size:19px;font-weight:bold">Total</td><td align="right" style="background:${BRAND.ink};color:#ffffff;border-radius:14px;padding:13px 18px;font-size:19px;font-weight:bold">${usd(o.totalCents)} ${o.currency}</td></tr></table></td></tr>
-<tr><td style="padding:16px 28px 0"><div style="background:#FFF6F9;border-radius:16px;padding:14px 16px;font-size:14px;line-height:1.6">\u{1F48C} ${esc(nextStep(o))}</div>${button}</td></tr>
-<tr><td align="center" style="padding:22px 28px 26px"><div style="font-family:${hand};font-size:24px;color:${BRAND.skyDeep}"><span style="font-family:'Khmer UI','Noto Sans Khmer',Arial,sans-serif;font-size:20px">\u17A2\u179A\u1782\u17BB\u178E</span> \xB7 Thank you! \u{1F499}</div><div style="font-family:${hand};font-size:17px;color:${BRAND.ink};margin-top:2px">with love, Cloudy Toys</div>
-  <p style="margin:12px 0 0;font-size:12px;color:${BRAND.mute};line-height:1.6">Just reply to this email if you have any question about your order.</p></td></tr>
+${banner ? `<tr><td style="padding:14px 36px 0">${banner}</td></tr>` : ""}
+<tr><td style="padding:20px 36px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+  <td width="49%" valign="top" style="background:${BRAND.skyPale};border-radius:20px;padding:16px 18px;font-size:13.5px;line-height:1.55">${label(admin2 ? "CUSTOMER" : "MADE FOR")}<div style="font-weight:900;font-size:17px;text-transform:capitalize;line-height:1.3">${esc(c.name)}</div><div style="margin-top:4px">${who}</div></td>
+  <td width="2%" style="font-size:0;line-height:0">&nbsp;</td>
+  <td width="49%" valign="top" style="background:#FFF6F9;border-radius:20px;padding:16px 18px">${label("INVOICE DETAILS", "#c56a86")}<table role="presentation" cellpadding="0" cellspacing="0">${details}</table>
+    <div style="margin-top:8px"><span style="display:inline-block;white-space:nowrap;background:${tb};color:${tf};font-weight:900;font-size:12px;letter-spacing:1.2px;padding:5px 14px;border-radius:999px">${st.label}</span></div></td>
+</tr></table></td></tr>
+<tr><td style="padding:22px 36px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  <tr>${th("PRODUCT", "left", "border-radius:14px 0 0 14px;")}${th("QTY", "right")}${th("PRICE", "right")}${th("AMOUNT", "right", "border-radius:0 14px 14px 0;")}</tr>${rows}</table></td></tr>
+<tr><td style="padding:16px 36px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+  <td valign="bottom" style="padding:0 12px 6px 0">${stamp2}</td>
+  <td valign="top" width="290" style="white-space:nowrap"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${line("Subtotal", usd(o.subtotalCents))}${o.discountCents > 0 ? line(`Discount${o.discountCode ? ` (${esc(o.discountCode)})` : ""}`, `\u2212${usd(o.discountCents)}`, `color:${BRAND.red};font-weight:bold;`) : ""}${line("Delivery", usd(o.shippingCents))}</table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px"><tr><td style="background:${BRAND.ink};color:#ffffff;border-radius:18px 0 0 18px;padding:12px 0 12px 18px;font-size:20px;font-weight:900">Total</td><td align="right" style="background:${BRAND.ink};color:#ffffff;border-radius:0 18px 18px 0;padding:12px 18px 12px 0;font-size:20px;font-weight:900;white-space:nowrap">${usd(o.totalCents)} ${o.currency}</td></tr></table></td></tr></table></td></tr>
+${note}${nextBox}
+${adminBtn ? `<tr><td style="padding:0 36px">${adminBtn}</td></tr>` : ""}
+<tr><td style="padding:26px 0 0;font-size:0;line-height:0">&nbsp;</td></tr>
+<tr><td style="background:${BRAND.skyPale};padding:18px 36px 22px;border-top:2px dashed ${BRAND.border}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+  <td valign="middle"><div style="font-family:${hand};font-size:30px;line-height:1.2;color:${BRAND.ink};white-space:nowrap"><span style="font-family:${khmer};font-size:24px">\u17A2\u179A\u1782\u17BB\u178E</span> \xB7 Thank you! \u{1F499}</div><div style="margin-top:4px;font-family:${hand};font-size:22px;color:${BRAND.ink}">with love, ${BRAND.name}</div></td>
+  <td valign="middle" align="right" style="font-size:12.5px;line-height:1.6;color:${BRAND.ink}">${footRight}</td></tr></table></td></tr>
 </table></td></tr></table></body></html>`;
 }
+var customerHtml = (o, kind = "placed", base = siteUrl(), contact2 = [], inlineLogo = false) => invoiceEmail(o, { mode: "customer", kind, base, contact: contact2, inlineLogo });
+var adminInvoiceHtml = (o, banner, base = siteUrl(), contact2 = [], inlineLogo = false) => invoiceEmail(o, { mode: "admin", base, banner, contact: contact2, inlineLogo });
 
 // server/lib/email.ts
 var esc2 = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var usd2 = (c) => `$${(c / 100).toFixed(2)}`;
 function adminSubject(o) {
-  return `[Cloudy-Toy] New Order #${o.orderNumber} - ${o.method === "COD" ? "PAY WITH DELIVERY" : "QR PAYMENT (verify manually)"}`;
+  return `[Cloudy-Toy] New Order #${o.orderNumber} - ${o.method === "COD" ? "PAY WITH DELIVERY" : o.method === "BAKONG" ? "BAKONG KHQR (waiting for payment)" : "QR PAYMENT (verify manually)"}`;
 }
-function adminHtml(o) {
-  const note = o.method === "COD" ? `<p style="background:#fff3cd;padding:10px"><b>PAY WITH DELIVERY (Phnom Penh):</b> collect <b>${usd2(o.totalCents)}</b> in cash when delivering. Not paid yet.</p>` : `<p style="background:#fff3cd;padding:10px"><b>QR IMAGE PAYMENT, NOT VERIFIED.</b> The customer may have scanned your QR. Check your bank/Bakong app for <b>${usd2(o.totalCents)}</b> with order number ${esc2(o.orderNumber)}, then mark it paid in Admin &gt; Orders.</p>`;
-  const rows = o.items.map((i) => `<tr><td>${esc2(i.name)}</td><td>${esc2(i.sku)}</td><td>${i.qty}</td><td>${usd2(i.unitCents)}</td><td>${usd2(i.lineCents)}</td></tr>`).join("");
-  return `<h2>New order #${esc2(o.orderNumber)}</h2>${note}<p>Created: ${esc2(o.createdAt)}<br>Method: ${methodLabel(o.method)}<br>Payment status: ${o.paymentStatus}<br>Reference: ${esc2(o.paymentReference)}</p>
-<h3>Customer</h3><p>${esc2(o.customer.name)}<br>${esc2(o.customer.email || "-")}<br>${esc2(o.customer.phone)}<br>Facebook: ${esc2(o.customer.facebook ?? "-")}<br>Telegram: ${esc2(o.customer.telegram ?? "-")}<br>${esc2(areaLabel(o))}: ${esc2(o.customer.address)}<br>Notes: ${esc2(o.customer.notes ?? "-")}</p>
-<table border="1" cellpadding="6" cellspacing="0"><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Unit</th><th>Line</th></tr>${rows}</table>
-<p>Subtotal ${usd2(o.subtotalCents)}<br>Discount ${usd2(o.discountCents)}${o.discountCode ? ` (code ${esc2(o.discountCode)})` : ""}<br>Delivery ${usd2(o.shippingCents)}<br><b>Total ${usd2(o.totalCents)} ${o.currency}</b></p>`;
+var box = (bg, html) => `<div style="background:${bg};border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.6;margin-top:8px">${html}</div>`;
+function adminHtml(o, extra = "", contact2 = [], inlineLogo = false) {
+  const note = o.method === "COD" ? box("#fff3cd", `<b>PAY WITH DELIVERY (Phnom Penh):</b> collect <b>${usd2(o.totalCents)}</b> in cash when delivering. Not paid yet.`) : o.method === "BAKONG" ? box("#fff3cd", `<b>BAKONG KHQR: waiting for payment.</b> You will get a separate PAID email when the bank confirms <b>${usd2(o.totalCents)}</b>.`) : box("#fff3cd", `<b>QR IMAGE PAYMENT, NOT VERIFIED.</b> The customer may have scanned your QR. Check your bank/Bakong app for <b>${usd2(o.totalCents)}</b> with order number ${esc2(o.orderNumber)}, then mark it paid in Admin &gt; Orders.`);
+  return adminInvoiceHtml(o, extra + note, void 0, contact2, inlineLogo);
 }
 var TEST_SENDER = "Cloudy-Toy <onboarding@resend.dev>";
 var FREE_MAIL = ["gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "live.com"];
@@ -434,6 +479,27 @@ function fromAddress(v) {
   if (!addr) return TEST_SENDER;
   const domain = (addr.match(/@([^>\s]+)/)?.[1] ?? "").toLowerCase();
   return !domain || FREE_MAIL.includes(domain) ? TEST_SENDER : addr;
+}
+var logoB64;
+var logoAttachment = () => {
+  if (logoB64 === void 0) {
+    try {
+      logoB64 = readFileSync(join(process.cwd(), "public", INVOICE_LOGO)).toString("base64");
+    } catch {
+      logoB64 = null;
+    }
+  }
+  return logoB64 ? [{ filename: "cloudy-toys-logo.jpg", content: logoB64, content_type: "image/jpeg", content_id: LOGO_CID }] : [];
+};
+function friendlyMailError(detail) {
+  const d2 = detail ?? "";
+  if (/HTTP 403/.test(d2) && /testing emails|own email|verify a domain/i.test(d2)) return `Resend is still in test mode, so it can only email ${adminInbox().split(",")[0].trim() || "your own address"}. To email customers: verify your domain at resend.com/domains, then set EMAIL_FROM to an address on that domain.`;
+  if (/HTTP 401/.test(d2)) return "Resend rejected the API key. Check RESEND_API_KEY in your environment variables.";
+  if (/HTTP 403/.test(d2) || /HTTP 422/.test(d2)) return "Resend refused this email. Check that your sending domain is verified and EMAIL_FROM uses it.";
+  if (/HTTP 429/.test(d2)) return "Resend is busy (too many emails at once). Please wait a minute and try again.";
+  if (/HTTP 5\d\d/.test(d2)) return "Resend had a temporary problem. Please try again in a moment.";
+  if (/timeout|aborted|network|fetch failed/i.test(d2)) return "Could not reach Resend (network problem). Please try again.";
+  return d2 || "The email could not be sent.";
 }
 var adminInbox = () => process.env.ADMIN_NOTIFICATION_EMAIL || ADMIN_EMAIL;
 var recipients = () => adminInbox().split(",").map((x) => x.trim()).filter(Boolean);
@@ -446,12 +512,13 @@ async function deliver(subject, html, o, customerTo) {
     if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in your environment variables" };
     const text = plain(html);
     const send = async (from, to2) => {
-      const body = JSON.stringify({
+      const body2 = JSON.stringify({
         from,
         to: to2,
         subject,
         html,
         text,
+        attachments: html.includes(`cid:${LOGO_CID}`) ? logoAttachment() : void 0,
         ...customerTo ? { reply_to: recipients()[0] } : validEmail(o.customer.email) ? { reply_to: o.customer.email } : {},
         // admin mail: reply goes to the customer; customer mail: reply goes to the shop
         headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}` }
@@ -459,7 +526,7 @@ async function deliver(subject, html, o, customerTo) {
       let detail = "";
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
-          const res = await fetch("https://api.resend.com/emails", { method: "POST", signal: AbortSignal.timeout(4e3), headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body });
+          const res = await fetch("https://api.resend.com/emails", { method: "POST", signal: AbortSignal.timeout(4e3), headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: body2 });
           if (res.ok) return { status: "SENT" };
           detail = `Resend HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`;
           if (res.status !== 429 && res.status < 500) break;
@@ -488,7 +555,10 @@ async function deliver(subject, html, o, customerTo) {
         r = { status: "FAILED", detail: `${first} | test sender: ${last}` };
       }
     }
-    if (r.status === "FAILED") console.error("[email]", o.orderNumber, r.detail);
+    if (r.status === "FAILED") {
+      console.error("[email]", o.orderNumber, r.detail);
+      if (customerTo) r = { ...r, detail: friendlyMailError(r.detail) };
+    }
     return r;
   } catch (e) {
     const detail = e instanceof Error ? e.message : "unexpected email error";
@@ -496,15 +566,68 @@ async function deliver(subject, html, o, customerTo) {
     return { status: "FAILED", detail };
   }
 }
-var sendAdminEmail = (o) => deliver(adminSubject(o), adminHtml(o), o);
-function claimHtml(o) {
-  return `<p style="background:#fff3cd;padding:10px"><b>CUSTOMER SAYS THEY PAID (NOT VERIFIED).</b> Check your ABA app for <b>${usd2(o.totalCents)}</b> with order number <b>${esc2(o.orderNumber)}</b>. Expect a screenshot on Telegram/Facebook. When confirmed, open Admin &gt; Orders &gt; Mark as paid.</p>
-<p>Order: <b>${esc2(o.orderNumber)}</b><br>Total: <b>${usd2(o.totalCents)} ${o.currency}</b><br>Customer: ${esc2(o.customer.name)}<br>Phone: ${esc2(o.customer.phone)}<br>Email: ${esc2(o.customer.email)}<br>${esc2(areaLabel(o))}: ${esc2(o.customer.address)}<br>Items: ${esc2(o.items.map((i) => `${i.name} x${i.qty}`).join(", "))}</p>`;
-}
+var contact = async () => contactLines(await getSettings());
+var sendAdminEmail = async (o) => deliver(adminSubject(o), adminHtml(o, "", await contact(), logoAttachment().length > 0), o);
 var paidOrderSubject = (o) => `[Cloudy-Toy] New Order #${o.orderNumber} - QR PAYMENT, CUSTOMER SAYS PAID (verify)`;
-var proofNote = (o) => o.paymentProof ? `<p style="background:#d1f2d1;padding:10px"><b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc2(o.orderNumber)}).</p>` : "";
-var sendPaidOrderEmail = (o) => deliver(paidOrderSubject(o), claimHtml(o) + proofNote(o) + "<hr>" + adminHtml(o), o);
-var sendCustomerEmail = (o, kind) => validEmail(o.customer.email) ? deliver(customerSubject(o, kind), customerHtml(o, kind), o, o.customer.email.trim()) : Promise.resolve({ status: "SKIPPED", detail: "Customer gave no email address" });
+var proofNote = (o) => o.paymentProof ? box("#d1f2d1", `<b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc2(o.orderNumber)}).`) : "";
+var claimNote = (o) => box("#fff3cd", `<b>CUSTOMER SAYS THEY PAID (NOT VERIFIED).</b> Check your ABA app for <b>${usd2(o.totalCents)}</b> with order number <b>${esc2(o.orderNumber)}</b>. Expect a screenshot on Telegram/Facebook. When confirmed, open Admin &gt; Orders &gt; Mark as paid.`);
+var sendPaidOrderEmail = async (o) => deliver(paidOrderSubject(o), adminHtml(o, claimNote(o) + proofNote(o), await contact(), logoAttachment().length > 0), o);
+var bakongPaidSubject = (o) => `[Cloudy-Toy] PAID #${o.orderNumber} - ${usd2(o.totalCents)} - Bakong KHQR (verified)`;
+var sendBakongPaidEmail = async (o) => deliver(bakongPaidSubject(o), adminInvoiceHtml(o, box("#d1f2d1", `<b>\u2705 PAID via Bakong KHQR (verified automatically).</b> <b>${usd2(o.totalCents)}</b> received for order <b>${esc2(o.orderNumber)}</b>${o.bakongHash ? ` \xB7 transaction ${esc2(o.bakongHash.slice(0, 12))}\u2026` : ""}. Nothing to verify. Pack and ship the order.`), void 0, await contact(), logoAttachment().length > 0), o);
+var sendCustomerEmail = async (o, kind) => validEmail(o.customer.email) ? deliver(customerSubject(o, kind), customerHtml(o, kind, void 0, await contact(), logoAttachment().length > 0), o, o.customer.email.trim()) : { status: "SKIPPED", detail: "Customer gave no email address" };
+
+// shared/payOptions.ts
+var PAY_KEY = { BAKONG: "payBakong", QR_IMAGE: "payQr", COD: "payCod" };
+function modeOf(s, m) {
+  const v = s[PAY_KEY[m]];
+  return v === "paused" || v === "soon" ? v : v === false ? "paused" : "on";
+}
+var methodOn = (s, m) => modeOf(s, m) === "on";
+
+// server/lib/bakong.ts
+import { createRequire } from "node:module";
+import QRCode from "qrcode";
+var nodeRequire = createRequire(import.meta.url);
+var { BakongKHQR, khqrData, IndividualInfo } = nodeRequire("bakong-khqr");
+var QR_MINUTES = 10;
+var cfg = () => ({
+  account: (process.env.BAKONG_ACCOUNT_ID ?? "").trim(),
+  // your Bakong account id, e.g. yourname@aba
+  token: (process.env.BAKONG_API_TOKEN ?? "").trim(),
+  // Bakong Open API token (https://api-bakong.nbc.gov.kh/register)
+  name: (process.env.BAKONG_MERCHANT_NAME ?? "Cloudy Toys").trim().slice(0, 25),
+  city: (process.env.BAKONG_MERCHANT_CITY ?? "Phnom Penh").trim().slice(0, 15),
+  api: (process.env.BAKONG_API_URL ?? "https://api-bakong.nbc.gov.kh").trim().replace(/\/$/, "")
+});
+var bakongEnabled = () => {
+  const c = cfg();
+  return !!c.account && !!c.token;
+};
+var bakongName = () => cfg().name;
+async function makeKhqr(orderNumber, totalCents) {
+  const c = cfg();
+  const expiresAt = Date.now() + QR_MINUTES * 6e4;
+  const info = new IndividualInfo(c.account, c.name, c.city, { currency: khqrData.currency.usd, amount: totalCents / 100, billNumber: orderNumber, expirationTimestamp: expiresAt });
+  const r = new BakongKHQR().generateIndividual(info);
+  if (!r?.data?.qr || !r.data.md5) throw new Error(`KHQR failed: ${r?.status?.message ?? "unknown"}`);
+  const image = await QRCode.toDataURL(r.data.qr, { errorCorrectionLevel: "M", margin: 1, width: 560 });
+  return { qr: r.data.qr, md5: r.data.md5, expiresAt, image };
+}
+async function checkPaid(md5, totalCents) {
+  const c = cfg();
+  try {
+    const res = await fetch(`${c.api}/v1/check_transaction_by_md5`, { method: "POST", signal: AbortSignal.timeout(6e3), headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ md5 }) });
+    const j = await res.json().catch(() => null);
+    if (!j) return { ok: false, reason: "ERROR", detail: `Bakong HTTP ${res.status}` };
+    if (j.responseCode !== 0 || !j.data) return j.responseCode === 1 ? { ok: false, reason: "NOT_FOUND" } : { ok: false, reason: "ERROR", detail: `Bakong HTTP ${res.status}: ${j.responseMessage ?? "error"}` };
+    const d2 = j.data;
+    if (String(d2.currency).toUpperCase() !== "USD" || Math.round(Number(d2.amount) * 100) !== totalCents || (d2.toAccountId ?? "").toLowerCase() !== c.account.toLowerCase())
+      return { ok: false, reason: "MISMATCH", detail: `amount ${d2.amount} ${d2.currency} to ${d2.toAccountId}` };
+    return { ok: true, hash: d2.hash };
+  } catch (e) {
+    return { ok: false, reason: "ERROR", detail: e instanceof Error ? e.message : "network error" };
+  }
+}
 
 // server/lib/proofStore.ts
 var BUCKET2 = "payment-proofs";
@@ -829,8 +952,8 @@ var wrap = (fn) => (req, res) => {
   fn(req, res).catch((e) => {
     console.error("[api]", req.path, e);
     const msg = e instanceof Error ? e.message : String(e);
-    const body = req.path.startsWith("/admin") ? { error: "Server error", detail: msg, hint: hint(msg) } : { error: "Server error" };
-    if (!res.headersSent) res.status(500).json(body);
+    const body2 = req.path.startsWith("/admin") ? { error: "Server error", detail: msg, hint: hint(msg) } : { error: "Server error" };
+    if (!res.headersSent) res.status(500).json(body2);
   });
 };
 var files = (req, name) => (req.files ?? []).filter((f) => f.fieldname === name && f.size > 0);
@@ -845,11 +968,11 @@ var Body = z.object({
   lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99) })).min(1).max(50),
   area: z.enum(["PHNOM_PENH", "PROVINCE"]),
   province: z.enum(PROVINCE_NAMES).optional(),
-  method: z.enum(["COD", "QR_IMAGE"]),
+  method: z.enum(["COD", "QR_IMAGE", "BAKONG"]),
   code: z.string().trim().max(40).optional()
 });
 var LABELS = { name: "Full name (at least 2 characters)", email: "Email (a valid address)", phone: "Phone (at least 6 digits)", address: "Delivery address (5 to 400 characters)", notes: "Delivery instructions (max 300 characters)", area: "Delivery area", method: "Payment method" };
-api.post("/checkout", wrap(async (req, res) => {
+api.post("/checkout", requireUser, wrap(async (req, res) => {
   const raw = req.body;
   const parsed = Body.safeParse(raw);
   if (!parsed.success) {
@@ -865,8 +988,11 @@ api.post("/checkout", wrap(async (req, res) => {
   if (codeIn && tooMany(`c:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (codeIn && !CODE_RE.test(codeIn)) return res.status(400).json({ error: "That discount code is not valid." });
   if (area2 === "PROVINCE" && !parsed.data.province) return res.status(400).json({ error: "Please choose your province." });
+  if (method === "BAKONG" && !bakongEnabled()) return res.status(400).json({ error: "Bakong payment is not available right now. Please choose another payment method." });
   if (!methodAllowed(method, area2)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
-  const [settings, products, acct] = await Promise.all([getSettings(), listProducts(), userFromReq(req)]);
+  const acct = userOf(req);
+  const [settings, products] = await Promise.all([getSettings(), listProducts()]);
+  if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   const catalog = catalogOf(products);
   let usedCode;
   try {
@@ -908,6 +1034,7 @@ api.post("/checkout", wrap(async (req, res) => {
       await restoreStock(lines2);
       throw e;
     }
+    if (method === "BAKONG") return res.json({ orderNumber });
     try {
       const r = await sendAdminEmail(order);
       await updateOrder(orderNumber, (x) => {
@@ -949,6 +1076,66 @@ api.get("/orders/:n", wrap(async (req, res) => {
   if (tooMany(`o:${clientKey(req)}`, 30)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   const o = await getOrder(String(req.params.n));
   return o ? res.json({ order: o }) : res.status(404).json({ error: "Not found" });
+}));
+var ORDER_RE = /^CT-[0-9]{6}-[A-Z0-9]{5}$/;
+api.get("/payment/bakong/enabled", wrap(async (_req, res) => res.json({ enabled: bakongEnabled() && methodOn(await getSettings(), "BAKONG") })));
+api.post("/payment/bakong/qr", wrap(async (req, res) => {
+  const n = typeof req.body?.orderNumber === "string" ? req.body.orderNumber.trim() : "";
+  if (!ORDER_RE.test(n)) return res.status(400).json({ error: "Invalid order" });
+  if (tooMany(`bkqr:${clientKey(req)}`, 20)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  if (!bakongEnabled()) return res.status(503).json({ error: "Bakong payment is not set up yet." });
+  const o = await getOrder(n);
+  if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Order not found" });
+  if (o.paymentStatus === "PAID") return res.json({ paid: true });
+  const k = await makeKhqr(n, o.totalCents);
+  await updateOrder(n, (x) => {
+    x.bakongMd5s = [...x.bakongMd5s ?? [], k.md5].slice(-10);
+  });
+  res.json({ paid: false, image: k.image, expiresAt: k.expiresAt, amountCents: o.totalCents, merchant: bakongName() });
+}));
+api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
+  const n = String(req.params.n);
+  if (!ORDER_RE.test(n)) return res.status(404).json({ error: "Not found" });
+  if (tooMany(`bks:${clientKey(req)}`, 60)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  const o = await getOrder(n);
+  if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Not found" });
+  if (o.paymentStatus === "PAID") return res.json({ paid: true });
+  let hash;
+  for (const md5 of [...o.bakongMd5s ?? []].reverse()) {
+    const r = await checkPaid(md5, o.totalCents);
+    if (r.ok) {
+      hash = r.hash ?? md5;
+      break;
+    }
+    if (r.reason === "ERROR") console.error("[bakong check]", n, r.detail);
+  }
+  if (!hash) return res.json({ paid: false });
+  const won = await markPaidOnce(n, (x) => {
+    x.paidAt = (/* @__PURE__ */ new Date()).toISOString();
+    x.paidManuallyBy = void 0;
+    x.bakongHash = hash;
+  });
+  if (won) {
+    try {
+      const r = await sendBakongPaidEmail(won);
+      await updateOrder(n, (x) => {
+        x.claimEmail = r;
+        x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 };
+      });
+      if (r.status !== "SENT") console.error("[bakong paid email]", n, r.status, r.detail);
+    } catch (e) {
+      console.error("[bakong paid email]", n, e);
+    }
+    try {
+      const r = await sendCustomerEmail(won, "paid");
+      await updateOrder(n, (x) => {
+        x.customerEmail = { ...r, kind: "paid" };
+      });
+    } catch (e) {
+      console.error("[bakong receipt]", n, e);
+    }
+  }
+  res.json({ paid: true });
 }));
 api.post("/payment/claim", wrap(async (req, res) => {
   const n = typeof req.body?.orderNumber === "string" ? req.body.orderNumber.trim() : "";
@@ -1181,6 +1368,13 @@ admin.post("/settings", wrap(async (req, res) => {
   const p = z.object({ pp: Fee, prov: Fee, tg: Url, fb: Url }).safeParse({ pp: req.body?.pp, prov: req.body?.prov, tg: req.body?.tg ?? "", fb: req.body?.fb ?? "" });
   if (!p.success) return res.json({ error: p.error.issues[0]?.message ?? "Invalid input" });
   await saveSettings({ shipPhnomPenhCents: Math.round(p.data.pp * 100), shipProvinceCents: Math.round(p.data.prov * 100), telegramUrl: p.data.tg, facebookUrl: p.data.fb });
+  res.json({ ok: true });
+}));
+admin.post("/settings/payments", wrap(async (req, res) => {
+  const p = z.object({ payBakong: z.enum(["on", "paused", "soon"]), payQr: z.enum(["on", "paused", "soon"]), payCod: z.enum(["on", "paused", "soon"]) }).safeParse(req.body);
+  if (!p.success) return res.json({ error: "Invalid input" });
+  if (![p.data.payBakong, p.data.payQr, p.data.payCod].includes("on")) return res.json({ error: "Keep at least one payment option on (working), or customers cannot check out." });
+  await saveSettings(p.data);
   res.json({ ok: true });
 }));
 admin.post("/settings/logo", upload.any(), wrap(async (req, res) => {

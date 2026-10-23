@@ -18,6 +18,13 @@ export async function updateOrder(n: string, fn: (o: StoredOrder) => void) {
   const o = await getOrder(n); if (!o) return null;
   fn(o); must(await db().from("orders").update(toRow(o)).eq("order_number", n).select("order_number").single()); return o;
 }
+/** Moves PENDING -> PAID exactly once (the database only updates a row that is still PENDING). Returns the order only for the caller that won, so emails go out once. */
+export async function markPaidOnce(n: string, fn: (o: StoredOrder) => void) {
+  const o = await getOrder(n); if (!o || o.paymentStatus !== "PENDING") return null;
+  o.paymentStatus = "PAID"; fn(o);
+  const r = await db().from("orders").update(toRow(o)).eq("order_number", n).eq("payment_status", "PENDING").select("order_number");
+  return (must(r) as unknown[] | null)?.length ? o : null;
+}
 /** Order history for a signed-in customer: orders placed while signed in to this account, plus older ones whose checkout email matches. */
 export async function listOrdersByEmail(email: string) {
   const e = email.toLowerCase();

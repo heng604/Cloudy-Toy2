@@ -9,12 +9,13 @@ import { customerHtml, customerSubject, adminInvoiceHtml, LOGO_CID, type Custome
 import { INVOICE_LOGO } from "../../shared/invoice";
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
-export function adminSubject(o: StoredOrder) { return `[Cloudy-Toy] New Order #${o.orderNumber} - ${o.method === "COD" ? "PAY WITH DELIVERY" : "QR PAYMENT (verify manually)"}`; }
+export function adminSubject(o: StoredOrder) { return `[Cloudy-Toy] New Order #${o.orderNumber} - ${o.method === "COD" ? "PAY WITH DELIVERY" : o.method === "BAKONG" ? "BAKONG KHQR (waiting for payment)" : "QR PAYMENT (verify manually)"}`; }
 const box = (bg: string, html: string) => `<div style="background:${bg};border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.6;margin-top:8px">${html}</div>`;
 /** "New Order" e-mail to the shop owner. Same design as the invoice (see customerEmail.ts). `extra` = more banners shown above the order. */
 export function adminHtml(o: StoredOrder, extra = "", contact: string[] = [], inlineLogo = false) {
   const note = o.method === "COD"
     ? box("#fff3cd", `<b>PAY WITH DELIVERY (Phnom Penh):</b> collect <b>${usd(o.totalCents)}</b> in cash when delivering. Not paid yet.`)
+    : o.method === "BAKONG" ? box("#fff3cd", `<b>BAKONG KHQR: waiting for payment.</b> You will get a separate PAID email when the bank confirms <b>${usd(o.totalCents)}</b>.`)
     : box("#fff3cd", `<b>QR IMAGE PAYMENT, NOT VERIFIED.</b> The customer may have scanned your QR. Check your bank/Bakong app for <b>${usd(o.totalCents)}</b> with order number ${esc(o.orderNumber)}, then mark it paid in Admin &gt; Orders.`);
   return adminInvoiceHtml(o, extra + note, undefined, contact, inlineLogo);
 }
@@ -109,6 +110,9 @@ export const paidOrderSubject = (o: StoredOrder) => `[Cloudy-Toy] New Order #${o
 const proofNote = (o: StoredOrder) => o.paymentProof ? box("#d1f2d1", `<b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc(o.orderNumber)}).`) : "";
 const claimNote = (o: StoredOrder) => box("#fff3cd", `<b>CUSTOMER SAYS THEY PAID (NOT VERIFIED).</b> Check your ABA app for <b>${usd(o.totalCents)}</b> with order number <b>${esc(o.orderNumber)}</b>. Expect a screenshot on Telegram/Facebook. When confirmed, open Admin &gt; Orders &gt; Mark as paid.`);
 export const sendPaidOrderEmail = async (o: StoredOrder) => deliver(paidOrderSubject(o), adminHtml(o, claimNote(o) + proofNote(o), await contact(), logoAttachment().length > 0), o);
+/** Bakong payment was confirmed by the bank: full order + invoice with a green "PAID" banner, sent to the admin. */
+export const bakongPaidSubject = (o: StoredOrder) => `[Cloudy-Toy] PAID #${o.orderNumber} - ${usd(o.totalCents)} - Bakong KHQR (verified)`;
+export const sendBakongPaidEmail = async (o: StoredOrder) => deliver(bakongPaidSubject(o), adminInvoiceHtml(o, box("#d1f2d1", `<b>✅ PAID via Bakong KHQR (verified automatically).</b> <b>${usd(o.totalCents)}</b> received for order <b>${esc(o.orderNumber)}</b>${o.bakongHash ? ` · transaction ${esc(o.bakongHash.slice(0, 12))}…` : ""}. Nothing to verify. Pack and ship the order.`), undefined, await contact(), logoAttachment().length > 0), o);
 export const sendPaidClaimEmail = (o: StoredOrder) => deliver(claimSubject(o), claimHtml(o), o);
 
 /** Personal invoice e-mail to the customer. SKIPPED when they gave no valid address. Never throws. */

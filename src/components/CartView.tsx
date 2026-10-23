@@ -3,6 +3,7 @@ import { useCart } from "@/components/CartProvider";
 import { FALLBACK_IMG, money } from "@shared/products";
 import type { CartProduct } from "@shared/cartTypes";
 import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
 
 const iconBtn = "grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-ink transition hover:bg-sky disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 
@@ -18,7 +19,7 @@ function CloudArt() {
 }
 
 export default function CartView({ products, telegram = "" }: { products: CartProduct[]; telegram?: string }) {
-  const { lines, setQty, clear, ready } = useCart(); const { t } = useI18n();
+  const { lines, setQty, clear, ready } = useCart(); const { t } = useI18n(); const { user } = useAuth();
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x): x is { l: { id: string; qty: number }; p: CartProduct } => !!x.p);
   const unit = (p: CartProduct) => p.salePrice ?? p.price;
   const subtotal = items.reduce((s, x) => s + unit(x.p) * x.l.qty, 0);
@@ -109,7 +110,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
 
           {blocked
             ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Please fix the items marked above before checking out.</p>
-            : <Link to="/checkout" className="block rounded-full bg-sky px-6 py-3 text-center text-lg font-extrabold transition hover:bg-sky-hover hover:shadow-lift">{t("Checkout")}</Link>}
+            : <Link to="/checkout" className="block rounded-full bg-sky px-6 py-3 text-center text-lg font-extrabold transition hover:bg-sky-hover hover:shadow-lift">{user ? t("Checkout") : "Sign in to checkout"}</Link>}
           <Link to="/shop" className="block text-center text-sm font-semibold text-mute hover:text-ink hover:underline">{t("← Continue shopping")}</Link>
 
           {telegram && (
