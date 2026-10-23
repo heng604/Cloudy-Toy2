@@ -2,12 +2,12 @@ import { Link } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import BannerSlider from "@/components/BannerSlider";
 import Skeleton from "@/components/Skeleton";
-import { useProducts, useSettings } from "@/lib/store";
+import { useListedProducts, useSettings } from "@/lib/store";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 export default function Home() {
   useTitle(); const { t } = useI18n();
-  const { data: products } = useProducts(); const { settings: { banners } } = useSettings();
+  const { data: products } = useListedProducts(); const { settings: { banners } } = useSettings();
   return (<>
     <section className="rounded-xl2 bg-sky-pale px-5 py-8 text-center shadow-soft sm:p-10 lg:py-14">
       <h1 className="text-3xl font-extrabold sm:text-5xl lg:text-6xl">{t("Collect a little happiness")}</h1>

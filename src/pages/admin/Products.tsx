@@ -1,6 +1,6 @@
 import { useI18n } from "@/lib/i18n";
 import { Link, useSearchParams } from "react-router-dom";
-import { stockStatus, type Product } from "@shared/products";
+import { stockStatus, isListed, type Product } from "@shared/products";
 import ExportButtons from "@/components/admin/ExportButtons";
 import DeleteButton from "@/components/admin/DeleteButton";
 import Skeleton from "@/components/Skeleton";
@@ -26,7 +26,7 @@ export default function AdminProducts() {
     <div className="overflow-x-auto rounded-xl2 border border-sky-border bg-white"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-sky-pale"><tr>{["", "Product", "SKU", "Category", "Price", "Stock", ""].map((h, i) => <th key={i} className="p-3">{h === "SKU" ? h : t(h)}</th>)}</tr></thead>
       <tbody>{list.map((p) => { const st = stockStatus(p.stock); return (<tr key={p.id} className="border-t border-sky-border">
         <td className="p-3">{p.images[0] ? <img loading="lazy" src={p.images[0].src} alt="" className="h-10 w-10 rounded-lg object-cover" /> : <span className="grid h-10 w-10 place-items-center rounded-lg bg-sky-pale">☁️</span>}</td>
-        <td className="p-3 font-semibold">{p.name}{p.active === false && <span className="ml-2 rounded-full bg-slate-200 px-2 text-xs">hidden</span>}</td><td className="p-3">{p.sku}</td><td className="p-3">{p.category}</td>
+        <td className="p-3 font-semibold">{p.name}{p.active === false && <span className="ml-2 rounded-full bg-slate-200 px-2 text-xs">hidden</span>}{!isListed(p) && <span className="ml-2 rounded-full bg-red-100 px-2 text-xs text-red-800" title="Out of stock for 2+ days. Add stock to show it again.">hidden from shop (no stock)</span>}</td><td className="p-3">{p.sku}</td><td className="p-3">{p.category}</td>
         <td className="p-3">{p.salePrice != null ? <><b>${p.salePrice.toFixed(2)}</b> <s className="text-mute">${p.price.toFixed(2)}</s></> : `$${p.price.toFixed(2)}`}</td>
         <td className="p-3"><form key={p.stock} onSubmit={setStockFor(p.id)} className="flex items-center gap-2"><input name="stock" type="number" min="0" step="1" defaultValue={p.stock} aria-label={`Stock for ${p.name}`} className="w-20 rounded-lg border border-sky-border px-2 py-1" /><button className="rounded-full border border-sky-border px-3 py-1 text-xs font-bold hover:bg-sky-pale">Set</button><span className={`rounded-full px-2 py-0.5 text-xs font-bold ${badge[st]}`}>{st}</span></form></td>
         <td className="p-3"><div className="flex items-center justify-end gap-2"><Link to={`/admin/products/${p.id}`} className="rounded-full bg-sky px-4 py-1.5 font-bold hover:bg-sky-hover">{t("Edit")}</Link><DeleteButton action={del(p.id)} message={`Delete "${p.name}" permanently? This cannot be undone.`} /></div></td></tr>); })}</tbody></table>

@@ -114,6 +114,7 @@ function tooMany(key, max = 15, windowMs = 6e4) {
 var clientKey = (req) => req.ip ?? "local";
 
 // shared/products.ts
+var HIDE_AFTER_MS = 2 * 24 * 60 * 60 * 1e3;
 var FALLBACK_IMG = "data:image/svg+xml;utf8," + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'><rect width='400' height='300' fill='#EAF5FF'/><path d='M110 190a40 40 0 0 1 12-78 55 55 0 0 1 106-8 45 45 0 0 1 58 86z' fill='#8ECCFF'/></svg>");
 var LOW_STOCK = 5;
 var stockStatus = (stock) => stock <= 0 ? "OUT" : stock <= LOW_STOCK ? "LOW" : "OK";
@@ -121,7 +122,7 @@ var categoriesOf = (list) => [...new Set(list.map((p) => p.category).filter(Bool
 function slugify(s) {
   return s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "product";
 }
-var toProduct = (r) => ({ id: r.id, slug: r.slug, name: r.name, sku: r.sku, price: Number(r.price), stock: r.stock, category: r.category ?? "", createdAt: r.created_at, description: r.description ?? "", images: r.images ?? [], active: r.active });
+var toProduct = (r) => ({ id: r.id, slug: r.slug, name: r.name, sku: r.sku, price: Number(r.price), stock: r.stock, category: r.category ?? "", createdAt: r.created_at, description: r.description ?? "", images: r.images ?? [], active: r.active, ...r.out_of_stock_at ? { outOfStockAt: r.out_of_stock_at } : {} });
 
 // server/lib/productStore.ts
 var BUCKET = "product-images";

@@ -1,13 +1,13 @@
 import { Link, useSearchParams } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
-import { useProducts } from "@/lib/store";
+import { useListedProducts } from "@/lib/store";
 import { categoriesOf } from "@shared/products";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 export default function Shop() {
   const { t } = useI18n(); useTitle(t("Product"));
-  const [sp] = useSearchParams(); const { data: all } = useProducts();
+  const [sp] = useSearchParams(); const { data: all } = useListedProducts();
   if (!all) return <Skeleton />;
   const q = (sp.get("q") ?? "").toLowerCase(), category = sp.get("category"), sort = sp.get("sort");
   let list = all.filter((p) => p.name.toLowerCase().includes(q) && (!category || p.category === category));

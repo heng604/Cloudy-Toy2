@@ -4,11 +4,11 @@ import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
 import NotFound from "@/components/NotFound";
 import { money, isNewProduct, stockStatus } from "@shared/products";
-import { useProducts } from "@/lib/store";
+import { useListedProducts } from "@/lib/store";
 import { useTitle } from "@/lib/title";
 import AddButton from "./AddButton";
 export default function ProductPage() {
-  const { slug } = useParams(); const { data: all } = useProducts();
+  const { slug } = useParams(); const { data: all } = useListedProducts();
   const p = all?.find((x) => x.slug === slug);
   useTitle(all ? p?.name ?? "Not found" : undefined);
   if (!all) return <Skeleton />;

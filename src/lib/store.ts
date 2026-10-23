@@ -1,8 +1,9 @@
 // Storefront data: read straight from Supabase with the public (anon) key. RLS only exposes active products and site settings.
+import { useMemo } from "react";
 import { supabase } from "./supabase";
 import { useResource, load, refreshPrefix } from "./data";
 import { DEFAULT_SETTINGS, type Settings } from "@shared/types";
-import { toProduct, slugify, type Product, type ProductRow } from "@shared/products";
+import { toProduct, slugify, isListed, type Product, type ProductRow } from "@shared/products";
 import { hiddenFrom, resolvePage, type PagesStore, type PageSlug } from "@shared/pages";
 // Local preview without Supabase keys: sample products so the shop can be tried right after extracting.
 const DEMO_PRODUCTS: Product[] = [
@@ -18,12 +19,15 @@ const DEMO_PRODUCTS: Product[] = [
 }));
 const need = () => { if (!supabase) throw new Error("Supabase is not configured"); return supabase; };
 const COLS = "id,slug,name,sku,price,sale_price,stock,created_at,category,description,images,active";
-export const fetchProducts = async (): Promise<Product[]> => { if (!supabase) return DEMO_PRODUCTS; const r = await need().from("products").select(COLS).eq("active", true).order("created_at", { ascending: false }); if (r.error) throw new Error(r.error.message); return (r.data as ProductRow[]).map(toProduct); };
+export const fetchProducts = async (): Promise<Product[]> => { if (!supabase) return DEMO_PRODUCTS; const q = (cols: string) => need().from("products").select(cols).eq("active", true).order("created_at", { ascending: false });
+  let r = await q(`${COLS},out_of_stock_at`); if (r.error) r = await q(COLS); /* column not created yet (SQL migration 0011 not run): still show everything */ if (r.error) throw new Error(r.error.message); return (r.data as unknown as ProductRow[]).map(toProduct); };
 export const fetchSettings = async (): Promise<Settings> => {
   try { const r = await need().from("site_settings").select("value").eq("key", "main").maybeSingle(); const v = { ...DEFAULT_SETTINGS, ...((r.data?.value as Partial<Settings>) ?? {}) }; if (!Array.isArray(v.banners)) v.banners = []; return v; } catch { return DEFAULT_SETTINGS; }
 };
 export const fetchPages = async (): Promise<PagesStore> => { try { const r = await need().from("site_settings").select("value").eq("key", "pages").maybeSingle(); return (r.data?.value as PagesStore) ?? {}; } catch { return {}; } };
 export const useProducts = () => useResource("products", fetchProducts, { persist: true, staleMs: 15_000 });
+/** Products the shop shows: out-of-stock ones disappear after 2 days until the admin adds stock again. */
+export const useListedProducts = () => { const r = useProducts(); const data = useMemo(() => r.data?.filter((p) => isListed(p)), [r.data]); return { ...r, data }; };
 export const useSettings = () => { const r = useResource("settings", fetchSettings, { persist: true, staleMs: 30_000 }); return { ...r, settings: r.data ?? DEFAULT_SETTINGS }; };
 export const usePages = () => { const r = useResource("pages", fetchPages, { persist: true, staleMs: 30_000 }); return { ...r, hidden: hiddenFrom(r.data ?? {}), page: (slug: PageSlug) => (r.data ? resolvePage(r.data, slug) : null) }; };
 /** Start downloading as soon as the script loads, before React has rendered. */
