@@ -11,7 +11,7 @@ export default function AdminNav({ logoUrl, onSignOut }: { logoUrl: string; onSi
     <nav aria-label="Admin" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto md:flex-none md:flex-col md:items-stretch md:overflow-visible">{LINKS.map(([href, label, icon]) => {
       const on = href === "/admin" ? path === "/admin" : path.startsWith(href);
       return <Link key={href} to={href} title={t(label)} aria-current={on ? "page" : undefined} className={`${item} ${on ? "bg-sky-pale text-ink shadow-soft ring-1 ring-sky-border" : "text-mute hover:bg-sky-pale hover:text-ink"}`}><Icon name={icon} size={20} /><span className="hidden md:inline">{t(label)}</span></Link>; })}</nav>
-    <div className="hidden md:mt-auto md:block"><div className="relative mb-4 flex items-end gap-2 px-1"><img src="/img/invoice-logo.jpg" alt="" className="h-14 w-14 shrink-0 rounded-full object-cover ring-2 ring-sky-border" /><p className="mb-6 rounded-2xl rounded-bl-sm bg-sky-pale px-3 py-1.5 font-['Caveat'] text-base font-semibold leading-tight text-ink">{t("Good things are coming!")}</p></div></div>
+    <div className="hidden md:mt-auto md:block"><img src="/img/sidebar-mascot.png" alt="" width={812} height={522} className="mx-auto mb-3 h-auto w-full max-w-[13rem]" /></div>
     <Link to="/" title={t("View shop")} className={`${item} text-mute hover:bg-sky-pale hover:text-ink`}><Icon name="shop" size={20} /><span className="hidden md:inline">{t("View shop")}</span></Link>
     <button type="button" onClick={onSignOut} title={t("Sign out")} className={`${item} text-mute hover:bg-sky-pale hover:text-ink`}><Icon name="logout" size={20} /><span className="hidden md:inline">{t("Sign out")}</span></button>
   </aside>);

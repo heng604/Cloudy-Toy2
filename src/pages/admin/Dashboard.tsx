@@ -54,9 +54,9 @@ export default function Dashboard() {
   const big = "text-2xl font-extrabold leading-tight sm:text-3xl";
   const Row = ({ o }: { o: StoredOrder }) => <li className="flex justify-between gap-3 border-b border-sky-border py-2 text-sm last:border-0"><span className="min-w-0"><span className="block truncate font-semibold">{o.orderNumber}</span><span className="block truncate text-xs text-mute">{o.customer.name} · {stamp(o.createdAt)} · {t(o.paymentStatus)}</span></span><b className="shrink-0">{usd(o.totalCents)}</b></li>;
   return (<div className="space-y-4">
-    <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-white via-[#EAF5FF] to-[#D6ECFF] p-5 shadow-soft sm:p-6" aria-label={t("Dashboard")}>
-      <div className="relative z-10 max-w-xl"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Welcome back, {name}!", { name })}</h1><p className="mt-1 text-sm text-mute sm:text-base">{t("Here's what's happening with your Cloudy Toys store today.")}</p><p className="mt-3 font-['Caveat'] text-xl font-semibold text-sky-hover">{t("Keep spreading happiness!")}</p></div>
-      <img src="/img/invoice-logo.jpg" alt="" className="absolute -bottom-6 right-4 h-36 w-36 rounded-full object-cover opacity-90 ring-4 ring-white sm:right-10 sm:h-44 sm:w-44" /></section>
+    <section className="overflow-hidden rounded-3xl shadow-soft" aria-label={t("Dashboard")}>
+      <h1 className="sr-only">{t("Welcome back, {name}!", { name })}</h1>
+      <img src="/img/dashboard-banner.jpg" alt="" width={2576} height={361} className="block h-auto w-full min-h-[5.5rem] object-cover object-left" /></section>
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4 sm:gap-4">
       {cards.map((c) => <section key={c.label} className={`${card} flex items-center gap-3 !p-4`}><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl" style={{ background: c.tint, color: c.fg }}><Icon name={c.icon} size={22} /></span>
         <div className="min-w-0"><p className="truncate text-sm font-semibold text-mute">{c.label}</p><p className="truncate text-xl font-extrabold leading-tight sm:text-2xl">{c.value}</p>
