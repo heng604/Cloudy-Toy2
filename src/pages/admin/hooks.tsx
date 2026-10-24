@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useResource, refreshPrefix } from "@/lib/data";
 import { apiJson } from "@/lib/api";
 import { refreshStore } from "@/lib/store";
+import type { User } from "@supabase/supabase-js";
 /** Admin data comes from the API (needs the admin token). Keys start with "admin:" so one call refreshes all of them. */
 export const useAdmin = <T,>(path: string) => {
   const r = useResource<T>(`admin:${path}`, () => apiJson<T>(path));
@@ -22,3 +23,5 @@ export function AdminErrorBanner() {
 }
 export const refreshAdmin = () => { refreshPrefix("admin:"); refreshStore(); };
 export const Msg = ({ ok, err }: { ok?: string | null; err?: string | null }) => <>{ok && <p role="status" className="rounded-xl bg-green-100 p-3">{ok}</p>}{err && <p role="alert" className="rounded-xl bg-red-100 p-3">{err}</p>}</>;
+/** Name shown for the signed-in admin: Google/profile name if there is one, else the part of the email before @. */
+export const displayName = (u: User | null) => { const m = (u?.user_metadata ?? {}) as { full_name?: string; name?: string }; return (m.full_name || m.name || u?.email?.split("@")[0] || "Admin").trim(); };

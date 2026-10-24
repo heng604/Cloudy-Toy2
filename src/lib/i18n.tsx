@@ -26,6 +26,10 @@ const KM: Record<string, string> = {
   "Stock alerts": "ការជូនដំណឹងស្តុក", "Manage stock": "គ្រប់គ្រងស្តុក", "All products have healthy stock.": "ផលិតផលទាំងអស់មានស្តុកគ្រប់គ្រាន់។", "Best sellers": "លក់ដាច់បំផុត", "No sales yet.": "មិនទាន់មានការលក់។", "No orders yet.": "មិនទាន់មានការបញ្ជាទិញ។",
   "Export all data": "នាំចេញទិន្នន័យទាំងអស់", "{n} left": "នៅសល់ {n}", "{n} sold": "លក់បាន {n}", "Paid share": "ភាគរយបានបង់", "In stock": "មានស្តុក", "Orders per day": "ការបញ្ជាទិញក្នុងមួយថ្ងៃ", "Revenue": "ចំណូល", "Orders ": "ការបញ្ជាទិញ",
   "Calendar": "ប្រតិទិន", "Days with orders are marked.": "ថ្ងៃដែលមានការបញ្ជាទិញត្រូវបានសម្គាល់។", "Today": "ថ្ងៃនេះ", "orders": "ការបញ្ជាទិញ", "paid": "បានបង់", "pending": "រង់ចាំ", "Healthy stock": "ស្តុកល្អ", "{a} of {b} products": "{a} ក្នុងចំណោម {b} ផលិតផល",
+  // dashboard (new layout)
+  "Total Orders": "ការបញ្ជាទិញសរុប", "Total Revenue": "ចំណូលសរុប", "New Customers": "អតិថិជនថ្មី", "Products Sold": "ផលិតផលដែលបានលក់", "vs last 7 days": "បើធៀបនឹង ៧ ថ្ងៃមុន",
+  "Sales Overview": "ទិដ្ឋភាពទូទៅនៃការលក់", "Last 7 days": "៧ ថ្ងៃចុងក្រោយ", "Last 14 days": "១៤ ថ្ងៃចុងក្រោយ", "Recent Orders": "ការបញ្ជាទិញថ្មីៗ", "View all": "មើលទាំងអស់",
+  "Customer": "អតិថិជន", "Status": "ស្ថានភាព", "Order #": "លេខបញ្ជាទិញ", "Admin": "អ្នកគ្រប់គ្រង", "Welcome back, {name}!": "សូមស្វាគមន៍ត្រឡប់មកវិញ {name}!", "Stock status": "ស្ថានភាពស្តុក", "Promo codes": "កូដបញ្ចុះតម្លៃ", "Manage Promotions": "គ្រប់គ្រងប្រូម៉ូសិន", "Other": "ផ្សេងៗ",
   // discounts
   "Discount codes": "កូដបញ្ចុះតម្លៃ", "Create a code": "បង្កើតកូដ", "Create code": "បង្កើតកូដ", "Generate": "បង្កើតស្វ័យប្រវត្តិ", "Code": "កូដ", "Discount % (off the subtotal)": "បញ្ចុះតម្លៃ % (លើសរុបរង)", "{n}% off the subtotal": "បញ្ចុះ {n}% លើសរុបរង",
   "Your codes ({n})": "កូដរបស់អ្នក ({n})", "No codes yet. Create one above.": "មិនទាន់មានកូដទេ។ បង្កើតមួយនៅខាងលើ។", "Saving…": "កំពុងរក្សាទុក…", "3 to 30 letters, numbers, - or _": "អក្សរ លេខ - ឬ _ ចំនួន ៣ ដល់ ៣០",

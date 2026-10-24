@@ -18,8 +18,8 @@ export default function FilePicker({ name, multiple = false, accept = "image/png
   const clear = () => { if (ref.current) ref.current.value = ""; sync(); };
   return (<div>
     <div onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={drop}
-      className={`flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-4 py-5 text-center transition-colors ${over ? "border-[#1FC2C8] bg-[#E3F6F8]" : "border-[#BFE6EA] bg-[#F3FBFC]"}`}>
-      <span className="grid h-12 w-12 place-items-center rounded-full bg-[#DDF3F7] text-[#1FC2C8]" aria-hidden="true">
+      className={`flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed px-4 py-5 text-center transition-colors ${over ? "border-[#6CB8F5] bg-[#E3F6F8]" : "border-[#BFE6EA] bg-[#F3FBFC]"}`}>
+      <span className="grid h-12 w-12 place-items-center rounded-full bg-[#DDF3F7] text-[#6CB8F5]" aria-hidden="true">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 16.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5M12 15V4M7.5 8.5 12 4l4.5 4.5" /></svg></span>
       <p className="text-sm text-mute">{label ?? (multiple ? "Drag photos here, or" : "Drag a photo here, or")}</p>
       <button type="button" onClick={() => ref.current?.click()} className="min-h-10 rounded-full bg-sky px-6 text-sm font-bold shadow-soft hover:bg-sky-hover">{files.length ? (multiple ? "Choose different photos" : "Choose a different photo") : (multiple ? "Choose photos" : "Choose photo")}</button>

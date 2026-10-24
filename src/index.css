@@ -21,22 +21,19 @@ table{max-width:100%}
 dialog{max-width:calc(100vw - 2rem)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-/* ---------- Admin theme: teal sidebar, soft rounded white cards, yellow action buttons ---------- */
-.admin-theme{background:linear-gradient(135deg,#C9EEF2,#DDF3F7);min-height:100vh}
-.admin-theme .bg-sky{background-color:#FFD25A}
-.admin-theme .bg-sky-hover,.admin-theme .hover\:bg-sky-hover:hover{background-color:#FFC53D}
-.admin-theme .bg-sky-pale{background-color:#EAF8FA}
-.admin-theme .hover\:bg-sky-pale:hover{background-color:#DFF4F7}
-.admin-theme .border-sky-border{border-color:#DCEEF2}
-.admin-theme .border-sky{border-color:#FFD25A}
-.admin-theme .shadow-soft{box-shadow:0 8px 24px rgba(31,194,200,.13)}
-.admin-theme .shadow-lift{box-shadow:0 12px 28px rgba(31,194,200,.25)}
-.admin-theme :focus-visible{outline-color:#1FC2C8}
+/* ---------- Admin theme: soft sky-blue clouds, white sidebar, rounded white cards, blue action buttons ---------- */
+.admin-theme{background:radial-gradient(ellipse 40% 22% at 12% 4%,#fff 0,rgba(255,255,255,0) 70%),radial-gradient(ellipse 35% 20% at 88% 10%,#fff 0,rgba(255,255,255,0) 70%),radial-gradient(ellipse 45% 20% at 60% 100%,#fff 0,rgba(255,255,255,0) 70%),linear-gradient(180deg,#D9EEFF,#EAF6FF 55%,#F4FAFF);background-attachment:fixed;min-height:100vh}
+.admin-theme .bg-sky-pale{background-color:#EAF5FF}
+.admin-theme .hover\:bg-sky-pale:hover{background-color:#DCEEFF}
+.admin-theme .border-sky-border{border-color:#D8EAFE}
+.admin-theme .shadow-soft{box-shadow:0 8px 24px rgba(108,184,245,.16)}
+.admin-theme .shadow-lift{box-shadow:0 12px 28px rgba(108,184,245,.3)}
+.admin-theme :focus-visible{outline-color:#6CB8F5}
 .admin-theme button:not(:disabled),.admin-theme a.rounded-full{transition:transform .15s,box-shadow .15s,background-color .15s}
-.admin-theme button.rounded-full:not(:disabled):hover,.admin-theme a.rounded-full:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(31,194,200,.22)}
-.admin-theme input:focus,.admin-theme select:focus,.admin-theme textarea:focus{border-color:#1FC2C8;outline:2px solid rgba(31,194,200,.35);outline-offset:0}
-.admin-theme :where(.rounded-xl2){border-radius:1.5rem;border-color:transparent;box-shadow:0 8px 24px rgba(31,194,200,.1)}
-.admin-theme thead.bg-sky-pale{background-color:#E3F6F8}
+.admin-theme button.rounded-full:not(:disabled):hover,.admin-theme a.rounded-full:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(108,184,245,.25)}
+.admin-theme input:focus,.admin-theme select:focus,.admin-theme textarea:focus{border-color:#6CB8F5;outline:2px solid rgba(108,184,245,.35);outline-offset:0}
+.admin-theme :where(.rounded-xl2){border-radius:1.5rem;border-color:transparent;box-shadow:0 8px 24px rgba(108,184,245,.14)}
+.admin-theme thead.bg-sky-pale{background-color:#E3F1FF}
 
 button,input,select,textarea{font-family:inherit;color:inherit}
 /* header stays fixed in place on phone, iPad and tablet */
