@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { areaLabel } from "@shared/delivery";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import PayQr from "@/components/PayQr";
 import BakongPay from "@/components/BakongPay";
 import NotFound from "@/components/NotFound";
@@ -13,6 +13,8 @@ export default function Payment() {
   useTitle("Payment", true); const { orderNumber } = useParams(); const { settings: s } = useSettings();
   const [o, setO] = useState<StoredOrder | null | undefined>(undefined); const [justPaid, setJustPaid] = useState(false);
   useEffect(() => { let live = true; setO(undefined); fetch(`/api/orders/${encodeURIComponent(orderNumber ?? "")}`).then((r) => (r.ok ? r.json() : null)).then((j) => live && setO(j?.order ?? null)).catch(() => live && setO(null)); return () => { live = false; }; }, [orderNumber]);
+  const navigate = useNavigate();
+  useEffect(() => { if (o && o.method === "BAKONG" && (o.paymentStatus === "FAILED" || o.paymentStatus === "EXPIRED")) { const id = setTimeout(() => navigate("/"), 3500); return () => clearTimeout(id); } }, [o, navigate]); // a cancelled or expired Bakong order goes back to the home page
   if (o === undefined) return <div className="mx-auto max-w-xl animate-pulse space-y-4" aria-busy="true"><div className="h-9 w-64 rounded-full bg-sky-pale" /><div className="h-14 rounded-xl2 bg-sky-pale" /><div className="h-40 rounded-xl2 bg-sky-pale" /></div>;
   if (!o) return <NotFound />;
   return (<div className="mx-auto max-w-xl space-y-4"><h1 className="text-2xl font-extrabold sm:text-3xl">Order {o.orderNumber}</h1>

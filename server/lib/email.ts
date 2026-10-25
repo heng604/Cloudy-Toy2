@@ -66,15 +66,21 @@ const validEmail = (v: string | undefined) => !!v && /^[^\s@<>]+@[^\s@<>]+\.[^\s
  *  - Each request times out after 4s (hosting platforms kill slow functions) and network errors / 429 / 5xx are retried once.
  *  - If the configured sender is rejected (4xx, e.g. domain not verified yet), it retries with Resend's test sender, one recipient at a time,
  *    because the test sender is only allowed to reach the Resend account owner: the admin gets the order if ANY inbox is accepted. */
+/** Phone notification text for the admin: Gmail shows the sender + the start of the subject, so the emoji, amount and customer come first. One order = one separate mail (the subject holds the order number, so Gmail never merges two orders into one conversation). */
+const alertSubject = (emoji: string, o: StoredOrder, subject: string) => `${emoji} ${usd(payNowCents(o))} ${o.customer.name.replace(/\s+/g, " ").trim().slice(0, 24)} | ${subject}`;
+/** Hidden first line of the mail: Gmail shows it as the preview text under the subject (name, phone, items). */
+const preheader = (o: StoredOrder) => `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#ffffff">${esc(`${o.customer.name} · ${o.customer.phone} · ${o.items.map((i) => `${i.name} x${i.qty}`).join(", ")}`.slice(0, 140))}</div>`;
+const withPreheader = (html: string, o: StoredOrder) => (/<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, (m) => m + preheader(o)) : preheader(o) + html);
 async function deliver(subject: string, html: string, o: StoredOrder, customerTo?: string): Promise<SendResult> {
   try {
     const key = process.env.RESEND_API_KEY?.trim();
     if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in your environment variables" };
+    if (!customerTo) html = withPreheader(html, o); // admin mails only
     const text = plain(html);
     const send = async (from: string, to: string[]): Promise<SendResult> => {
       const body = JSON.stringify({ from, to, subject, html, text, attachments: [...(html.includes(`cid:${LOGO_CID}`) ? logoAttachment() : []), ...(html.includes(`cid:${MASCOT_CID}`) ? mascotAttachment() : [])],
         ...(customerTo ? { reply_to: recipients()[0] } : validEmail(o.customer.email) ? { reply_to: o.customer.email } : {}), // admin mail: reply goes to the customer; customer mail: reply goes to the shop
-        headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}` } });
+        headers: { "X-Entity-Ref-ID": `${o.orderNumber}-${Date.now()}`, ...(customerTo ? {} : { "X-Priority": "1", "X-MSMail-Priority": "High", Importance: "high", Priority: "urgent" }) } }); // admin mails are marked high priority so Gmail notifies on the phone
       let detail = "";
       for (let attempt = 1; attempt <= 2; attempt++) {
         try {
@@ -108,7 +114,7 @@ async function deliver(subject: string, html: string, o: StoredOrder, customerTo
   }
 }
 const contact = async () => contactLines(await getSettings());
-export const sendAdminEmail = async (o: StoredOrder) => deliver(adminSubject(o), adminHtml(o, "", await contact(), logoAttachment().length > 0), o);
+export const sendAdminEmail = async (o: StoredOrder) => deliver(alertSubject("🛒", o, adminSubject(o)), adminHtml(o, "", await contact(), logoAttachment().length > 0), o);
 
 export const claimSubject = (o: StoredOrder) => `[Cloudy-Toy] Customer says PAID #${o.orderNumber} - ${usd(payNowCents(o))} - please verify`;
 export function claimHtml(o: StoredOrder) {
@@ -119,11 +125,11 @@ export function claimHtml(o: StoredOrder) {
 export const paidOrderSubject = (o: StoredOrder) => `[Cloudy-Toy] New Order #${o.orderNumber} - QR PAYMENT, CUSTOMER SAYS PAID (verify)`;
 const proofNote = (o: StoredOrder) => o.paymentProof ? box("#d1f2d1", `<b>Payment screenshot uploaded.</b> Open it in Admin &gt; Transactions (order ${esc(o.orderNumber)}).`) : "";
 const claimNote = (o: StoredOrder) => box("#fff3cd", `<b>CUSTOMER SAYS THEY PAID (NOT VERIFIED).</b> Check your ABA app for <b>${usd(payNowCents(o))}</b> with order number <b>${esc(o.orderNumber)}</b>. Expect a screenshot on Telegram/Facebook. When confirmed, open Admin &gt; Orders &gt; Mark as paid.`);
-export const sendPaidOrderEmail = async (o: StoredOrder) => deliver(paidOrderSubject(o), adminHtml(o, claimNote(o) + proofNote(o), await contact(), logoAttachment().length > 0), o);
+export const sendPaidOrderEmail = async (o: StoredOrder) => deliver(alertSubject("🔔", o, paidOrderSubject(o)), adminHtml(o, claimNote(o) + proofNote(o), await contact(), logoAttachment().length > 0), o);
 /** Bakong payment was confirmed by the bank: full order + invoice with a green "PAID" banner, sent to the admin. */
 export const bakongPaidSubject = (o: StoredOrder) => `[Cloudy-Toy] PAID #${o.orderNumber} - ${usd(payNowCents(o))} - Bakong KHQR (verified)`;
-export const sendBakongPaidEmail = async (o: StoredOrder) => deliver(bakongPaidSubject(o), adminInvoiceHtml(o, box("#d1f2d1", `<b>✅ PAID via Bakong KHQR (verified automatically).</b> <b>${usd(payNowCents(o))}</b> received for order <b>${esc(o.orderNumber)}</b>${o.bakongHash ? ` · transaction ${esc(o.bakongHash.slice(0, 12))}…` : ""}. Nothing to verify. Pack and ship the order.`), undefined, await contact(), logoAttachment().length > 0), o);
-export const sendPaidClaimEmail = (o: StoredOrder) => deliver(claimSubject(o), claimHtml(o), o);
+export const sendBakongPaidEmail = async (o: StoredOrder) => deliver(alertSubject("💰", o, bakongPaidSubject(o)), adminInvoiceHtml(o, box("#d1f2d1", `<b>✅ PAID via Bakong KHQR (verified automatically).</b> <b>${usd(payNowCents(o))}</b> received for order <b>${esc(o.orderNumber)}</b>${o.bakongHash ? ` · transaction ${esc(o.bakongHash.slice(0, 12))}…` : ""}. Nothing to verify. Pack and ship the order.`), undefined, await contact(), logoAttachment().length > 0), o);
+export const sendPaidClaimEmail = (o: StoredOrder) => deliver(alertSubject("🔔", o, claimSubject(o)), claimHtml(o), o);
 
 /** Personal invoice e-mail to the customer. SKIPPED when they gave no valid address. Never throws. */
 export const sendCustomerEmail = async (o: StoredOrder, kind: CustomerMailKind): Promise<SendResult> =>
