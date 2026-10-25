@@ -55,3 +55,15 @@ export async function listPendingBakong() {
   const r = await db().from("orders").select("data").eq("payment_status", "PENDING").eq("data->>method", "BAKONG").order("created_at", { ascending: false }).limit(30);
   return fromRows(must(r)).filter((o) => (o.bakongMd5s?.length ?? 0) > 0 && Date.now() - Date.parse(o.createdAt) < 6 * 3600_000);
 }
+
+/** Moves PENDING -> FAILED (customer cancelled) or EXPIRED (QR time ran out) exactly once. Returns the order only for the caller that won, so its stock is given back once. A PAID order is never touched. */
+export async function markUnpaidOnce(n: string, status: "FAILED" | "EXPIRED") {
+  const o = await getOrder(n); if (!o || o.paymentStatus !== "PENDING") return null;
+  o.paymentStatus = status; o.stockReleased = true;
+  const r = await db().from("orders").update(toRow(o)).eq("order_number", n).eq("payment_status", "PENDING").select("order_number");
+  return (must(r) as unknown[] | null)?.length ? o : null;
+}
+/** Every Bakong order still waiting for payment (used to give stock back for abandoned ones). */
+export async function listPendingBakongAll() {
+  return fromRows(must(await db().from("orders").select("data").eq("payment_status", "PENDING").eq("data->>method", "BAKONG").order("created_at", { ascending: false }).limit(100)));
+}

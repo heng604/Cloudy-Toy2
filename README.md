@@ -45,3 +45,7 @@ Bakong only answers Cambodian IP addresses, so a site on Vercel cannot confirm p
 1. Pick any long random text (12+ characters) as `BAKONG_WATCHER_SECRET`. Add it to **Vercel → Settings → Environment Variables**, then redeploy.
 2. On the shop PC, in `.env.local`, add the same `BAKONG_WATCHER_SECRET`, plus `BAKONG_SITE_URL=https://your-site.vercel.app` (it already has `BAKONG_API_TOKEN`).
 3. Double-click `start-bakong-watcher.bat` and keep the window open while taking payments. When a customer pays, the watcher tells the site within about 1.5 s and the green popup appears; you get the paid email.
+
+## Stock rules
+- A Bakong order holds its stock while the customer pays. Each order gets up to 3 QR codes (a new one is made automatically when one expires). When the 3rd runs out, or the customer presses **Cancel order**, or nobody opens the payment page for 5 minutes after the last QR expired, the order is cancelled and the stock goes back to the shop (once only; a paid order is never touched).
+- A sold-out product shows only the "Out of stock" label. After 2 days out of stock it disappears from the Home and Product pages (it stays in the admin dashboard and database); when the admin adds stock it shows again with all its data. Only the admin can delete a product.

@@ -4,6 +4,10 @@ import QRCode from "qrcode";
 const nodeRequire = createRequire(import.meta.url);
 const { BakongKHQR, khqrData, IndividualInfo } = nodeRequire("bakong-khqr") as any; // the package ships no types
 export const QR_MINUTES = 10;
+/** A customer gets this many QR codes per order (a new one is made automatically when one expires). After the last one runs out the order is cancelled and its stock goes back to the shop. */
+export const QR_MAX = 3;
+/** An abandoned order (no new QR requested this long after the last QR expired) is cancelled and its stock released. */
+export const QR_GRACE_MS = 5 * 60_000;
 const cfg = () => ({
   account: (process.env.BAKONG_ACCOUNT_ID ?? "").trim(), // your Bakong account id, e.g. yourname@aba
   token: (process.env.BAKONG_API_TOKEN ?? "").trim(), // Bakong Open API token (https://api-bakong.nbc.gov.kh/register)
@@ -17,8 +21,8 @@ export const bakongEnabled = () => { const c = cfg(); return !!c.account && !!c.
 export const bakongAccount = () => cfg().account;
 export const bakongName = () => cfg().name;
 /** KHQR string + md5 + PNG data-URL for an exact USD amount. */
-export async function makeKhqr(orderNumber: string, totalCents: number) {
-  const c = cfg(); const expiresAt = Date.now() + QR_MINUTES * 60_000;
+export async function makeKhqr(orderNumber: string, totalCents: number, reuseExpiresAt?: number) {
+  const c = cfg(); const expiresAt = reuseExpiresAt ?? Date.now() + QR_MINUTES * 60_000; // same expiry = the very same QR (a page reload does not use up one of the customer's QR codes)
   const info = new IndividualInfo(c.account, c.name, c.city, { currency: khqrData.currency.usd, amount: totalCents / 100, billNumber: orderNumber, expirationTimestamp: expiresAt });
   const r = new BakongKHQR().generateIndividual(info);
   if (!r?.data?.qr || !r.data.md5) throw new Error(`KHQR failed: ${r?.status?.message ?? "unknown"}`);

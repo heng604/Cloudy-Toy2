@@ -14,12 +14,12 @@ import { getPromotions, savePromotions } from "./lib/promotionsStore";
 import { tooMany, clientKey } from "./lib/rateLimit";
 import { listProducts, listAllProducts, renameCategory, setLabels, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
 import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
-import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listPendingBakong } from "./lib/store";
+import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
 import { methodOn } from "../shared/payOptions";
-import { bakongEnabled, makeKhqr, checkPaid, bakongName, bakongDiagnose, matchPaid, watcherSecret } from "./lib/bakong";
+import { bakongEnabled, makeKhqr, checkPaid, bakongName, bakongDiagnose, matchPaid, watcherSecret, QR_MAX, QR_GRACE_MS } from "./lib/bakong";
 import { uploadProof, deleteProofs, proofUrls } from "./lib/proofStore";
 import { ordersDataset, transactionsDataset, deliveryDataset, productsDataset, stockDataset } from "./lib/exports";
 import { toCsv } from "../shared/csv";
@@ -100,6 +100,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (area === "PROVINCE" && !parsed.data.province) return res.status(400).json({ error: "Please choose your province." });
   if (method === "BAKONG" && !bakongEnabled()) return res.status(400).json({ error: "Bakong payment is not available right now. Please choose another payment method." });
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
+  await expireStaleBakong(true); // abandoned Bakong orders give their stock back before we check stock
   const acct = userOf(req); const [settings, products] = await Promise.all([getSettings(), listProducts()]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   const catalog = catalogOf(products); let usedCode: string | undefined;
@@ -173,15 +174,46 @@ api.get("/payment/bakong/enabled", wrap(async (_req, res) => res.json({ enabled:
 api.post("/payment/bakong/qr", wrap(async (req, res) => {
   const n = typeof req.body?.orderNumber === "string" ? req.body.orderNumber.trim() : "";
   if (!ORDER_RE.test(n)) return res.status(400).json({ error: "Invalid order" });
-  if (tooMany(`bkqr:${clientKey(req)}`, 20)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  if (tooMany(`bkqr:${clientKey(req)}`, 30)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (!bakongEnabled()) return res.status(503).json({ error: "Bakong payment is not set up yet." });
   const o = await getOrder(n);
   if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Order not found" });
   if (o.paymentStatus === "PAID") return res.json({ paid: true });
-  const k = await makeKhqr(n, payNowCents(o));
-  await updateOrder(n, (x) => { x.bakongMd5s = [...(x.bakongMd5s ?? []), k.md5].slice(-10); }); // older QR codes stay valid for checking
-  res.json({ paid: false, image: k.image, expiresAt: k.expiresAt, amountCents: payNowCents(o), merchant: bakongName() });
+  if (o.paymentStatus !== "PENDING") return res.json({ closed: true, status: o.paymentStatus });
+  const now = Date.now(), used = o.bakongMd5s?.length ?? 0, live = !!o.bakongQrExpiresAt && o.bakongQrExpiresAt > now + 3000;
+  if (!live && used >= QR_MAX) { // all QR codes used and the last one expired: cancel and give the stock back
+    await releaseBakongOrder(n, "EXPIRED"); const again = await getOrder(n);
+    return res.json(again?.paymentStatus === "PAID" ? { paid: true } : { closed: true, status: again?.paymentStatus ?? "EXPIRED" });
+  }
+  const k = await makeKhqr(n, payNowCents(o), live ? o.bakongQrExpiresAt : undefined);
+  const qrNumber = live && (o.bakongMd5s ?? []).includes(k.md5) ? used : used + 1;
+  await updateOrder(n, (x) => { if (!(x.bakongMd5s ?? []).includes(k.md5)) x.bakongMd5s = [...(x.bakongMd5s ?? []), k.md5].slice(-10); x.bakongQrExpiresAt = k.expiresAt; }); // older QR codes stay valid for checking
+  res.json({ paid: false, image: k.image, expiresAt: k.expiresAt, amountCents: payNowCents(o), merchant: bakongName(), qrNumber, qrMax: QR_MAX });
 }));
+/** Customer pressed "Cancel order": the order is cancelled and its stock goes back to the shop (once). */
+api.post("/payment/bakong/cancel", wrap(async (req, res) => {
+  const n = typeof req.body?.orderNumber === "string" ? req.body.orderNumber.trim() : "";
+  if (!ORDER_RE.test(n)) return res.status(400).json({ error: "Invalid order" });
+  if (tooMany(`bkc:${clientKey(req)}`, 10)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  const o = await getOrder(n);
+  if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Order not found" });
+  if (o.paymentStatus === "PAID") return res.json({ paid: true });
+  await releaseBakongOrder(n, "FAILED"); const now = await getOrder(n);
+  res.json(now?.paymentStatus === "PAID" ? { paid: true } : { ok: true, status: now?.paymentStatus ?? "FAILED" });
+}));
+/** Gives the stock of an unpaid Bakong order back to the shop, exactly once (cancelled, or its QR codes ran out). A paid order is never touched. */
+async function releaseBakongOrder(n: string, status: "FAILED" | "EXPIRED") {
+  const o = await markUnpaidOnce(n, status); if (!o) return false;
+  try { await restoreStock(o.items.map((i) => ({ productId: i.productId, qty: i.qty }))); } catch (e) { console.error("[restock failed]", n, e); }
+  return true;
+}
+let lastSweep = 0;
+/** Cancels Bakong orders nobody is paying any more (no new QR within a few minutes after the last one expired) so their stock is sellable again. */
+async function expireStaleBakong(force = false) {
+  if (!force && Date.now() - lastSweep < 20_000) return; lastSweep = Date.now();
+  try { for (const o of await listPendingBakongAll()) { const last = o.bakongQrExpiresAt ?? Date.parse(o.createdAt) + 15 * 60_000; if (Date.now() > last + QR_GRACE_MS) await releaseBakongOrder(o.orderNumber, "EXPIRED"); } }
+  catch (e) { console.error("[expire sweep]", e); }
+}
 /** Moves the order to PAID once and sends the emails (only the caller that flips PENDING -> PAID sends them, side by side so the popup is not kept waiting). */
 async function finalizeBakongPaid(n: string, hash: string) {
   const won = await markPaidOnce(n, (x) => { x.paidAt = new Date().toISOString(); x.paidManuallyBy = undefined; x.bakongHash = hash; });
@@ -200,6 +232,8 @@ api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
   const o = await getOrder(n);
   if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Not found" });
   if (o.paymentStatus === "PAID") return res.json({ paid: true });
+  if (o.paymentStatus !== "PENDING") return res.json({ paid: false, closed: true, status: o.paymentStatus });
+  await expireStaleBakong();
   if (watcherSecret()) return res.json({ paid: false, problem: false, ...(req.query.debug === "1" ? { debug: ["waiting for the shop-PC watcher (tools/bakong-watcher.mjs) to confirm"] } : {}) });
   const md5s = [...(o.bakongMd5s ?? [])].reverse(); let hash: string | undefined; let problem = false;
   const results = await Promise.all(md5s.map((md5) => checkPaid(md5, payNowCents(o)).then((r) => ({ md5, r })))); // all QR codes of this order at once = fastest answer
@@ -213,6 +247,7 @@ const watcherOk = (req: Request) => { const s = watcherSecret(), got = String(re
 api.get("/relay/pending", wrap(async (req, res) => {
   if (tooMany(`rp:${clientKey(req)}`, 600)) return res.status(429).json({ error: "slow down" });
   if (!watcherOk(req)) return res.status(401).json({ error: "bad secret" });
+  await expireStaleBakong();
   res.json({ orders: (await listPendingBakong()).map((o) => ({ orderNumber: o.orderNumber, md5s: o.bakongMd5s ?? [] })) });
 }));
 api.post("/relay/confirm", wrap(async (req, res) => {

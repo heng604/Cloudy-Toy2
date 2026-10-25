@@ -1,38 +1,55 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-type Qr = { image: string; expiresAt: number; merchant: string };
+type Qr = { image: string; expiresAt: number; merchant: string; qrNumber?: number; qrMax?: number };
 const POLL_MS = 2000;
 /** Bakong KHQR checkout: shows the KHQR ticket for this order, checks the bank every few seconds, and pops up a green "Payment successful" card the moment it is paid.
  *  The server confirms the payment with Bakong and emails the admin the PAID invoice; this page only shows the result. */
 export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber: string; total: string; onPaid?: () => void }) {
   const navigate = useNavigate(); const doneBtn = useRef<HTMLButtonElement>(null);
-  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [left, setLeft] = useState(0); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false); const [problem, setProblem] = useState(false); const [dbg, setDbg] = useState<string[] | null>(null); const debug = typeof location !== "undefined" && new URLSearchParams(location.search).get("debug") === "1";
+  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [left, setLeft] = useState(0); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false); const [problem, setProblem] = useState(false); const [closed, setClosed] = useState<"" | "FAILED" | "EXPIRED">(""); const renewed = useRef(0); const [dbg, setDbg] = useState<string[] | null>(null); const debug = typeof location !== "undefined" && new URLSearchParams(location.search).get("debug") === "1";
   const amount = total.replace(/^\$/, "");
   const markPaid = useCallback(() => { setPaid(true); setOpen(true); onPaid?.(); }, [onPaid]);
   const load = useCallback(async () => {
     setLoading(true); setErr("");
     try {
       const r = await fetch("/api/payment/bakong/qr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber }) });
-      const j = await r.json().catch(() => ({})) as { paid?: boolean; error?: string } & Partial<Qr>;
+      const j = await r.json().catch(() => ({})) as { paid?: boolean; closed?: boolean; status?: string; error?: string } & Partial<Qr>;
       if (!r.ok) { setErr(j.error ?? "Could not create the QR code."); return; }
       if (j.paid) { markPaid(); return; }
-      setQr({ image: j.image!, expiresAt: j.expiresAt!, merchant: j.merchant ?? "" });
+      if (j.closed) { setClosed(j.status === "FAILED" ? "FAILED" : "EXPIRED"); return; }
+      setQr({ image: j.image!, expiresAt: j.expiresAt!, merchant: j.merchant ?? "", qrNumber: j.qrNumber, qrMax: j.qrMax });
     } catch { setErr("Could not create the QR code (network error)."); } finally { setLoading(false); }
   }, [orderNumber, markPaid]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { if (!qr) return; const tick = () => setLeft(Math.max(0, Math.round((qr.expiresAt - Date.now()) / 1000))); tick(); const id = setInterval(tick, 1000); return () => clearInterval(id); }, [qr]);
   const expired = !!qr && left === 0;
+  useEffect(() => { // a QR ran out: make the next one automatically (the server allows 3 per order, then cancels the order and gives the stock back)
+    if (!qr || !expired || paid || closed || loading || renewed.current === qr.expiresAt) return; renewed.current = qr.expiresAt; void load();
+  }, [qr, expired, paid, closed, loading, load]);
+  useEffect(() => { if (!closed) return; const id = setTimeout(() => navigate("/"), 8000); return () => clearTimeout(id); }, [closed, navigate]); // back to the home page
+  const cancel = async () => {
+    if (!confirm("Cancel this order? Your items will go back in stock.")) return; setLoading(true);
+    try { const r = await fetch("/api/payment/bakong/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber }) }); const j = await r.json().catch(() => ({})) as { paid?: boolean; ok?: boolean; error?: string }; if (j.paid) markPaid(); else if (j.ok) setClosed("FAILED"); else setErr(j.error ?? "Could not cancel. Please try again."); }
+    catch { setErr("Could not cancel (network error). Please try again."); } finally { setLoading(false); }
+  };
   useEffect(() => { // ask the server whether Bakong has the payment yet
-    if (!qr || paid) return; let live = true; let busy = false;
-    const check = async () => { if (busy) return; busy = true; try { const r = await fetch(`/api/payment/bakong/status/${encodeURIComponent(orderNumber)}${debug ? "?debug=1" : ""}`, { cache: "no-store" }); const j = await r.json().catch(() => ({})) as { paid?: boolean; problem?: boolean; debug?: string[] }; if (!live) return; if (j.paid) markPaid(); else { setProblem(!!j.problem); if (debug) setDbg(j.debug ?? []); } } catch { /* try again on the next tick */ } finally { busy = false; } };
+    if (!qr || paid || closed) return; let live = true; let busy = false;
+    const check = async () => { if (busy) return; busy = true; try { const r = await fetch(`/api/payment/bakong/status/${encodeURIComponent(orderNumber)}${debug ? "?debug=1" : ""}`, { cache: "no-store" }); const j = await r.json().catch(() => ({})) as { paid?: boolean; closed?: boolean; status?: string; problem?: boolean; debug?: string[] }; if (!live) return; if (j.paid) markPaid(); else if (j.closed) setClosed(j.status === "FAILED" ? "FAILED" : "EXPIRED"); else { setProblem(!!j.problem); if (debug) setDbg(j.debug ?? []); } } catch { /* try again on the next tick */ } finally { busy = false; } };
     void check(); const id = setInterval(() => { if (!document.hidden) void check(); }, POLL_MS);
     const back = () => { if (!document.hidden) void check(); }; // customer comes back from the banking app: check right away
     document.addEventListener("visibilitychange", back); window.addEventListener("focus", back); window.addEventListener("pageshow", back);
     return () => { live = false; clearInterval(id); document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); window.removeEventListener("pageshow", back); };
-  }, [qr, paid, orderNumber, markPaid, debug]);
+  }, [qr, paid, closed, orderNumber, markPaid, debug]);
   useEffect(() => { if (open) doneBtn.current?.focus(); }, [open]);
   const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
   const close = (to: string) => { setOpen(false); navigate(to); };
+  if (closed) return (<div role="status" className="mx-auto max-w-sm space-y-3 rounded-xl2 border border-sky-border bg-white p-6 text-center shadow-soft">
+    <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-slate-100 text-3xl" aria-hidden="true">{closed === "FAILED" ? "✕" : "⏱"}</div>
+    <h2 className="text-xl font-extrabold">{closed === "FAILED" ? "Order cancelled" : "Payment time is over"}</h2>
+    <p className="text-sm text-mute">{closed === "FAILED" ? "Your order was cancelled and nothing was charged." : "No payment was received, so the order was cancelled."} The items are back in stock.</p>
+    <button type="button" onClick={() => navigate("/")} className="min-h-11 w-full rounded-full bg-sky px-6 font-bold hover:bg-sky-hover">Back to home</button>
+    <p className="text-xs text-mute">Taking you back to the home page…</p>
+  </div>);
   return (<div className="space-y-3 text-center">
     <style>{`@keyframes bk-pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}@keyframes bk-draw{to{stroke-dashoffset:0}}@keyframes bk-fade{from{opacity:0}to{opacity:1}}@keyframes bk-rise{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}@keyframes bk-ring{0%{transform:scale(.8);opacity:.5}100%{transform:scale(1.7);opacity:0}}`}</style>
     {/* KHQR card: same 300 x 450 layout as the official KHQR card. Name = BAKONG_MERCHANT_NAME from your data. */}
@@ -53,8 +70,9 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
     </div>
     <p className="text-xs text-mute">Order {orderNumber}</p>
     {err && <p role="alert" className="text-sm text-red-700">{err} <button type="button" onClick={load} className="underline">Try again</button></p>}
-    {qr && !expired && !paid && <p className="text-sm text-mute">Open your banking app (ABA, ACLEDA, Wing…), scan, and pay <b>{total}</b>. QR expires in <b>{mmss}</b>.</p>}
+    {qr && !expired && !paid && <p className="text-sm text-mute">Open your banking app (ABA, ACLEDA, Wing…), scan, and pay <b>{total}</b>. QR {qr.qrNumber ?? 1} of {qr.qrMax ?? 3} expires in <b>{mmss}</b>. A new one is made automatically.</p>}
     {qr && !expired && !paid && <p role="status" className="flex items-center justify-center gap-2 text-sm font-semibold text-mute"><span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#e1232e]" />Waiting for your payment…</p>}
+    {!paid && <button type="button" onClick={cancel} disabled={loading} className="text-sm text-red-700 underline disabled:opacity-50">Cancel order</button>}
     {debug && !paid && <pre className="mx-auto max-w-md whitespace-pre-wrap rounded-lg bg-black/80 p-2 text-left text-xs text-green-300">Bakong check (debug):{"\n"}{dbg === null ? "waiting…" : dbg.length ? dbg.join("\n") : "no QR codes stored for this order"}</pre>}
     {problem && !paid && <p role="status" className="text-xs text-amber-700">We could not reach the bank to confirm yet. If you have paid, please wait a moment or contact the shop with your order number.</p>}
     {paid && !open && <p role="status" className="text-sm font-bold text-green-700">✓ Payment received. <button type="button" onClick={() => setOpen(true)} className="underline">Show receipt</button></p>}
@@ -80,8 +98,8 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
         </dl>
         <p className="px-6 pt-3 text-sm text-mute">Thank you! Your order has been sent to our team and we will start packing it.</p>
         <div className="p-6 pt-4">
-          <button ref={doneBtn} type="button" onClick={() => close("/account/orders")} className="min-h-11 w-full rounded-full bg-green-600 px-6 font-bold text-white hover:bg-green-700">Done</button>
-          <button type="button" onClick={() => close("/")} className="mt-2 text-sm underline">Back to shop</button>
+          <button ref={doneBtn} type="button" onClick={() => close("/")} className="min-h-11 w-full rounded-full bg-green-600 px-6 font-bold text-white hover:bg-green-700">Done</button>
+          <button type="button" onClick={() => close("/account/orders")} className="mt-2 text-sm underline">View my orders</button>
         </div>
       </div>
     </div>}
