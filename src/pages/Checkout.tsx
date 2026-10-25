@@ -10,5 +10,5 @@ export default function Checkout() {
   const { data: all } = useProducts(); const { settings: s } = useSettings(); const { lang } = useI18n();
   if (!all) return <Skeleton />;
   const products = all.map((p) => ({ id: p.id, name: nameFor(p, lang), price: p.price, salePrice: p.salePrice, category: p.category, preorder: isPreorder(p) }));
-  return <RequireUser>{() => <CheckoutForm fees={{ pp: s.shipPhnomPenhCents, prov: s.shipProvinceCents }} products={products} telegram={s.telegramUrl} facebook={s.facebookUrl} />}</RequireUser>;
+  return <RequireUser allowAdmin>{() => <CheckoutForm fees={{ pp: s.shipPhnomPenhCents, prov: s.shipProvinceCents }} products={products} telegram={s.telegramUrl} facebook={s.facebookUrl} />}</RequireUser>;
 }
