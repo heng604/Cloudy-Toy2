@@ -15,7 +15,7 @@ import { useAdmin, refreshAdmin } from "./hooks";
 
 const hand = '"Caveat","Segoe Print","Bradley Hand","Comic Sans MS",cursive';
 type Proofs = Record<string, string>;
-const TABS = [{ id: "ALL", label: "All orders" }, { id: "CHECK", label: "Needs checking" }, { id: "PENDING", label: "Waiting" }, { id: "PAID", label: "Paid" }];
+const TABS = [{ id: "ALL", label: "All orders" }, { id: "CHECK", label: "Needs checking" }, { id: "PENDING", label: "Pay with delivery" }, { id: "PAID", label: "Paid" }];
 
 /** "5 min ago" style label (relative time only). */
 const ago = (iso: string, now = Date.now()) => { const m = Math.max(0, Math.round((now - Date.parse(iso)) / 60000)); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
@@ -49,9 +49,9 @@ export default function AdminOrders() {
   if (!data) return <Skeleton />;
   const tab = sp.get("status") ?? "ALL", q = sp.get("q") ?? undefined; const proofs = data.proofs ?? {};
   const f = { status: tab === "ALL" || tab === "CHECK" ? undefined : tab, q };
-  const all = data.orders, s = summarize(all), checkN = all.filter(needsCheck).length;
-  const orders = sortOrders(filterOrders(all, f), "new").filter((o) => tab !== "CHECK" || needsCheck(o));
-  const counts: Record<string, number> = { ALL: s.count, CHECK: checkN, PENDING: s.pendingCount, PAID: s.paidCount };
+  const all = data.orders, s = summarize(all), checkN = all.filter(needsCheck).length, codPending = all.filter((o) => o.paymentStatus === "PENDING" && o.method === "COD");
+  const orders = sortOrders(filterOrders(all, f), "new").filter((o) => tab !== "CHECK" || needsCheck(o)).filter((o) => tab !== "PENDING" || o.method === "COD");
+  const counts: Record<string, number> = { ALL: s.count, CHECK: checkN, PENDING: codPending.length, PAID: s.paidCount };
   const setTab = (id: string) => { const p = new URLSearchParams(sp); if (id === "ALL") p.delete("status"); else p.set("status", id); setSp(p); };
   const picked = all.find((o) => o.orderNumber === sel) ?? null;
   const groups: { day: string; list: StoredOrder[] }[] = [];
@@ -140,7 +140,7 @@ export default function AdminOrders() {
   return (<div className="space-y-5">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><p className="text-3xl leading-none sm:text-4xl" style={{ fontFamily: hand, fontWeight: 700 }}>Your little shop orders 🧸</p>
-        <h1 className="mt-1.5 text-sm font-semibold text-mute">{s.count} {s.count === 1 ? "order" : "orders"} · <span className="text-green-700">{usd(s.paidCents)} paid</span> · {usd(s.pendingCents)} waiting</h1></div>
+        <h1 className="mt-1.5 text-sm font-semibold text-mute">{s.count} {s.count === 1 ? "order" : "orders"} · <span className="text-green-700">{usd(s.paidCents)} paid</span> · {usd(codPending.reduce((n, o) => n + o.totalCents, 0))} pay with delivery</h1></div>
       <ExportButtons type="orders" params={{ status: f.status, q }} /></div>
 
     <div className="flex flex-wrap items-center gap-3">
