@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 type Qr = { image: string; expiresAt: number; merchant: string };
-const POLL_MS = 3000;
+const POLL_MS = 2000;
 /** Bakong KHQR checkout: shows the KHQR ticket for this order, checks the bank every few seconds, and pops up a green "Payment successful" card the moment it is paid.
  *  The server confirms the payment with Bakong and emails the admin the PAID invoice; this page only shows the result. */
 export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber: string; total: string; onPaid?: () => void }) {
   const navigate = useNavigate(); const doneBtn = useRef<HTMLButtonElement>(null);
-  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [left, setLeft] = useState(0); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false);
+  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [left, setLeft] = useState(0); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false); const [problem, setProblem] = useState(false);
   const amount = total.replace(/^\$/, "");
   const markPaid = useCallback(() => { setPaid(true); setOpen(true); onPaid?.(); }, [onPaid]);
   const load = useCallback(async () => {
@@ -16,7 +16,7 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
       const j = await r.json().catch(() => ({})) as { paid?: boolean; error?: string } & Partial<Qr>;
       if (!r.ok) { setErr(j.error ?? "Could not create the QR code."); return; }
       if (j.paid) { markPaid(); return; }
-      setQr({ image: j.image!, expiresAt: j.expiresAt!, merchant: j.merchant ?? "Cloudy Toys" });
+      setQr({ image: j.image!, expiresAt: j.expiresAt!, merchant: j.merchant ?? "" });
     } catch { setErr("Could not create the QR code (network error)."); } finally { setLoading(false); }
   }, [orderNumber, markPaid]);
   useEffect(() => { void load(); }, [load]);
@@ -24,8 +24,8 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
   const expired = !!qr && left === 0;
   useEffect(() => { // ask the server whether Bakong has the payment yet
     if (!qr || paid) return; let live = true; let busy = false;
-    const check = async () => { if (busy) return; busy = true; try { const r = await fetch(`/api/payment/bakong/status/${encodeURIComponent(orderNumber)}`, { cache: "no-store" }); const j = await r.json().catch(() => ({})) as { paid?: boolean }; if (live && j.paid) markPaid(); } catch { /* try again on the next tick */ } finally { busy = false; } };
-    const id = setInterval(() => { if (!document.hidden) void check(); }, POLL_MS);
+    const check = async () => { if (busy) return; busy = true; try { const r = await fetch(`/api/payment/bakong/status/${encodeURIComponent(orderNumber)}`, { cache: "no-store" }); const j = await r.json().catch(() => ({})) as { paid?: boolean; problem?: boolean }; if (!live) return; if (j.paid) markPaid(); else setProblem(!!j.problem); } catch { /* try again on the next tick */ } finally { busy = false; } };
+    void check(); const id = setInterval(() => { if (!document.hidden) void check(); }, POLL_MS);
     const back = () => { if (!document.hidden) void check(); }; // customer comes back from the banking app: check right away
     document.addEventListener("visibilitychange", back); window.addEventListener("focus", back); window.addEventListener("pageshow", back);
     return () => { live = false; clearInterval(id); document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); window.removeEventListener("pageshow", back); };
@@ -35,31 +35,27 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
   const close = (to: string) => { setOpen(false); navigate(to); };
   return (<div className="space-y-3 text-center">
     <style>{`@keyframes bk-pop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}@keyframes bk-draw{to{stroke-dashoffset:0}}@keyframes bk-fade{from{opacity:0}to{opacity:1}}@keyframes bk-rise{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}@keyframes bk-ring{0%{transform:scale(.8);opacity:.5}100%{transform:scale(1.7);opacity:0}}`}</style>
-    {/* KHQR ticket */}
-    <div className="relative mx-auto w-full max-w-[19rem] drop-shadow-[0_14px_30px_rgba(225,35,46,.22)]">
-      <div className="overflow-hidden rounded-[1.75rem] bg-white" style={{ WebkitMask: "radial-gradient(circle 12px at 0 var(--cut),transparent 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 12px at 100% var(--cut),transparent 98%,#000) right/51% 100% no-repeat", mask: "radial-gradient(circle 12px at 0 var(--cut),transparent 98%,#000) left/51% 100% no-repeat,radial-gradient(circle 12px at 100% var(--cut),transparent 98%,#000) right/51% 100% no-repeat", ["--cut" as string]: "5.6rem" }}>
-        <div className="relative bg-gradient-to-br from-[#e1232e] to-[#c4121d] px-5 pb-5 pt-4" style={{ clipPath: "polygon(0 0,100% 0,100% 100%,0 100%)" }}>
-          <img src="/img/khqr-logo.png" alt="KHQR" className="mx-auto h-8 w-auto" />
-          <span aria-hidden="true" className="absolute right-0 top-0 h-7 w-7 bg-white/25" style={{ clipPath: "polygon(0 0,100% 100%,0 100%)" }} />
+    {/* KHQR card: same 300 x 450 layout as the official KHQR card. Name = BAKONG_MERCHANT_NAME from your data. */}
+    <div className="mx-auto w-[300px] max-w-full" style={{ containerType: "inline-size" }}>
+      <div className="relative w-full overflow-hidden bg-white shadow-[0_2px_10px_rgba(0,0,0,.18)]" style={{ aspectRatio: "2 / 3", borderRadius: "4.000cqw" }}>
+        <div className="absolute left-0 top-0 w-full bg-[#cc0000]" style={{ height: "29.333cqw", clipPath: "polygon(0 0,100% 0,100% 100%,90.667% 69.318%,0 69.318%)" }}>
+          <img src="/img/khqr-logo-white.png" alt="KHQR" className="absolute" style={{ left: "33.333cqw", top: "6.000cqw", width: "33.333cqw", height: "auto" }} />
         </div>
-        <div className="px-6 pb-3 pt-3 text-left">
-          <p className="truncate text-sm font-semibold text-mute">{qr?.merchant ?? "Cloudy Toys"}</p>
-          <p className="mt-0.5 flex items-baseline gap-1.5 text-ink"><span className="text-3xl font-extrabold tabular-nums">{amount}</span><span className="text-xs font-bold text-mute">USD</span></p>
-          <p className="text-xs text-mute">Order {orderNumber}</p>
-        </div>
-        <div className="mx-5 border-t-2 border-dashed border-[#f1c7ca]" />
-        <div className="p-5 pt-4">
-          {qr ? <div className="relative mx-auto aspect-square w-full">
-            <img src={qr.image} alt={`Bakong KHQR for ${total}`} className={`h-full w-full rounded-xl ${expired ? "opacity-20 blur-sm" : ""}`} />
-            {!expired && <span className="absolute left-1/2 top-1/2 grid h-[19%] w-[19%] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white p-[3%]"><img src="/img/khqr-center.png" alt="" className="h-full w-full rounded-full" /></span>}
-            {expired && <div className="absolute inset-0 grid place-items-center"><button type="button" onClick={load} disabled={loading} className="rounded-full bg-[#e1232e] px-5 py-2 font-bold text-white hover:bg-[#c4121d] disabled:opacity-60">{loading ? "…" : "Get a new QR"}</button></div>}
-          </div> : <div className="grid aspect-square place-items-center text-mute" aria-busy="true">{err ? "" : "Creating your QR…"}</div>}
-        </div>
+        <p className="absolute m-0 truncate text-left font-medium leading-none text-[#050505]" style={{ left: "10.333cqw", top: "28.000cqw", right: "10.333cqw", fontSize: "6.333cqw", lineHeight: "8.667cqw", fontFamily: "'Noto Sans Khmer','Khmer OS',system-ui,sans-serif" }}>{qr?.merchant ?? ""}</p>
+        <p className="absolute m-0 flex items-baseline text-left leading-none" style={{ left: "10.333cqw", top: "37.333cqw", gap: "1.667cqw" }}><b className="tabular-nums text-[#050505]" style={{ fontSize: "7.000cqw" }}>{amount}</b><span className="text-[#6c6c6c]" style={{ fontSize: "4.167cqw" }}>USD</span></p>
+        <div className="absolute left-0 w-full border-t border-dashed border-[#9a9a9a]" style={{ top: "50.000cqw" }} />
+        {qr ? <>
+          <img src={qr.image} alt={`Bakong KHQR for ${total}`} className={`absolute ${expired ? "opacity-20 blur-sm" : ""}`} style={{ left: "8.333cqw", top: "58.333cqw", width: "83.333cqw", height: "83.333cqw" }} />
+          {!expired && <img src="/img/khqr-center.png" alt="" className="absolute rounded-full bg-white" style={{ left: "42.667cqw", top: "92.667cqw", width: "14.667cqw", height: "14.667cqw", padding: "1.667cqw" }} />}
+          {expired && <div className="absolute inset-x-0 grid place-items-center" style={{ top: "58.333cqw", height: "83.333cqw" }}><button type="button" onClick={load} disabled={loading} className="rounded-full bg-[#cc0000] px-5 py-2 font-bold text-white hover:bg-[#a60000] disabled:opacity-60">{loading ? "…" : "Get a new QR"}</button></div>}
+        </> : <p className="absolute inset-x-0 text-center text-sm text-mute" style={{ top: "96.667cqw" }} aria-busy="true">{err ? "" : "Creating your QR…"}</p>}
       </div>
     </div>
+    <p className="text-xs text-mute">Order {orderNumber}</p>
     {err && <p role="alert" className="text-sm text-red-700">{err} <button type="button" onClick={load} className="underline">Try again</button></p>}
     {qr && !expired && !paid && <p className="text-sm text-mute">Open your banking app (ABA, ACLEDA, Wing…), scan, and pay <b>{total}</b>. QR expires in <b>{mmss}</b>.</p>}
     {qr && !expired && !paid && <p role="status" className="flex items-center justify-center gap-2 text-sm font-semibold text-mute"><span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#e1232e]" />Waiting for your payment…</p>}
+    {problem && !paid && <p role="status" className="text-xs text-amber-700">We could not reach the bank to confirm yet. If you have paid, please wait a moment or contact the shop with your order number.</p>}
     {paid && !open && <p role="status" className="text-sm font-bold text-green-700">✓ Payment received. <button type="button" onClick={() => setOpen(true)} className="underline">Show receipt</button></p>}
     {/* Payment successful popup */}
     {open && <div className="fixed inset-0 z-[100] grid place-items-center p-4" role="dialog" aria-modal="true" aria-labelledby="bk-title" onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}>
@@ -77,7 +73,7 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
         </div>
         <dl className="mx-6 mt-3 space-y-1.5 border-y border-dashed border-green-200 py-3 text-left text-sm">
           <div className="flex justify-between gap-3"><dt className="text-mute">Order</dt><dd className="font-bold">{orderNumber}</dd></div>
-          <div className="flex justify-between gap-3"><dt className="text-mute">Paid to</dt><dd className="truncate font-bold">{qr?.merchant ?? "Cloudy Toys"}</dd></div>
+          <div className="flex justify-between gap-3"><dt className="text-mute">Paid to</dt><dd className="truncate font-bold">{qr?.merchant ?? ""}</dd></div>
           <div className="flex justify-between gap-3"><dt className="text-mute">Method</dt><dd className="font-bold">Bakong KHQR</dd></div>
           <div className="flex justify-between gap-3"><dt className="text-mute">Status</dt><dd className="font-bold text-green-700">Paid ✓</dd></div>
         </dl>

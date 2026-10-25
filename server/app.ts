@@ -189,15 +189,17 @@ api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
   const o = await getOrder(n);
   if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Not found" });
   if (o.paymentStatus === "PAID") return res.json({ paid: true });
-  let hash: string | undefined;
-  for (const md5 of [...(o.bakongMd5s ?? [])].reverse()) { const r = await checkPaid(md5, payNowCents(o)); if (r.ok) { hash = r.hash ?? md5; break; } if (r.reason === "ERROR" || r.reason === "MISMATCH") console.error("[bakong check]", n, r.reason, r.detail); }
-  if (!hash) return res.json({ paid: false });
+  const md5s = [...(o.bakongMd5s ?? [])].reverse(); let hash: string | undefined; let problem = false;
+  const results = await Promise.all(md5s.map((md5) => checkPaid(md5, payNowCents(o)).then((r) => ({ md5, r })))); // all QR codes of this order at once = fastest answer
+  for (const { md5, r } of results) { if (r.ok) { hash = hash ?? r.hash ?? md5; } else if (r.reason === "ERROR" || r.reason === "MISMATCH") { problem = true; console.error("[bakong check]", n, r.reason, r.detail); } }
+  if (!hash) return res.json({ paid: false, problem });
   const won = await markPaidOnce(n, (x) => { x.paidAt = new Date().toISOString(); x.paidManuallyBy = undefined; x.bakongHash = hash; });
-  if (won) { // only the request that flipped PENDING -> PAID sends the emails
-    try { const r = await sendBakongPaidEmail(won); await updateOrder(n, (x) => { x.claimEmail = r; x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; }); if (r.status !== "SENT") console.error("[bakong paid email]", n, r.status, r.detail); }
-    catch (e) { console.error("[bakong paid email]", n, e); }
-    try { const r = await sendCustomerEmail(won, "paid"); await updateOrder(n, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); } catch (e) { console.error("[bakong receipt]", n, e); }
-    await sendItemsMail(won);
+  if (won) { // only the request that flipped PENDING -> PAID sends the emails; they run side by side so the customer's popup is not kept waiting
+    await Promise.allSettled([
+      (async () => { const r = await sendBakongPaidEmail(won); await updateOrder(n, (x) => { x.claimEmail = r; x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; }); if (r.status !== "SENT") console.error("[bakong paid email]", n, r.status, r.detail); })().catch((e) => console.error("[bakong paid email]", n, e)),
+      (async () => { const r = await sendCustomerEmail(won, "paid"); await updateOrder(n, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); })().catch((e) => console.error("[bakong receipt]", n, e)),
+      sendItemsMail(won).catch((e) => console.error("[bakong items mail]", n, e)),
+    ]);
   }
   res.json({ paid: true });
 }));
