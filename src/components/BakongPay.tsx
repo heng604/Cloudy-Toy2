@@ -35,7 +35,7 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
   }, [qr, paid, closed, load, tries]);
   useEffect(() => { if (!closed) return; const id = setTimeout(() => navigate("/"), closed === "FAILED" ? 0 : 3500); return () => clearTimeout(id); }, [closed, navigate]); // always back to the home page
   const cancel = async () => {
-    if (!confirm("Cancel this order? Your items will go back in stock.")) return; setLoading(true);
+    if (loading) return; setLoading(true); // no "are you sure" popup: one click cancels and goes home
     try { const r = await fetch("/api/payment/bakong/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderNumber }) }); const j = await r.json().catch(() => ({})) as { paid?: boolean; ok?: boolean; error?: string }; if (j.paid) markPaid(); else if (j.ok) { setClosed("FAILED"); navigate("/"); } else setErr(j.error ?? "Could not cancel. Please try again."); }
     catch { setErr("Could not cancel (network error). Please try again."); } finally { setLoading(false); }
   };
