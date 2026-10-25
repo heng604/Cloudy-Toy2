@@ -18,7 +18,7 @@ import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
 import { methodOn } from "../shared/payOptions";
-import { bakongEnabled, makeKhqr, checkPaid, bakongName } from "./lib/bakong";
+import { bakongEnabled, makeKhqr, checkPaid, bakongName, bakongDiagnose } from "./lib/bakong";
 import { uploadProof, deleteProofs, proofUrls } from "./lib/proofStore";
 import { ordersDataset, transactionsDataset, deliveryDataset, productsDataset, stockDataset } from "./lib/exports";
 import { toCsv } from "../shared/csv";
@@ -448,6 +448,8 @@ admin.post("/settings", wrap(async (req, res) => {
   if (!p.success) return res.json({ error: p.error.issues[0]?.message ?? "Invalid input" });
   await saveSettings({ shipPhnomPenhCents: Math.round(p.data.pp * 100), shipProvinceCents: Math.round(p.data.prov * 100), telegramUrl: p.data.tg, facebookUrl: p.data.fb, instagramUrl: p.data.ig }); res.json({ ok: true });
 }));
+/** Admin: checks Bakong settings + connection so the owner can see why automatic payment confirmation fails. */
+admin.get("/bakong/diagnose", wrap(async (_req, res) => res.json(await bakongDiagnose())));
 /** Admin sets each payment option to on / paused / coming soon (at least one must stay on). */
 admin.post("/settings/payments", wrap(async (req, res) => {
   const p = z.object({ payBakong: z.enum(["on", "paused", "soon"]), payQr: z.enum(["on", "paused", "soon"]), payCod: z.enum(["on", "paused", "soon"]) }).safeParse(req.body);

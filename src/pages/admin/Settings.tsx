@@ -11,7 +11,7 @@ import { useTitle } from "@/lib/title";
 import { refreshAdmin, Msg } from "./hooks";
 export default function Settings() {
   const { t } = useI18n(); useTitle(t("Settings"), true);
-  const [sp, setSp] = useSearchParams(); const { settings: s, loading } = useSettings(); const [busy, setBusy] = useState("");
+  const [sp, setSp] = useSearchParams(); const { settings: s, loading } = useSettings(); const [busy, setBusy] = useState(""); const [diag, setDiag] = useState<{ ok: boolean; steps: { label: string; ok: boolean; detail: string }[] } | "loading" | "error" | null>(null);
   if (loading) return <Skeleton />;
   const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3";
   const run = (name: string, send: (f: FormData) => Promise<Response>, after?: () => void) => async (e: FormEvent<HTMLFormElement>) => {
@@ -39,6 +39,11 @@ export default function Settings() {
         return (<div key={k} className="space-y-2 rounded-xl border border-sky-border p-3"><div><p className="font-bold">{name}</p><p className="text-xs text-mute">{hint}</p></div>
           <div role="radiogroup" aria-label={name} className="grid grid-cols-3 gap-1 rounded-full bg-sky-pale p-1">{opts.map(([m, label, on]) => <button key={m} type="button" role="radio" aria-checked={cur === m} disabled={!!busy} onClick={() => cur !== m && set(m)} className={`min-h-10 rounded-full px-2 text-sm font-bold transition disabled:opacity-60 ${cur === m ? on : "hover:bg-white"}`}>{label}</button>)}</div></div>);
       })}</section>
+    <section className="space-y-2 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Bakong auto-payment test</p>
+      <p className="text-sm text-mute">Checks that your Bakong account, token and connection work, so customers get the green &quot;Payment successful&quot; popup automatically.</p>
+      <button type="button" disabled={diag === "loading"} onClick={async () => { setDiag("loading"); try { const r = await api("/admin/bakong/diagnose"); setDiag(r.ok ? await r.json() : "error"); } catch { setDiag("error"); } }} className="min-h-11 rounded-full bg-sky px-6 font-bold hover:bg-sky-hover disabled:opacity-50">{diag === "loading" ? "Testing…" : "Test Bakong connection"}</button>
+      {diag === "error" && <p role="alert" className="text-sm text-red-700">Could not run the test.</p>}
+      {diag && typeof diag === "object" && <div role="status" className="space-y-1 text-sm"><p className={`font-bold ${diag.ok ? "text-green-700" : "text-red-700"}`}>{diag.ok ? "✓ Working: payments will be confirmed automatically" : "✗ Not working yet"}</p>{diag.steps.map((x) => <p key={x.label}><span className={x.ok ? "text-green-700" : "text-red-700"}>{x.ok ? "✓" : "✗"}</span> <b>{x.label}</b>: {x.detail}</p>)}</div>}</section>
     <form onSubmit={run("logo", multi("/admin/settings/logo"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Shop logo</p>
       <p className="text-sm text-mute">Shown in the shop header, footer and admin. JPG, PNG or WebP, max 5 MB. A PNG with a transparent background looks best.</p>
       <img src={s.logoUrl} alt="Current logo" className="h-20 w-auto rounded-xl border border-sky-border bg-page p-1" />

@@ -38,3 +38,18 @@ export async function checkPaid(md5: string, totalCents: number): Promise<PaidCh
     return { ok: true, hash: d.hash };
   } catch (e) { return { ok: false, reason: "ERROR", detail: e instanceof Error ? e.message : "network error" }; }
 }
+/** Admin connection test: tells the shop owner exactly why automatic confirmation does (not) work. Never returns the token. */
+export async function bakongDiagnose(): Promise<{ ok: boolean; steps: { label: string; ok: boolean; detail: string }[] }> {
+  const c = cfg(); const steps: { label: string; ok: boolean; detail: string }[] = [];
+  steps.push({ label: "BAKONG_ACCOUNT_ID", ok: !!c.account, detail: c.account ? `set (${c.account})` : "missing: add it in Vercel → Settings → Environment Variables, then redeploy" });
+  steps.push({ label: "BAKONG_API_TOKEN", ok: !!c.token, detail: c.token ? "set" : "missing: get one at https://api-bakong.nbc.gov.kh/register, add it in Vercel, then redeploy" });
+  if (!c.account || !c.token) return { ok: false, steps };
+  try {
+    const res = await fetch(`${c.api}/v1/check_transaction_by_md5`, { method: "POST", signal: AbortSignal.timeout(8000), headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" }, body: JSON.stringify({ md5: "0".repeat(32) }) });
+    const text = await res.text(); let j: { responseCode?: number; responseMessage?: string } | null = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
+    if (!j) steps.push({ label: "Reach Bakong API", ok: false, detail: `HTTP ${res.status}, not a Bakong reply. Bakong usually blocks servers outside Cambodia. Host the API on a Cambodian server/VPS, or set BAKONG_API_URL to a relay inside Cambodia.` });
+    else if (res.status === 401 || res.status === 403 || j.responseCode === 3 || /token|unauthor|expired/i.test(j.responseMessage ?? "")) steps.push({ label: "Reach Bakong API", ok: false, detail: `Bakong answered HTTP ${res.status}: ${j.responseMessage ?? "rejected"}. The token is invalid or expired: renew it, or the request was blocked by region.` });
+    else { steps.push({ label: "Reach Bakong API", ok: true, detail: `connected (HTTP ${res.status})` }); steps.push({ label: "Token accepted", ok: true, detail: j.responseMessage ?? "ok" }); }
+  } catch (e) { steps.push({ label: "Reach Bakong API", ok: false, detail: `${e instanceof Error ? e.message : "network error"}. The server cannot connect to Bakong (often blocked outside Cambodia).` }); }
+  return { ok: steps.every((s) => s.ok), steps };
+}
