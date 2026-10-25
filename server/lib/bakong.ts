@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import QRCode from "qrcode";
 const nodeRequire = createRequire(import.meta.url);
 const { BakongKHQR, khqrData, IndividualInfo } = nodeRequire("bakong-khqr") as any; // the package ships no types
-export const QR_MINUTES = 10;
+export const QR_MINUTES = 5;
 /** A customer gets this many QR codes per order (a new one is made automatically when one expires). After the last one runs out the order is cancelled and its stock goes back to the shop. */
 export const QR_MAX = 3;
 /** An abandoned order (no new QR requested this long after the last QR expired) is cancelled and its stock released. */

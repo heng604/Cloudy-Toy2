@@ -25,7 +25,7 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); const back = () => setNow(Date.now()); document.addEventListener("visibilitychange", back); return () => { clearInterval(id); document.removeEventListener("visibilitychange", back); }; }, []);
   const left = qr ? Math.max(0, Math.round((qr.expiresAt - now) / 1000)) : 0;
   const expired = !!qr && qr.expiresAt <= now;
-  useEffect(() => { // when a QR runs out (10 min) make the next one by itself. The server allows 3 per order, then cancels the order, gives the stock back and we go home.
+  useEffect(() => { // when a QR runs out (5 min) make the next one by itself. The server allows 3 per order, then cancels the order, gives the stock back and we go home.
     if (!qr || paid || closed) return;
     const go = () => { void load().then((ok) => { if (!ok) setTimeout(() => setTries((n) => n + 1), 4000); }); }; // network hiccup: try again in 4 s
     const t = setTimeout(go, Math.max(0, qr.expiresAt - Date.now()) + 1500);
