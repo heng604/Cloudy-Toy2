@@ -67,3 +67,6 @@ export async function markUnpaidOnce(n: string, status: "FAILED" | "EXPIRED") {
 export async function listPendingBakongAll() {
   return fromRows(must(await db().from("orders").select("data").eq("payment_status", "PENDING").eq("data->>method", "BAKONG").order("created_at", { ascending: false }).limit(100)));
 }
+
+/** Orders the admin dashboard shows: everything except Bakong orders that were cancelled by the customer or whose QR time ran out (those only gave their stock back; they stay in the database but clutter nothing). */
+export async function listAdminOrders() { return (await listAllOrders()).filter((o) => !(o.stockReleased && (o.paymentStatus === "FAILED" || o.paymentStatus === "EXPIRED"))); }

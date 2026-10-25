@@ -14,7 +14,7 @@ import { getPromotions, savePromotions } from "./lib/promotionsStore";
 import { tooMany, clientKey } from "./lib/rateLimit";
 import { listProducts, listAllProducts, renameCategory, setLabels, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
 import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
-import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll } from "./lib/store";
+import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listAdminOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
@@ -307,8 +307,8 @@ admin.get("/me", (req, res) => { const u = adminOf(req); const m = (u.user_metad
 // each area is limited by role (owner: all, admin: all but staff, editor: products + pages)
 admin.use(["/orders", "/transactions"], needs("orders")); admin.use("/pages", needs("pages")); admin.use(["/discounts", "/promotions"], needs("promotions")); admin.use("/settings", needs("settings")); admin.use("/staff", needs("staff"));
 admin.use(["/products", "/product-form-meta", "/categories"], needs("products"));
-admin.get("/dashboard", wrap(async (req, res) => { const [orders, products] = await Promise.all([can(roleOf(req), "orders") ? listAllOrders() : Promise.resolve([] as Awaited<ReturnType<typeof listAllOrders>>), listAllProducts()]); res.json({ orders, products }); }));
-admin.get("/orders", wrap(async (req, res) => { const orders = await listAllOrders(); res.json({ orders, proofs: req.query.proofs ? await proofUrls(orders.map((o) => o.paymentProof ?? "")) : {} }); }));
+admin.get("/dashboard", wrap(async (req, res) => { const [orders, products] = await Promise.all([can(roleOf(req), "orders") ? listAdminOrders() : Promise.resolve([] as Awaited<ReturnType<typeof listAllOrders>>), listAllProducts()]); res.json({ orders, products }); }));
+admin.get("/orders", wrap(async (req, res) => { const orders = await listAdminOrders(); res.json({ orders, proofs: req.query.proofs ? await proofUrls(orders.map((o) => o.paymentProof ?? "")) : {} }); }));
 admin.post("/orders/:n/mark-paid", wrap(async (req, res) => {
   const o = await getOrder(String(req.params.n));
   if (!o || !canPay(o.paymentStatus, "PAID")) return res.json({ ok: false });
@@ -349,9 +349,9 @@ admin.get("/export", wrap(async (req, res) => {
   if ((type === "orders" || type === "transactions" || type === "delivery") && !can(roleOf(req), "orders")) return res.status(403).send("Your role cannot export orders");
   const f = { status: u.status, from: u.from, to: u.to, q: u.q };
   let ds;
-  if (type === "orders") ds = ordersDataset(sortOrders(filterOrders(await listAllOrders(), f), u.sort ?? "new"));
-  else if (type === "transactions") ds = transactionsDataset(sortOrders(filterOrders(await listAllOrders(), f), u.sort ?? "high"));
-  else if (type === "delivery") ds = deliveryDataset(sortOrders(filterOrders(await listAllOrders(), f), u.sort ?? "new"));
+  if (type === "orders") ds = ordersDataset(sortOrders(filterOrders(await listAdminOrders(), f), u.sort ?? "new"));
+  else if (type === "transactions") ds = transactionsDataset(sortOrders(filterOrders(await listAdminOrders(), f), u.sort ?? "high"));
+  else if (type === "delivery") ds = deliveryDataset(sortOrders(filterOrders(await listAdminOrders(), f), u.sort ?? "new"));
   else if (type === "products") ds = productsDataset(await listAllProducts());
   else if (type === "stock") ds = stockDataset([...(await listAllProducts())].sort((a, b) => a.stock - b.stock));
   else return res.status(400).send("Unknown export type");
