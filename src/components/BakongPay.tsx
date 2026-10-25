@@ -6,7 +6,7 @@ const POLL_MS = 2000;
  *  The server confirms the payment with Bakong and emails the admin the PAID invoice; this page only shows the result. */
 export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber: string; total: string; onPaid?: () => void }) {
   const navigate = useNavigate(); const doneBtn = useRef<HTMLButtonElement>(null);
-  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [left, setLeft] = useState(0); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false); const [problem, setProblem] = useState(false);
+  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [left, setLeft] = useState(0); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false); const [problem, setProblem] = useState(false); const [dbg, setDbg] = useState<string[] | null>(null); const debug = typeof location !== "undefined" && new URLSearchParams(location.search).get("debug") === "1";
   const amount = total.replace(/^\$/, "");
   const markPaid = useCallback(() => { setPaid(true); setOpen(true); onPaid?.(); }, [onPaid]);
   const load = useCallback(async () => {
@@ -24,12 +24,12 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
   const expired = !!qr && left === 0;
   useEffect(() => { // ask the server whether Bakong has the payment yet
     if (!qr || paid) return; let live = true; let busy = false;
-    const check = async () => { if (busy) return; busy = true; try { const r = await fetch(`/api/payment/bakong/status/${encodeURIComponent(orderNumber)}`, { cache: "no-store" }); const j = await r.json().catch(() => ({})) as { paid?: boolean; problem?: boolean }; if (!live) return; if (j.paid) markPaid(); else setProblem(!!j.problem); } catch { /* try again on the next tick */ } finally { busy = false; } };
+    const check = async () => { if (busy) return; busy = true; try { const r = await fetch(`/api/payment/bakong/status/${encodeURIComponent(orderNumber)}${debug ? "?debug=1" : ""}`, { cache: "no-store" }); const j = await r.json().catch(() => ({})) as { paid?: boolean; problem?: boolean; debug?: string[] }; if (!live) return; if (j.paid) markPaid(); else { setProblem(!!j.problem); if (debug) setDbg(j.debug ?? []); } } catch { /* try again on the next tick */ } finally { busy = false; } };
     void check(); const id = setInterval(() => { if (!document.hidden) void check(); }, POLL_MS);
     const back = () => { if (!document.hidden) void check(); }; // customer comes back from the banking app: check right away
     document.addEventListener("visibilitychange", back); window.addEventListener("focus", back); window.addEventListener("pageshow", back);
     return () => { live = false; clearInterval(id); document.removeEventListener("visibilitychange", back); window.removeEventListener("focus", back); window.removeEventListener("pageshow", back); };
-  }, [qr, paid, orderNumber, markPaid]);
+  }, [qr, paid, orderNumber, markPaid, debug]);
   useEffect(() => { if (open) doneBtn.current?.focus(); }, [open]);
   const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
   const close = (to: string) => { setOpen(false); navigate(to); };
@@ -55,6 +55,7 @@ export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber:
     {err && <p role="alert" className="text-sm text-red-700">{err} <button type="button" onClick={load} className="underline">Try again</button></p>}
     {qr && !expired && !paid && <p className="text-sm text-mute">Open your banking app (ABA, ACLEDA, Wing…), scan, and pay <b>{total}</b>. QR expires in <b>{mmss}</b>.</p>}
     {qr && !expired && !paid && <p role="status" className="flex items-center justify-center gap-2 text-sm font-semibold text-mute"><span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#e1232e]" />Waiting for your payment…</p>}
+    {debug && !paid && <pre className="mx-auto max-w-md whitespace-pre-wrap rounded-lg bg-black/80 p-2 text-left text-xs text-green-300">Bakong check (debug):{"\n"}{dbg === null ? "waiting…" : dbg.length ? dbg.join("\n") : "no QR codes stored for this order"}</pre>}
     {problem && !paid && <p role="status" className="text-xs text-amber-700">We could not reach the bank to confirm yet. If you have paid, please wait a moment or contact the shop with your order number.</p>}
     {paid && !open && <p role="status" className="text-sm font-bold text-green-700">✓ Payment received. <button type="button" onClick={() => setOpen(true)} className="underline">Show receipt</button></p>}
     {/* Payment successful popup */}

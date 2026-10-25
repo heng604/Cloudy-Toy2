@@ -49,3 +49,9 @@ export async function deleteAllOrders() {
   const rows = must(await db().from("orders").delete().neq("order_number", "").select("order_number")) as unknown[] | null;
   return rows?.length ?? 0;
 }
+
+/** Bakong orders still waiting for payment (used by the shop-PC watcher that checks Bakong from a Cambodian IP). */
+export async function listPendingBakong() {
+  const r = await db().from("orders").select("data").eq("payment_status", "PENDING").eq("data->>method", "BAKONG").order("created_at", { ascending: false }).limit(30);
+  return fromRows(must(r)).filter((o) => (o.bakongMd5s?.length ?? 0) > 0 && Date.now() - Date.parse(o.createdAt) < 6 * 3600_000);
+}

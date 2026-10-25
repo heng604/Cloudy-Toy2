@@ -39,3 +39,9 @@ Letters, numbers and `#` `*` `_` `-` (no spaces), 2 to 40 characters. Example: `
 
 ## Screen sizes
 Layout adapts automatically: phone, tablet/iPad, laptop, desktop and large screens (page width and text size grow with the screen).
+
+## Automatic Bakong payment popup (hosted outside Cambodia, e.g. Vercel)
+Bakong only answers Cambodian IP addresses, so a site on Vercel cannot confirm payments by itself. A small watcher on a computer in Cambodia does it:
+1. Pick any long random text (12+ characters) as `BAKONG_WATCHER_SECRET`. Add it to **Vercel → Settings → Environment Variables**, then redeploy.
+2. On the shop PC, in `.env.local`, add the same `BAKONG_WATCHER_SECRET`, plus `BAKONG_SITE_URL=https://your-site.vercel.app` (it already has `BAKONG_API_TOKEN`).
+3. Double-click `start-bakong-watcher.bat` and keep the window open while taking payments. When a customer pays, the watcher tells the site within about 1.5 s and the green popup appears; you get the paid email.

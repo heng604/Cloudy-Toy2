@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { PROVINCE_NAMES } from "../shared/provinces";
 import "./env";
 import express, { type Request, type Response } from "express";
@@ -13,12 +14,12 @@ import { getPromotions, savePromotions } from "./lib/promotionsStore";
 import { tooMany, clientKey } from "./lib/rateLimit";
 import { listProducts, listAllProducts, renameCategory, setLabels, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
 import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
-import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders } from "./lib/store";
+import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listPendingBakong } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
 import { methodOn } from "../shared/payOptions";
-import { bakongEnabled, makeKhqr, checkPaid, bakongName, bakongDiagnose } from "./lib/bakong";
+import { bakongEnabled, makeKhqr, checkPaid, bakongName, bakongDiagnose, matchPaid, watcherSecret } from "./lib/bakong";
 import { uploadProof, deleteProofs, proofUrls } from "./lib/proofStore";
 import { ordersDataset, transactionsDataset, deliveryDataset, productsDataset, stockDataset } from "./lib/exports";
 import { toCsv } from "../shared/csv";
@@ -181,27 +182,51 @@ api.post("/payment/bakong/qr", wrap(async (req, res) => {
   await updateOrder(n, (x) => { x.bakongMd5s = [...(x.bakongMd5s ?? []), k.md5].slice(-10); }); // older QR codes stay valid for checking
   res.json({ paid: false, image: k.image, expiresAt: k.expiresAt, amountCents: payNowCents(o), merchant: bakongName() });
 }));
-/** The page polls this. When Bakong confirms the transfer (amount + account match) the order becomes PAID exactly once and the admin is emailed. */
+/** Moves the order to PAID once and sends the emails (only the caller that flips PENDING -> PAID sends them, side by side so the popup is not kept waiting). */
+async function finalizeBakongPaid(n: string, hash: string) {
+  const won = await markPaidOnce(n, (x) => { x.paidAt = new Date().toISOString(); x.paidManuallyBy = undefined; x.bakongHash = hash; });
+  if (!won) return;
+  await Promise.allSettled([
+    (async () => { const r = await sendBakongPaidEmail(won); await updateOrder(n, (x) => { x.claimEmail = r; x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; }); if (r.status !== "SENT") console.error("[bakong paid email]", n, r.status, r.detail); })().catch((e) => console.error("[bakong paid email]", n, e)),
+    (async () => { const r = await sendCustomerEmail(won, "paid"); await updateOrder(n, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); })().catch((e) => console.error("[bakong receipt]", n, e)),
+    sendItemsMail(won).catch((e) => console.error("[bakong items mail]", n, e)),
+  ]);
+}
+/** The customer's page polls this. Watcher mode: only reads our database (the shop-PC watcher does the Bakong check). Otherwise this server asks Bakong itself. */
 api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
   const n = String(req.params.n);
   if (!ORDER_RE.test(n)) return res.status(404).json({ error: "Not found" });
-  if (tooMany(`bks:${clientKey(req)}`, 60)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  if (tooMany(`bks:${clientKey(req)}`, 90)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   const o = await getOrder(n);
   if (!o || o.method !== "BAKONG") return res.status(404).json({ error: "Not found" });
   if (o.paymentStatus === "PAID") return res.json({ paid: true });
+  if (watcherSecret()) return res.json({ paid: false, problem: false, ...(req.query.debug === "1" ? { debug: ["waiting for the shop-PC watcher (tools/bakong-watcher.mjs) to confirm"] } : {}) });
   const md5s = [...(o.bakongMd5s ?? [])].reverse(); let hash: string | undefined; let problem = false;
   const results = await Promise.all(md5s.map((md5) => checkPaid(md5, payNowCents(o)).then((r) => ({ md5, r })))); // all QR codes of this order at once = fastest answer
   for (const { md5, r } of results) { if (r.ok) { hash = hash ?? r.hash ?? md5; } else if (r.reason === "ERROR" || r.reason === "MISMATCH") { problem = true; console.error("[bakong check]", n, r.reason, r.detail); } }
-  if (!hash) return res.json({ paid: false, problem });
-  const won = await markPaidOnce(n, (x) => { x.paidAt = new Date().toISOString(); x.paidManuallyBy = undefined; x.bakongHash = hash; });
-  if (won) { // only the request that flipped PENDING -> PAID sends the emails; they run side by side so the customer's popup is not kept waiting
-    await Promise.allSettled([
-      (async () => { const r = await sendBakongPaidEmail(won); await updateOrder(n, (x) => { x.claimEmail = r; x.email = { status: r.status, detail: r.detail, attempts: x.email.attempts + 1 }; }); if (r.status !== "SENT") console.error("[bakong paid email]", n, r.status, r.detail); })().catch((e) => console.error("[bakong paid email]", n, e)),
-      (async () => { const r = await sendCustomerEmail(won, "paid"); await updateOrder(n, (x) => { x.customerEmail = { ...r, kind: "paid" }; }); })().catch((e) => console.error("[bakong receipt]", n, e)),
-      sendItemsMail(won).catch((e) => console.error("[bakong items mail]", n, e)),
-    ]);
-  }
+  if (!hash) return res.json({ paid: false, problem, ...(req.query.debug === "1" ? { debug: results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`)) } : {}) }); // ?debug=1 on the payment page shows what Bakong answered
+  await finalizeBakongPaid(n, hash);
   res.json({ paid: true });
+}));
+/** Shop-PC watcher (runs in Cambodia, where Bakong answers). Protected by BAKONG_WATCHER_SECRET. */
+const watcherOk = (req: Request) => { const s = watcherSecret(), got = String(req.headers["x-relay-secret"] ?? ""); return s.length >= 12 && got.length === s.length && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(s)); };
+api.get("/relay/pending", wrap(async (req, res) => {
+  if (tooMany(`rp:${clientKey(req)}`, 600)) return res.status(429).json({ error: "slow down" });
+  if (!watcherOk(req)) return res.status(401).json({ error: "bad secret" });
+  res.json({ orders: (await listPendingBakong()).map((o) => ({ orderNumber: o.orderNumber, md5s: o.bakongMd5s ?? [] })) });
+}));
+api.post("/relay/confirm", wrap(async (req, res) => {
+  if (tooMany(`rc:${clientKey(req)}`, 120)) return res.status(429).json({ error: "slow down" });
+  if (!watcherOk(req)) return res.status(401).json({ error: "bad secret" });
+  const b = z.object({ orderNumber: z.string(), md5: z.string().regex(/^[a-f0-9]{32}$/i), data: z.object({ hash: z.string().optional(), amount: z.union([z.number(), z.string()]), currency: z.string(), toAccountId: z.string().optional() }) }).safeParse(req.body);
+  if (!b.success || !ORDER_RE.test(b.data.orderNumber)) return res.status(400).json({ error: "Bad request" });
+  const o = await getOrder(b.data.orderNumber);
+  if (!o || o.method !== "BAKONG" || !(o.bakongMd5s ?? []).includes(b.data.md5.toLowerCase())) return res.status(404).json({ error: "Unknown order or QR" });
+  if (o.paymentStatus === "PAID") return res.json({ ok: true, already: true });
+  const m = matchPaid(b.data.data, payNowCents(o)); // the server still checks amount, currency and account itself
+  if (!m.ok) { console.error("[bakong confirm]", o.orderNumber, m.reason, m.detail); return res.status(422).json({ error: "Payment does not match the order", detail: m.detail }); }
+  await finalizeBakongPaid(o.orderNumber, m.hash ?? b.data.md5);
+  res.json({ ok: true });
 }));
 
 /** Customer pressed "I have paid": email the full order to the admin (once). */
