@@ -25,6 +25,8 @@ import { ordersDataset, transactionsDataset, deliveryDataset, productsDataset, s
 import { toCsv } from "../shared/csv";
 import { buildPdf } from "./lib/pdf";
 import { buildXlsx } from "./lib/xlsx";
+import { buildSheetHtml } from "./lib/sheetHtml";
+import { INVOICE_LOGO } from "../shared/invoice";
 import { makeMeta } from "./lib/report";
 import { filterOrders, sortOrders } from "../shared/stats";
 import { computeTotals, type PricedProduct } from "../shared/pricing";
@@ -352,7 +354,7 @@ admin.post("/transactions/clear", wrap(async (_req, res) => {
 }));
 admin.get("/export", wrap(async (req, res) => {
   const u = req.query as Record<string, string | undefined>;
-  const type = u.type ?? "orders", format = u.format === "pdf" ? "pdf" : u.format === "xlsx" ? "xlsx" : "csv";
+  const type = u.type ?? "orders", format = u.format === "pdf" ? "pdf" : u.format === "xlsx" ? "xlsx" : u.format === "sheet" ? "sheet" : "csv";
   if ((type === "orders" || type === "transactions" || type === "delivery") && !can(roleOf(req), "orders")) return res.status(403).send("Your role cannot export orders");
   const f = { status: u.status, from: u.from, to: u.to, q: u.q };
   let ds;
@@ -363,6 +365,7 @@ admin.get("/export", wrap(async (req, res) => {
   else if (type === "stock") ds = stockDataset([...(await listAllProducts())].sort((a, b) => a.stock - b.stock));
   else return res.status(400).send("Unknown export type");
   const date = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+  if (format === "sheet") return res.set({ "Cache-Control": "no-store" }).json(buildSheetHtml({ title: ds.title, cols: ds.pdf, rows: ds.rows.map(ds.pdfRow), logoUrl: /^https:\/\/[\w.-]+(:\d+)?$/.test(u.origin ?? "") && !/^https:\/\/(localhost|127\.)/.test(u.origin ?? "") ? `${u.origin}${INVOICE_LOGO}` : undefined, meta: makeMeta(await getSettings(), date, { intro: ds.intro, summary: ds.summary }) }));
   res.set({ "Content-Disposition": `attachment; filename="cloudy-toy-${ds.name}-${date}.${format}"`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
   if (format === "csv") return res.type("text/csv; charset=utf-8").send(toCsv(ds.rows, ds.csv));
   const meta = makeMeta(await getSettings(), date, { intro: ds.intro, summary: ds.summary });

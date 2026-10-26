@@ -61,10 +61,10 @@ function zip(files: { name: string; data: Buffer; store?: boolean }[]): Buffer {
 }
 // ---- sheet ----
 // Columns are the same as the PDF report. Money / quantity columns hold real numbers (so Excel can add them up); everything else is text.
-const SUMMED = new Set(["Total", "Total USD", "Value", "Stock value USD", "Qty", "Item count", "Stock", "Sold QTY", "Sub Amount", "Invoice Discount", "Discount", "Delivery Fee", "Total Sale"]);
-const kindOf = (h: string): "usd" | "int" | "text" => (/^(Total|Price|Sale|Unit|Value)$|( USD|Amount|Discount|Fee|Total Sale)$/.test(h) ? "usd" : /^(Stock|Qty|Item count|Sold QTY)$/.test(h) ? "int" : "text");
+export const SUMMED = new Set(["Total", "Total USD", "Value", "Stock value USD", "Qty", "Item count", "Stock", "Sold QTY", "Sub Amount", "Invoice Discount", "Discount", "Delivery Fee", "Total Sale"]);
+export const kindOf = (h: string): "usd" | "int" | "text" => (/^(Total|Price|Sale|Unit|Value)$|( USD|Amount|Discount|Fee|Total Sale)$/.test(h) ? "usd" : /^(Stock|Qty|Item count|Sold QTY)$/.test(h) ? "int" : "text");
 /** "$1,234.50" -> 1234.5 ; "-" or "" -> NaN (left empty). */
-const toNum = (v: unknown): number => { if (typeof v === "number") return v; const t = String(v ?? "").replace(/[$,\s]/g, ""); return t === "" || t === "-" ? NaN : Number(t); };
+export const toNum = (v: unknown): number => { if (typeof v === "number") return v; const t = String(v ?? "").replace(/[$,\s]/g, ""); return t === "" || t === "-" ? NaN : Number(t); };
 export function buildXlsx(o: { title: string; sheet: string; cols: XlsxCol[]; rows: Cell[][]; meta: ReportMeta }): Buffer {
   const { meta } = o, logo = meta.logo, N = o.cols.length, kinds = o.cols.map((c) => kindOf(c.header)), last = colName(N), textCol = logo ? 2 : 1;
   const rowsXml: string[] = [], merges: string[] = [];
