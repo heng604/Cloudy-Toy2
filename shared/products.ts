@@ -7,6 +7,9 @@ export const LABEL_CLASS: Record<ProductLabel, string> = { new_arrival: "bg-[#DD
 /** Short text on the card: "New", "Restock", "Limited Edition", "Pre-Order". */
 export const LABEL_SHORT: Record<ProductLabel, { en: string; km: string }> = { new_arrival: { en: "New", km: "មកថ្មី" }, restock: { en: "Restock", km: "ចូលស្តុកឡើងវិញ" }, limited_edition: { en: "Limited Edition", km: "ចំនួនកំណត់" }, preorder: { en: "Pre-Order", km: "កម្មង់មុន" }, best_seller: { en: "Best Seller", km: "លក់ដាច់បំផុត" } };
 export const LABEL_IDS: string[] = LABELS.map((l) => l.id);
+/** A product shows ONE label badge only. If it somehow has several, the first of this list wins (so Best Seller beats Restock); New Arrival only shows when nothing else is chosen. */
+const BADGE_ORDER: ProductLabel[] = ["preorder", "best_seller", "limited_edition", "restock", "new_arrival"];
+export const badgeLabels = (p: { labels?: readonly string[] }): (typeof LABELS)[number][] => { const id = BADGE_ORDER.find((x) => p.labels?.includes(x)); return LABELS.filter((l) => l.id === id); };
 export const isPreorder = (p: { labels?: readonly string[] }) => !!p.labels?.includes("preorder");
 /** Each pre-order product has its OWN window: it opens on preorderStart and its deadline is preorderEnd (both YYYY-MM-DD, deadline day included). Both empty = no dates, always open. */
 const isoDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;

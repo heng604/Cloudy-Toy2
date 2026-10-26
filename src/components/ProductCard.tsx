@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { type Product, FALLBACK_IMG, LABELS, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor } from "@shared/products";
+import { type Product, FALLBACK_IMG, badgeLabels, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor } from "@shared/products";
 import { useCart } from "./CartProvider";
 import { useI18n } from "@/lib/i18n";
 export default function ProductCard({p}:{p:Product}) {
@@ -9,7 +9,7 @@ export default function ProductCard({p}:{p:Product}) {
   // badges: "Out of stock" when sold out, then (only when it is in stock) one badge for every label the admin ticked (New / Restock / Limited Edition / Pre-Order)
   const tags: { text: string; cls: string }[] = [];
   if (out) tags.push({ text: t("Out of stock"), cls: "bg-slate-700 text-white" });
-  if (!out) for (const l of LABELS) if (p.labels?.includes(l.id)) tags.push({ text: lang === "km" ? LABEL_SHORT[l.id].km : LABEL_SHORT[l.id].en, cls: LABEL_CLASS[l.id] });
+  if (!out) for (const l of badgeLabels(p)) tags.push({ text: lang === "km" ? LABEL_SHORT[l.id].km : LABEL_SHORT[l.id].en, cls: LABEL_CLASS[l.id] });
   return (
     <article className="group transition-transform duration-200 hover:-translate-y-1.5 overflow-hidden rounded-xl2 border border-sky-border bg-white shadow-soft hover:shadow-lift">
       <Link to={`/product/${p.slug}`} className="relative block overflow-hidden bg-sky-pale">

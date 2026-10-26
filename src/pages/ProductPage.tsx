@@ -3,7 +3,7 @@ import ProductGallery from "@/components/ProductGallery";
 import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
 import NotFound from "@/components/NotFound";
-import { LABELS, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor, stockStatus, preorderPhase, windowText, dayShort } from "@shared/products";
+import { badgeLabels, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor, stockStatus, preorderPhase, windowText, dayShort } from "@shared/products";
 import { useI18n } from "@/lib/i18n";
 import { useListedProducts, usePromotions } from "@/lib/store";
 import { useTitle } from "@/lib/title";
@@ -23,7 +23,7 @@ export default function ProductPage() {
       <div className="grid items-start gap-8 md:grid-cols-2 lg:gap-12">
         <ProductGallery key={p.id} images={p.images} name={name} />
         <div className="space-y-4 md:sticky md:top-24">
-          <div className="flex flex-wrap gap-2">{LABELS.filter((l) => st !== "OUT" && p.labels?.includes(l.id)).map((l) => <span key={l.id} className={`rounded-full px-3 py-1 text-sm font-extrabold uppercase tracking-wide ${LABEL_CLASS[l.id]}`}>{lang === "km" ? LABEL_SHORT[l.id].km : LABEL_SHORT[l.id].en}</span>)}{p.category && <span className="rounded-full bg-sky-pale px-3 py-1 text-sm font-semibold">{p.category}</span>}</div>
+          <div className="flex flex-wrap gap-2">{badgeLabels(p).filter(() => st !== "OUT").map((l) => <span key={l.id} className={`rounded-full px-3 py-1 text-sm font-extrabold uppercase tracking-wide ${LABEL_CLASS[l.id]}`}>{lang === "km" ? LABEL_SHORT[l.id].km : LABEL_SHORT[l.id].en}</span>)}{p.category && <span className="rounded-full bg-sky-pale px-3 py-1 text-sm font-semibold">{p.category}</span>}</div>
           <h1 className="text-3xl font-extrabold leading-tight md:text-4xl">{name}</h1>
           {lang === "km" && p.nameKm && <p className="-mt-2 text-sm text-mute">{p.name}</p>}
           <p className="text-2xl font-extrabold sm:text-3xl">{money(p.price)}{p.uom && <span className="ml-1 text-base font-semibold text-mute">/ {p.uom}</span>}</p>
