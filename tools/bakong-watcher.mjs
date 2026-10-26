@@ -26,6 +26,9 @@ async function check(md5) {
   return j;
 }
 log(`Bakong watcher started for ${SITE}. Keep this window open while you take payments.`);
+// start-up self test: shows right away what is (not) working
+try { const j = await check("0".repeat(32)); log(`Bakong connection: OK (${j.responseMessage ?? "reply received"})`); } catch (e) { log("Bakong connection PROBLEM:", e instanceof Error ? e.message : e); }
+try { const r = await site("/relay/pending"); log(r.ok ? "Website connection: OK. Waiting for payments..." : r.status === 401 ? "Website connection: WRONG SECRET. BAKONG_WATCHER_SECRET must be identical in Vercel and .env.local (then redeploy on Vercel)." : r.status === 404 ? "Website connection: the site has no watcher support yet. Deploy the latest project to Vercel." : `Website connection problem: HTTP ${r.status}`); } catch (e) { log("Website connection PROBLEM:", e instanceof Error ? e.message : e); }
 for (;;) {
   let busy = false;
   try {

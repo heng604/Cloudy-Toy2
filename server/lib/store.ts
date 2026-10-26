@@ -70,3 +70,9 @@ export async function listPendingBakongAll() {
 
 /** Orders the admin dashboard shows: everything except orders whose payment FAILED or EXPIRED (cancelled by the customer, QR time ran out, or marked failed) and Bakong orders still waiting for the customer to pay (they appear once paid). They stay in the database; only the admin's views hide them. */
 export async function listAdminOrders() { return (await listAllOrders()).filter((o) => o.paymentStatus !== "FAILED" && o.paymentStatus !== "EXPIRED" && !(o.method === "BAKONG" && o.paymentStatus === "PENDING")); }
+
+/** Like updateOrder, but only writes while the order is still PENDING, so it can never undo a payment that was confirmed a moment ago. */
+export async function updatePendingOrder(n: string, fn: (o: StoredOrder) => void) {
+  const o = await getOrder(n); if (!o || o.paymentStatus !== "PENDING") return null;
+  fn(o); const r = await db().from("orders").update(toRow(o)).eq("order_number", n).eq("payment_status", "PENDING").select("order_number"); must(r); return o;
+}

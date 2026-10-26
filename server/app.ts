@@ -14,8 +14,8 @@ import { getPromotions, savePromotions } from "./lib/promotionsStore";
 import { tooMany, clientKey } from "./lib/rateLimit";
 import { listProducts, listAllProducts, renameCategory, setLabels, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
 import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
-import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listAdminOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll } from "./lib/store";
-import { getSettings, saveSettings, DEFAULT_SETTINGS } from "./lib/settings";
+import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listAdminOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll, updatePendingOrder } from "./lib/store";
+import { getSettings, saveSettings, DEFAULT_SETTINGS, beatWatcher, watcherSeenAt } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
 import { methodOn } from "../shared/payOptions";
@@ -187,7 +187,7 @@ api.post("/payment/bakong/qr", wrap(async (req, res) => {
   }
   const k = await makeKhqr(n, payNowCents(o), live ? o.bakongQrExpiresAt : undefined);
   const qrNumber = live && (o.bakongMd5s ?? []).includes(k.md5) ? used : used + 1;
-  await updateOrder(n, (x) => { if (!(x.bakongMd5s ?? []).includes(k.md5)) x.bakongMd5s = [...(x.bakongMd5s ?? []), k.md5].slice(-10); x.bakongQrExpiresAt = k.expiresAt; }); // older QR codes stay valid for checking
+  await updatePendingOrder(n, (x) => { if (!(x.bakongMd5s ?? []).includes(k.md5)) x.bakongMd5s = [...(x.bakongMd5s ?? []), k.md5].slice(-10); x.bakongQrExpiresAt = k.expiresAt; }); // older QR codes stay valid for checking
   res.json({ paid: false, image: k.image, expiresAt: k.expiresAt, amountCents: payNowCents(o), merchant: bakongName(), qrNumber, qrMax: QR_MAX });
 }));
 /** Customer pressed "Cancel order": the order is cancelled and its stock goes back to the shop (once). */
@@ -234,7 +234,10 @@ api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
   if (o.paymentStatus === "PAID") return res.json({ paid: true });
   if (o.paymentStatus !== "PENDING") return res.json({ paid: false, closed: true, status: o.paymentStatus });
   await expireStaleBakong();
-  if (watcherSecret()) return res.json({ paid: false, problem: false, ...(req.query.debug === "1" ? { debug: ["waiting for the shop-PC watcher (tools/bakong-watcher.mjs) to confirm"] } : {}) });
+  if (watcherSecret()) { // watcher mode: tell the page whether the shop-PC watcher is alive
+    const seen = await watcherSeenAt(), online = !!seen && Date.now() - seen < 40_000;
+    return res.json({ paid: false, problem: false, watcher: online ? "online" : "offline", ...(req.query.debug === "1" ? { debug: [online ? "watcher online: it will confirm your payment within a few seconds" : `watcher OFFLINE (last seen ${seen ? Math.round((Date.now() - seen) / 1000) + " s ago" : "never"}): start start-bakong-watcher.bat on the shop PC and check BAKONG_WATCHER_SECRET matches in Vercel and .env.local`] } : {}) });
+  }
   const md5s = [...(o.bakongMd5s ?? [])].reverse(); let hash: string | undefined; let problem = false;
   const results = await Promise.all(md5s.map((md5) => checkPaid(md5, payNowCents(o)).then((r) => ({ md5, r })))); // all QR codes of this order at once = fastest answer
   for (const { md5, r } of results) { if (r.ok) { hash = hash ?? r.hash ?? md5; } else if (r.reason === "ERROR" || r.reason === "MISMATCH") { problem = true; console.error("[bakong check]", n, r.reason, r.detail); } }
@@ -248,7 +251,8 @@ api.get("/relay/pending", wrap(async (req, res) => {
   if (tooMany(`rp:${clientKey(req)}`, 600)) return res.status(429).json({ error: "slow down" });
   if (!watcherOk(req)) return res.status(401).json({ error: "bad secret" });
   await expireStaleBakong();
-  res.json({ orders: (await listPendingBakong()).map((o) => ({ orderNumber: o.orderNumber, md5s: o.bakongMd5s ?? [] })) });
+  const list = await listPendingBakong(); await beatWatcher(list.length > 0);
+  res.json({ orders: list.map((o) => ({ orderNumber: o.orderNumber, md5s: o.bakongMd5s ?? [] })) });
 }));
 api.post("/relay/confirm", wrap(async (req, res) => {
   if (tooMany(`rc:${clientKey(req)}`, 120)) return res.status(429).json({ error: "slow down" });
@@ -511,7 +515,11 @@ admin.post("/settings", wrap(async (req, res) => {
   await saveSettings({ shipPhnomPenhCents: Math.round(p.data.pp * 100), shipProvinceCents: Math.round(p.data.prov * 100), telegramUrl: p.data.tg, facebookUrl: p.data.fb, instagramUrl: p.data.ig }); res.json({ ok: true });
 }));
 /** Admin: checks Bakong settings + connection so the owner can see why automatic payment confirmation fails. */
-admin.get("/bakong/diagnose", wrap(async (_req, res) => res.json(await bakongDiagnose())));
+admin.get("/bakong/diagnose", wrap(async (_req, res) => {
+  const d = await bakongDiagnose();
+  if (watcherSecret()) { const seen = await watcherSeenAt(), ago = seen ? Math.round((Date.now() - seen) / 1000) : null, on = ago !== null && ago < 120; d.steps.push({ label: "Shop-PC watcher", ok: on, detail: on ? `running (last contact ${ago} s ago)` : `NOT running${ago === null ? " (never contacted this site)" : ` (last contact ${Math.round(ago / 60)} min ago)`}. Double-click start-bakong-watcher.bat on the shop PC and keep it open; BAKONG_WATCHER_SECRET must be identical in Vercel and .env.local, and BAKONG_SITE_URL must be this site's address.` }); d.ok = d.steps.every((x) => x.ok); }
+  res.json(d);
+}));
 /** Admin sets each payment option to on / paused / coming soon (at least one must stay on). */
 admin.post("/settings/payments", wrap(async (req, res) => {
   const p = z.object({ payBakong: z.enum(["on", "paused", "soon"]), payQr: z.enum(["on", "paused", "soon"]), payCod: z.enum(["on", "paused", "soon"]) }).safeParse(req.body);

@@ -17,3 +17,15 @@ export async function saveSettings(patch: Partial<Settings>) {
   must(await db().from("site_settings").upsert({ key: "main", value: next, updated_at: new Date().toISOString() }).select("key").single());
   cache = null;
 }
+
+/** Heartbeat of the shop-PC Bakong watcher, kept in its own row so it never touches the real settings. */
+let lastBeat = 0; let seenCache: { at: number; v: number | null } | null = null;
+export async function beatWatcher(hasPending: boolean) {
+  const now = Date.now(); if (now - lastBeat < (hasPending ? 15_000 : 60_000)) return; lastBeat = now;
+  try { must(await db().from("site_settings").upsert({ key: "bakong_watcher", value: { at: now }, updated_at: new Date().toISOString() }).select("key").single()); seenCache = null; } catch (e) { console.error("[watcher beat]", e); }
+}
+/** When the watcher last asked this server for work (ms since 1970), or null if never. */
+export async function watcherSeenAt(): Promise<number | null> {
+  if (seenCache && Date.now() - seenCache.at < 4000) return seenCache.v;
+  try { const r = must(await db().from("site_settings").select("value").eq("key", "bakong_watcher").maybeSingle()) as { value?: { at?: number } } | null; const v = typeof r?.value?.at === "number" ? r.value.at : null; seenCache = { at: Date.now(), v }; return v; } catch { return null; }
+}
