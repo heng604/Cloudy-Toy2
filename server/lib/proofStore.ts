@@ -17,10 +17,14 @@ export async function uploadProof(orderNumber: string, bytes: Uint8Array) {
   return path;
 }
 /** Signed links (valid 1 hour) for the admin pages: { path: url }. */
+const signed = new Map<string, { url: string; until: number }>(); // a signed link is reused for 30 of its 60 minutes (the admin pages poll, so this avoids re-signing every screenshot each time)
 export async function proofUrls(paths: string[]): Promise<Record<string, string>> {
-  const out: Record<string, string> = {}; const list = [...new Set(paths.filter(Boolean))]; if (!list.length) return out;
-  try { const r = await db().storage.from(BUCKET).createSignedUrls(list, 3600);
-    for (const x of r.data ?? []) if (x.path && x.signedUrl) out[x.path] = x.signedUrl; } catch { /* bucket not created yet */ }
+  const out: Record<string, string> = {}; const now = Date.now(); const need: string[] = [];
+  for (const p of new Set(paths.filter(Boolean))) { const hit = signed.get(p); if (hit && hit.until > now) out[p] = hit.url; else need.push(p); }
+  if (!need.length) return out;
+  try { const r = await db().storage.from(BUCKET).createSignedUrls(need, 3600);
+    if (signed.size > 2000) signed.clear();
+    for (const x of r.data ?? []) if (x.path && x.signedUrl) { out[x.path] = x.signedUrl; signed.set(x.path, { url: x.signedUrl, until: now + 30 * 60_000 }); } } catch { /* bucket not created yet */ }
   return out;
 }
 export async function deleteProofs(paths: string[]) {

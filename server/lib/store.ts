@@ -30,8 +30,8 @@ export async function listOrdersByEmail(email: string) {
   const e = email.toLowerCase();
   // Two independent lookups: one failing (or returning nothing) must not break the whole history.
   const results = await Promise.allSettled([
-    db().from("orders").select("data").eq("customer_email", e).order("created_at", { ascending: false }),
-    db().from("orders").select("data").eq("data->>accountEmail", e).order("created_at", { ascending: false }),
+    db().from("orders").select("data").eq("customer_email", e).order("created_at", { ascending: false }).limit(200),
+    db().from("orders").select("data").eq("data->>accountEmail", e).order("created_at", { ascending: false }).limit(200),
   ]);
   const rows: StoredOrder[] = [];
   let failures = 0;
@@ -57,8 +57,8 @@ export async function listPendingBakong() {
 }
 
 /** Moves PENDING -> FAILED (customer cancelled) or EXPIRED (QR time ran out) exactly once. Returns the order only for the caller that won, so its stock is given back once. A PAID order is never touched. */
-export async function markUnpaidOnce(n: string, status: "FAILED" | "EXPIRED") {
-  const o = await getOrder(n); if (!o || o.paymentStatus !== "PENDING") return null;
+export async function markUnpaidOnce(n: string, status: "FAILED" | "EXPIRED", known?: StoredOrder) {
+  const o = known ?? await getOrder(n); if (!o || o.paymentStatus !== "PENDING") return null; // `known` = the order the caller already loaded (saves one read per order in the sweep)
   o.paymentStatus = status; o.stockReleased = true;
   const r = await db().from("orders").update(toRow(o)).eq("order_number", n).eq("payment_status", "PENDING").select("order_number");
   return (must(r) as unknown[] | null)?.length ? o : null;
@@ -69,7 +69,16 @@ export async function listPendingBakongAll() {
 }
 
 /** Orders the admin dashboard shows: everything except orders whose payment FAILED or EXPIRED (cancelled by the customer, QR time ran out, or marked failed) and Bakong orders still waiting for the customer to pay (they appear once paid). They stay in the database; only the admin's views hide them. */
-export async function listAdminOrders() { return (await listAllOrders()).filter((o) => o.paymentStatus !== "FAILED" && o.paymentStatus !== "EXPIRED" && !(o.method === "BAKONG" && o.paymentStatus === "PENDING")); }
+export async function listAdminOrders() {
+  // the database does the filtering, so hidden orders are never downloaded just to be thrown away
+  const r = await db().from("orders").select("data").not("payment_status", "in", "(FAILED,EXPIRED)").or("payment_status.neq.PENDING,data->>method.neq.BAKONG").order("created_at", { ascending: false });
+  return fromRows(must(r) as Row[] | null);
+}
+/** Payment-screenshot paths of every order, reading ONLY that one field (used by Clear all transactions). */
+export async function listProofPaths() {
+  const rows = must(await db().from("orders").select("proof:data->>paymentProof")) as unknown as { proof: string | null }[];
+  return rows.map((r) => r.proof ?? "").filter(Boolean);
+}
 
 /** Like updateOrder, but only writes while the order is still PENDING, so it can never undo a payment that was confirmed a moment ago. */
 export async function updatePendingOrder(n: string, fn: (o: StoredOrder) => void) {

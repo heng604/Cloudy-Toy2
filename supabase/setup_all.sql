@@ -189,3 +189,12 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 insert into public.profiles(id, display_name)
 select u.id, coalesce(nullif(u.raw_user_meta_data->>'full_name', ''), nullif(u.raw_user_meta_data->>'name', ''), split_part(u.email, '@', 1)) from auth.users u
 where not exists (select 1 from public.profiles p where p.id = u.id);
+
+-- ---- performance indexes (same as migrations/0016_performance_indexes.sql)
+create index if not exists orders_status_created_idx on public.orders(payment_status, created_at desc);
+create index if not exists orders_pending_bakong_idx on public.orders(created_at desc) where payment_status = 'PENDING' and (data->>'method') = 'BAKONG';
+create index if not exists orders_account_email_idx on public.orders((data->>'accountEmail'));
+create index if not exists products_active_created_idx on public.products(active, created_at desc);
+create index if not exists products_category_idx on public.products(category);
+create index if not exists products_slug_pattern_idx on public.products(slug text_pattern_ops);
+analyze public.orders; analyze public.products;

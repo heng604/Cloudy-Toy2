@@ -12,9 +12,9 @@ import { requireAdmin, requireUser, userFromReq, adminOf, userOf, needs, roleOf 
 import { roleFor, listStaff, addStaff, updateStaff, deleteStaff } from "./lib/staff";
 import { getPromotions, savePromotions } from "./lib/promotionsStore";
 import { tooMany, clientKey } from "./lib/rateLimit";
-import { listProducts, listAllProducts, renameCategory, setLabels, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
+import { listProducts, listProductsByIds, firstImagesById, categoryCounts, listAllProducts, renameCategory, setLabels, getProductById, upsertProduct, skuTaken, deleteProduct, setStock, decrementStock, restoreStock, uploadProductImage, deleteProductImages } from "./lib/productStore";
 import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
-import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listAdminOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll, updatePendingOrder } from "./lib/store";
+import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listAdminOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll, updatePendingOrder, listProofPaths } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS, beatWatcher, watcherSeenAt } from "./lib/settings";
 import { getAllPages, savePage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
@@ -42,7 +42,7 @@ import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } fr
 import type { StoredOrder } from "../shared/types";
 /** "Meet your toys" e-mail with a photo of every product in the order. Never throws: the order must not fail because of an e-mail. */
 async function sendItemsMail(order: StoredOrder) {
-  try { const all = await listAllProducts(); const images: Record<string, string> = {}; for (const i of order.items) { const src = all.find((p) => p.id === i.productId)?.images?.[0]?.src; if (src) images[i.productId] = src; }
+  try { const images = await firstImagesById(order.items.map((i) => i.productId)); // one small query instead of loading the whole catalogue
     const r = await sendCustomerItemsEmail(order, images); if (r.status === "FAILED") console.error("[items email]", order.orderNumber, r.detail); return r; }
   catch (e) { console.error("[items email]", order.orderNumber, e); return { status: "FAILED" as const, detail: "Could not send" }; }
 }
@@ -61,6 +61,7 @@ app.use(compression());
 app.use(express.json({ limit: "1mb" }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 12 } });
 const api = express.Router();
+api.use((_req, res, next) => { res.set("Cache-Control", "private, no-cache"); next(); }); // API answers are per-user: browsers may keep them but must revalidate (ETag -> cheap 304), shared caches must not store them
 api.use((req, res, next) => { // overall brake per visitor: stops scripted flooding / scanning of the API
   if (tooMany(`all:${clientKey(req)}`, 300)) return res.status(429).json({ error: "Too many requests. Please wait a minute." });
   next(); });
@@ -102,8 +103,9 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (area === "PROVINCE" && !parsed.data.province) return res.status(400).json({ error: "Please choose your province." });
   if (method === "BAKONG" && !bakongEnabled()) return res.status(400).json({ error: "Bakong payment is not available right now. Please choose another payment method." });
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
-  await expireStaleBakong(true); // abandoned Bakong orders give their stock back before we check stock
-  const acct = userOf(req); const [settings, products] = await Promise.all([getSettings(), listProducts()]);
+  const acct = userOf(req); const ids = lines.map((l) => l.productId); // only the products in this cart are read (a cart has a few items, the catalogue has hundreds)
+  // abandoned Bakong orders give their stock back BEFORE the stock check (swept at most every 5 s); settings load at the same time
+  const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds(ids))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   const catalog = catalogOf(products); let usedCode: string | undefined;
   try {
@@ -113,7 +115,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents })), promos.campaigns);
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
-      const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }]);
+      const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true);
       if (!ev.ok) return res.status(400).json({ error: ev.error });
       usedCode = codeIn; discount += ev.discountCents;
     }
@@ -127,20 +129,25 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     if (hasPre && method === "COD") return res.status(400).json({ error: "Pre-order items are paid with a deposit online. Please choose Bakong or QR payment." });
     const orderNumber = `CT-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
     const order = { orderNumber, createdAt: new Date().toISOString(), area, ...(area === "PROVINCE" ? { province: parsed.data.province } : {}), method, customer,
-      items: t.items.map((i) => ({ productId: i.productId, sku: products.find((p) => p.id === i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents, ...itemDates(byId.get(i.productId)) })),
+      items: t.items.map((i) => ({ productId: i.productId, sku: byId.get(i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents, ...itemDates(byId.get(i.productId)) })),
       subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(auto.length ? { autoDiscounts: auto } : {}), ...(hasPre ? { preorder: preorderSplit(t.totalCents, promos.preorder, parsed.data.preorderPay === "full") } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
     const lines2 = t.items.map((i) => ({ productId: i.productId, qty: i.qty }));
     await decrementStock(lines2); // atomic in the database; throws INSUFFICIENT_STOCK without changing anything
     try { await saveOrder(order); } catch (e) { await restoreStock(lines2); throw e; }
     if (method === "BAKONG") return res.json({ orderNumber }); // Bakong: the admin is emailed once the bank confirms the payment (see /payment/bakong/status)
-    try { // EVERY new order (pay with delivery AND QR) is emailed to the admin right away; QR orders get a second email when the customer presses "I have paid"
-      const r = await sendAdminEmail(order); // order is never lost if email fails; status is recorded (admin can press "Resend email")
-      await updateOrder(orderNumber, (x) => { x.email = { status: r.status, detail: r.detail, attempts: 1 }; });
-    } catch (e) { console.error("[checkout email]", orderNumber, e); } // the order is already saved and stock reduced: never answer "could not place the order" because of email
-    try { const r = await sendCustomerEmail(order, "placed"); await updateOrder(orderNumber, (x) => { x.customerEmail = { ...r, kind: "placed" }; }); } // personal invoice to the customer; never blocks the order
-    catch (e) { console.error("[customer email]", orderNumber, e); }
-    await sendItemsMail(order); // second, different e-mail: one photo card per product (pre-orders get their own pre-order design)
+    // The three e-mails are independent, so they are sent AT THE SAME TIME (was one after another) and their results are saved with ONE order update (was two read+write rounds).
+    // EVERY new order (pay with delivery AND QR) is emailed to the admin right away; QR orders get a second email when the customer presses "I have paid".
+    // The order is already saved and stock reduced: an e-mail problem is logged and recorded, and never turns into "could not place the order".
+    const [adminMail, customerMail] = await Promise.allSettled([sendAdminEmail(order), sendCustomerEmail(order, "placed"), sendItemsMail(order)]); // 3rd = "meet your toys" photo e-mail (never throws)
+    if (adminMail.status === "rejected") console.error("[checkout email]", orderNumber, adminMail.reason);
+    if (customerMail.status === "rejected") console.error("[customer email]", orderNumber, customerMail.reason);
+    if (adminMail.status === "fulfilled" || customerMail.status === "fulfilled") {
+      try { await updateOrder(orderNumber, (x) => { // status is recorded so the admin can press "Resend email"
+        if (adminMail.status === "fulfilled") x.email = { status: adminMail.value.status, detail: adminMail.value.detail, attempts: 1 };
+        if (customerMail.status === "fulfilled") x.customerEmail = { ...customerMail.value, kind: "placed" };
+      }); } catch (e) { console.error("[checkout email status]", orderNumber, e); }
+    }
     return res.json({ orderNumber });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
@@ -156,7 +163,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
   const code = normalizeCode(b.data.code);
   if (!CODE_RE.test(code)) return res.status(400).json({ error: "That discount code is not valid." });
   try {
-    const products = await listProducts(); const t = computeTotals(b.data.lines, catalogOf(products), 0); const promos = await getPromotions();
+    const [products, promos] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions()]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents })), promos.campaigns);
     const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }]);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
@@ -204,17 +211,20 @@ api.post("/payment/bakong/cancel", wrap(async (req, res) => {
   res.json(now?.paymentStatus === "PAID" ? { paid: true } : { ok: true, status: now?.paymentStatus ?? "FAILED" });
 }));
 /** Gives the stock of an unpaid Bakong order back to the shop, exactly once (cancelled, or its QR codes ran out). A paid order is never touched. */
-async function releaseBakongOrder(n: string, status: "FAILED" | "EXPIRED") {
-  const o = await markUnpaidOnce(n, status); if (!o) return false;
+async function releaseBakongOrder(n: string, status: "FAILED" | "EXPIRED", known?: StoredOrder) {
+  const o = await markUnpaidOnce(n, status, known); if (!o) return false;
   try { await restoreStock(o.items.map((i) => ({ productId: i.productId, qty: i.qty }))); } catch (e) { console.error("[restock failed]", n, e); }
   return true;
 }
 let lastSweep = 0;
 /** Cancels Bakong orders nobody is paying any more (no new QR within a few minutes after the last one expired) so their stock is sellable again. */
-async function expireStaleBakong(force = false) {
-  if (!force && Date.now() - lastSweep < 20_000) return; lastSweep = Date.now();
-  try { for (const o of await listPendingBakongAll()) { const last = o.bakongQrExpiresAt ?? Date.parse(o.createdAt) + 15 * 60_000; if (Date.now() > last + QR_GRACE_MS) await releaseBakongOrder(o.orderNumber, "EXPIRED"); } }
-  catch (e) { console.error("[expire sweep]", e); }
+async function expireStaleBakong(minGapMs = 20_000) { // runs at most once per minGapMs per server instance
+  if (Date.now() - lastSweep < minGapMs) return; lastSweep = Date.now();
+  try {
+    const stale = (await listPendingBakongAll()).filter((o) => Date.now() > (o.bakongQrExpiresAt ?? Date.parse(o.createdAt) + 15 * 60_000) + QR_GRACE_MS);
+    // the orders are already loaded, so each release is ONE write (was a re-read + write per order), and all of them run together
+    await Promise.all(stale.map((o) => releaseBakongOrder(o.orderNumber, "EXPIRED", o).catch((e) => console.error("[expire sweep]", o.orderNumber, e))));
+  } catch (e) { console.error("[expire sweep]", e); }
 }
 /** Moves the order to PAID once and sends the emails (only the caller that flips PENDING -> PAID sends them, side by side so the popup is not kept waiting). */
 async function finalizeBakongPaid(n: string, hash: string) {
@@ -349,7 +359,7 @@ admin.post("/orders/:n/resend-invoice", wrap(async (req, res) => {
   res.json({ ok: r.status === "SENT", status: r.status, detail: r.detail });
 }));
 admin.post("/transactions/clear", wrap(async (_req, res) => {
-  try { const proofs = (await listAllOrders()).map((o) => o.paymentProof ?? ""); await deleteAllOrders(); await deleteProofs(proofs); res.json({ ok: true }); }
+  try { const proofs = await listProofPaths(); await deleteAllOrders(); await deleteProofs(proofs); res.json({ ok: true }); }
   catch { res.status(500).json({ error: "Could not clear the transactions. Please try again." }); }
 }));
 admin.get("/export", wrap(async (req, res) => {
@@ -384,9 +394,9 @@ const Schema = z.object({
 });
 /** Every category with its product count: categories that products use, plus empty ones the admin added in Manage Categories. */
 const categoryList = async () => {
-  const [products, settings] = await Promise.all([listAllProducts(), getSettings()]); const counts = new Map<string, number>();
+  const [used, settings] = await Promise.all([categoryCounts(), getSettings()]); const counts = new Map<string, number>();
   for (const c of settings.categories ?? []) counts.set(c, 0);
-  for (const p of products) if (p.category) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
+  for (const [c, n] of used) counts.set(c, n);
   return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
 };
 const catName = (v: unknown) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
@@ -412,8 +422,8 @@ admin.post("/categories/delete", wrap(async (req, res) => {
 }));
 admin.get("/products", wrap(async (_req, res) => res.json({ products: await listAllProducts() })));
 admin.get("/products/:id", wrap(async (req, res) => {
-  const p = await getProductById(String(req.params.id)); if (!p) return res.status(404).json({ error: "Not found" });
-  res.json({ product: p, categories: (await categoryList()).map((c) => c.name) });
+  const [p, cats] = await Promise.all([getProductById(String(req.params.id)), categoryList()]); if (!p) return res.status(404).json({ error: "Not found" });
+  res.json({ product: p, categories: cats.map((c) => c.name) });
 }));
 admin.get("/product-form-meta", wrap(async (_req, res) => res.json({ categories: (await categoryList()).map((c) => c.name) })));
 admin.post("/products/save", upload.any(), wrap(async (req, res) => {
@@ -425,8 +435,9 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
   if (labels.includes("preorder")) { const cap = (await getPromotions()).preorder.capSlots; if (d.stock > cap) return fail(`A pre-order item can have at most ${cap} slots (Promotions > Pre-Order Global Rules). For pre-order items, Stock Qty is the number of slots.`); }
   const dates = labels.includes("preorder") ? checkPreorderDates(fld(req, "preorderStart"), fld(req, "preorderEnd")) : { ok: true as const, start: "", end: "" }; // dates only belong to pre-order items
   if (!dates.ok) return fail(dates.error);
-  if (await skuTaken(d.sku, id || undefined)) return fail("That SKU is already used by another product");
-  const old = id ? await getProductById(id) : null; const keep = new Set(all(req, "keep"));
+  const [taken, old] = await Promise.all([skuTaken(d.sku, id || undefined), id ? getProductById(id) : Promise.resolve(null)]); // two independent lookups, run together
+  if (taken) return fail("That SKU is already used by another product");
+  const keep = new Set(all(req, "keep"));
   const images = (old?.images ?? []).filter((i) => keep.has(i.src)); const removed = (old?.images ?? []).filter((i) => !keep.has(i.src)).map((i) => i.src);
   const fl = files(req, "images");
   if (images.length + fl.length > MAX_IMAGES) return fail(`At most ${MAX_IMAGES} images per product`);
