@@ -35,7 +35,7 @@ import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, MAX_CAMPAIGNS } from "../shared/promotions";
 import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
-import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } from "../shared/products";
+import { isPreorder, normalizeLabels, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } from "../shared/products";
 
 import type { StoredOrder } from "../shared/types";
 /** "Meet your toys" e-mail with a photo of every product in the order. Never throws: the order must not fail because of an e-mail. */
@@ -418,7 +418,8 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
   const id = fld(req, "id");
   const p = Schema.safeParse(Object.fromEntries(["name", "nameKm", "brand", "uom", "variants", "sku", "category", "description", "price", "stock"].map((k) => [k, fld(req, k)])));
   if (!p.success) return fail(p.error.issues[0]?.message ?? "Invalid input");
-  const d = p.data; const labels = all(req, "labels").filter((l, i, a) => LABEL_IDS.includes(l) && a.indexOf(l) === i) as NonNullable<Parameters<typeof upsertProduct>[0]["labels"]>;
+  const d = p.data; const rawLabels = all(req, "labels").filter((l, i, a) => LABEL_IDS.includes(l) && a.indexOf(l) === i) as NonNullable<Parameters<typeof upsertProduct>[0]["labels"]>; // New Arrival is automatic: no other type chosen = New Arrival; any other type replaces it
+  const labels = normalizeLabels(rawLabels);
   if (labels.includes("preorder")) { const cap = (await getPromotions()).preorder.capSlots; if (d.stock > cap) return fail(`A pre-order item can have at most ${cap} slots (Promotions > Pre-Order Global Rules). For pre-order items, Stock Qty is the number of slots.`); }
   const dates = labels.includes("preorder") ? checkPreorderDates(fld(req, "preorderStart"), fld(req, "preorderEnd")) : { ok: true as const, start: "", end: "" }; // dates only belong to pre-order items
   if (!dates.ok) return fail(dates.error);
@@ -445,7 +446,7 @@ admin.post("/products/:id/labels", wrap(async (req, res) => {
   const p = await getProductById(String(req.params.id)); if (!p) return res.status(404).json({ error: "Not found" });
   const next = (Array.isArray(req.body?.labels) ? req.body.labels : []).map(String).filter((l: string, i: number, a: string[]) => LABEL_IDS.includes(l) && a.indexOf(l) === i);
   if (next.some((l: string) => !(p.labels ?? []).includes(l as NonNullable<typeof p.labels>[number]))) return res.json({ error: "Labels can only be removed here. Use Edit to add a label." });
-  await setLabels(p.id, next); res.json({ ok: true });
+  await setLabels(p.id, normalizeLabels(next as NonNullable<typeof p.labels>)); res.json({ ok: true });
 }));
 admin.delete("/products/:id", wrap(async (req, res) => { await deleteProduct(String(req.params.id)); res.json({ ok: true }); }));
 admin.post("/products/:id/stock", wrap(async (req, res) => { const n = Number(req.body?.stock); if (Number.isInteger(n) && n >= 0 && n <= 100000) await setStock(String(req.params.id), n); res.json({ ok: true }); }));
