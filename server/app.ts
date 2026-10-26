@@ -57,7 +57,7 @@ app.use((_req, res, next) => {
 });
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 8 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 12 } });
 const api = express.Router();
 api.use((req, res, next) => { // overall brake per visitor: stops scripted flooding / scanning of the API
   if (tooMany(`all:${clientKey(req)}`, 300)) return res.status(429).json({ error: "Too many requests. Please wait a minute." });
@@ -506,8 +506,8 @@ admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur 
 // staff (Admin Permissions page, owners only)
 admin.get("/staff", wrap(async (req, res) => res.json({ ...(await listStaff()), me: (adminOf(req).email ?? "").toLowerCase() })));
 admin.post("/staff/add", wrap(async (req, res) => { const e = await addStaff(req.body ?? {}); res.json(e ? { error: e } : { ok: true }); }));
-admin.post("/staff/update", wrap(async (req, res) => { const e = await updateStaff(req.body ?? {}); res.json(e ? { error: e } : { ok: true }); }));
-admin.post("/staff/delete", wrap(async (req, res) => { const e = await deleteStaff(String(req.body?.email ?? "")); res.json(e ? { error: e } : { ok: true }); }));
+admin.post("/staff/update", wrap(async (req, res) => { const body = req.body ?? {}; const self = String(body.email ?? "").trim().toLowerCase() === (adminOf(req).email ?? "").toLowerCase(); if (self && (body.role !== undefined && body.role !== "owner" || body.active === false)) return res.json({ error: "You cannot lower or deactivate your own access. Ask another owner." }); const e = await updateStaff(body); res.json(e ? { error: e } : { ok: true }); }));
+admin.post("/staff/delete", wrap(async (req, res) => { if (String(req.body?.email ?? "").trim().toLowerCase() === (adminOf(req).email ?? "").toLowerCase()) return res.json({ error: "You cannot remove yourself." }); const e = await deleteStaff(String(req.body?.email ?? "")); res.json(e ? { error: e } : { ok: true }); }));
 
 // settings
 const Url = z.string().trim().max(300).refine((v) => v === "" || /^https:\/\/[^\s]+$/.test(v), "Links must start with https://");
@@ -548,7 +548,7 @@ admin.post("/settings/logo", upload.any(), wrap(async (req, res) => {
   if (old && old !== next && old.includes("/logo-")) await deleteProductImages([old]);
   res.json({ ok: true });
 }));
-const MAX_BANNERS = 6;
+const MAX_BANNERS = 10;
 admin.post("/settings/banners", upload.any(), wrap(async (req, res) => {
   const old = (await getSettings()).banners ?? []; const k = all(req, "keep"); const keep = old.filter((b) => k.includes(b)); const fl = files(req, "banners");
   if (keep.length + fl.length > MAX_BANNERS) return res.json({ error: `At most ${MAX_BANNERS} banner images` });

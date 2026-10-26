@@ -48,8 +48,8 @@ const cleanName = (v: unknown) => String(v ?? "").trim().slice(0, 80);
 export const addStaff = (i: StaffInput) => guarded(() => addStaffRaw(i));
 async function addStaffRaw(i: StaffInput): Promise<string | null> {
   const email = key(String(i.email ?? "")); if (!EMAIL.test(email) || email.length > 200) return "Enter a valid email address";
-  if (ADMIN_EMAILS.includes(email)) return "That email is already an owner";
-  if (i.role !== "admin" && i.role !== "editor") return "Choose a role: Admin or Editor";
+  if (ADMIN_EMAILS.includes(email)) return "That email is already a founding owner";
+  if (!isRole(i.role)) return "Choose a role: Owner, Admin or Editor";
   if (await rowFor(email).catch(() => null)) { cache.delete(email); return "That email is already on the team"; }
   must(await db().from("staff_members").insert({ email, name: cleanName(i.name), role: i.role, active: true }).select("email")); cache.delete(email); return null;
 }
@@ -57,14 +57,14 @@ export const updateStaff = (i: StaffInput) => guarded(() => updateStaffRaw(i));
 async function updateStaffRaw(i: StaffInput): Promise<string | null> {
   const email = key(String(i.email ?? "")); const fixed = ADMIN_EMAILS.includes(email); const patch: Record<string, unknown> = {};
   if (i.name !== undefined) patch.name = cleanName(i.name);
-  if (i.role !== undefined) { if (fixed) return "Owners always keep the Owner role"; if (i.role !== "admin" && i.role !== "editor") return "Choose a role: Admin or Editor"; patch.role = i.role; }
-  if (i.active !== undefined) { if (fixed) return "Owners cannot be made inactive"; patch.active = i.active === true; }
+  if (i.role !== undefined) { if (fixed) return "Founding owners always keep the Owner role"; if (!isRole(i.role)) return "Choose a role: Owner, Admin or Editor"; patch.role = i.role; }
+  if (i.active !== undefined) { if (fixed) return "Founding owners cannot be made inactive"; patch.active = i.active === true; }
   if (fixed) { must(await db().from("staff_members").upsert({ email, role: "owner", ...patch }, { onConflict: "email" }).select("email")); cache.delete(email); return null; }
   const rows = must(await db().from("staff_members").update(patch).eq("email", email).select("email")) as unknown[];
   cache.delete(email); return rows.length ? null : "Staff member not found";
 }
 export const deleteStaff = (emailIn: string) => guarded(() => deleteStaffRaw(emailIn));
 async function deleteStaffRaw(emailIn: string): Promise<string | null> {
-  const email = key(emailIn); if (ADMIN_EMAILS.includes(email)) return "Owners cannot be removed";
+  const email = key(emailIn); if (ADMIN_EMAILS.includes(email)) return "Founding owners cannot be removed";
   must(await db().from("staff_members").delete().eq("email", email).select("email")); cache.delete(email); return null;
 }

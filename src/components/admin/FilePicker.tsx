@@ -12,7 +12,7 @@ export default function FilePicker({ name, multiple = false, accept = "image/png
     e.preventDefault(); setOver(false);
     if (!ref.current || !e.dataTransfer.files.length) return;
     const dt = new DataTransfer();
-    Array.from(e.dataTransfer.files).slice(0, multiple ? 6 : 1).forEach((f) => accept.split(",").includes(f.type) && dt.items.add(f));
+    Array.from(e.dataTransfer.files).slice(0, multiple ? 10 : 1).forEach((f) => accept.split(",").includes(f.type) && dt.items.add(f));
     ref.current.files = dt.files; sync();
   };
   const clear = () => { if (ref.current) ref.current.value = ""; sync(); };

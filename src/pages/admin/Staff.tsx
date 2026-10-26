@@ -27,9 +27,9 @@ function StaffModal({ s, onClose, onDone }: { s?: Staff; onClose: () => void; on
     {err && <p role="alert" className="rounded-xl bg-red-100 p-3 text-sm font-semibold text-red-800">{err}</p>}
     <label className="block text-sm font-bold">{t("Email")}<input name="email" type="email" required={!s} disabled={!!s} defaultValue={s?.email} maxLength={200} placeholder="name@example.com" className={`${field} mt-1 disabled:opacity-60`} /></label>
     <label className="block text-sm font-bold">{t("Full name")}<input name="name" maxLength={80} defaultValue={s?.name} className={`${field} mt-1`} /></label>
-    {!s?.fixed && <label className="block text-sm font-bold">{t("Role")}<select name="role" defaultValue={s?.role ?? "editor"} className={`${field} mt-1`}><option value="admin">{t("Admin")}: {t("everything except managing admins")}</option><option value="editor">{t("Editor")}: {t("products, stock, categories and pages")}</option></select></label>}
+    {!s?.fixed && <label className="block text-sm font-bold">{t("Role")}<select name="role" defaultValue={s?.role ?? "editor"} className={`${field} mt-1`}><option value="owner">{t("Owner")}: {t("everything, including managing admins")}</option><option value="admin">{t("Admin")}: {t("everything except managing admins")}</option><option value="editor">{t("Editor")}: {t("products, stock, categories and pages")}</option></select></label>}
     {s && !s.fixed && <label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" name="active" defaultChecked={s.active} className="h-4 w-4" />{t("Active (can sign in to the admin area)")}</label>}
-    {s?.fixed && <p className="rounded-xl bg-sky-pale p-3 text-xs text-mute">{t("Owners always keep full access and cannot be removed.")}</p>}
+    {s?.fixed && <p className="rounded-xl bg-sky-pale p-3 text-xs text-mute">{t("Founding owners always keep full access and cannot be removed.")}</p>}
     {!s && <p className="text-xs text-mute">{t("They sign in on the admin login page with this email (Google or email and password). The email must be verified.")}</p>}
     <div className="flex justify-end gap-3 border-t border-sky-border pt-4"><button type="button" onClick={close} className="rounded-xl border border-sky-border bg-white px-6 py-2.5 font-bold hover:bg-sky-pale">{t("Cancel")}</button><button disabled={busy} className="rounded-xl bg-sky px-6 py-2.5 font-extrabold shadow-soft hover:bg-sky-hover disabled:opacity-50">{busy ? t("Saving…") : s ? t("Save changes") : t("Add New Admin")}</button></div>
   </form>)}</Modal>);
@@ -39,7 +39,6 @@ export default function StaffPage() {
   const { data } = useAdmin<{ staff: Staff[]; me: string; ready?: boolean }>("/admin/staff"); const [edit, setEdit] = useState<Staff | "new" | null>(null); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   if (!data) return <Skeleton />;
   const del = async (s: Staff) => {
-    if (!confirm(`Remove ${s.name || s.email} from the admin team? They will no longer be able to open the admin area.`)) return;
     try { const j = await (await post("/admin/staff/delete", { email: s.email })).json().catch(() => ({})) as { ok?: boolean; error?: string }; refreshAdmin(); setMsg(j.ok ? { ok: true, text: t("Admin removed") } : { ok: false, text: j.error ?? "Could not remove. Please try again." }); }
     catch { setMsg({ ok: false, text: "Could not reach the server. Please try again." }); }
   };
@@ -56,7 +55,7 @@ export default function StaffPage() {
         <td className="px-4 py-3"><span className={`rounded-md px-2.5 py-1 text-xs font-bold ${ROLE_CLS[s.role]}`}>{t(ROLE_NAME[s.role])}</span></td>
         <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${s.active ? "bg-[#DDF6E8] text-[#2F8F5B]" : "bg-[#FFE3E8] text-[#C0304F]"}`}>● {s.active ? t("Active") : t("Inactive")}</span></td>
         <td className="px-4 py-3 text-mute">{ago(s.lastActiveAt, t)}</td>
-        <td className="px-4 py-3"><div className="flex items-center justify-end gap-4 font-bold"><button type="button" onClick={() => setEdit(s)} className="text-sky-hover hover:underline">{t("Edit")}</button>{!s.fixed && <button type="button" onClick={() => del(s)} className="text-[#E0456B] hover:underline">{t("Delete")}</button>}</div></td></tr>)}</tbody></table></div>
+        <td className="px-4 py-3"><div className="flex items-center justify-end gap-4 font-bold"><button type="button" onClick={() => setEdit(s)} className="text-sky-hover hover:underline">{t("Edit")}</button>{!s.fixed && s.email !== data.me && <button type="button" onClick={() => del(s)} className="text-[#E0456B] hover:underline">{t("Delete")}</button>}</div></td></tr>)}</tbody></table></div>
     {edit && <StaffModal key={edit === "new" ? "new" : edit.email} s={edit === "new" ? undefined : edit} onClose={() => setEdit(null)} onDone={setMsg} />}
   </div>);
 }
