@@ -13,7 +13,7 @@ export default function BannerSlider({ images = [], first = false }: { images?: 
   if (images.length === 0) return null;
   // edge to edge: break out of the page column; `first` also cancels the gap under the header
   return (<section aria-label="Promotions" className={`relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-sky-pale ${first ? "-mt-5 sm:-mt-8" : "mt-8"} mb-8`} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-    <div className="relative w-full" style={{ aspectRatio: "1600 / 750" }}>
+    <div className="relative w-full" style={{ aspectRatio: "1600 / 800" }}>
       {images.map((src, n) => (<img key={src} src={src} alt={`Banner ${n + 1}`} loading={n === 0 ? "eager" : "lazy"}
         className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${n === i ? "opacity-100" : "opacity-0"}`} aria-hidden={n !== i} />))}
       <Link to="/shop" className="absolute bottom-6 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-[#5BAAF0] px-5 py-2 text-xs font-extrabold text-white shadow-lift transition hover:-translate-y-[calc(0.125rem)] hover:bg-[#4A99E0] sm:bottom-8 sm:text-sm md:left-[18%] md:translate-x-0 md:px-7 md:py-3 md:text-base lg:bottom-[10%]"><span aria-hidden="true">♥</span>{t("Shopping with Cloudy Toys now!")}</Link>
