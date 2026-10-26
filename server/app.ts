@@ -576,9 +576,9 @@ admin.post("/settings/banners/delete", wrap(async (req, res) => {
   try { await saveSettings({ banners: old.filter((b) => b !== url) }); } catch { return res.json({ error: "Could not delete the banner. Please try again." }); }
   await deleteProductImages([url]); res.json({ ok: true });
 }));
-/** Payment QR: upload a new image, or delete the custom one (falls back to the built-in QR). */
+/** Payment QR: upload a new image, or delete it (no QR is shown until a new one is uploaded). */
 admin.post("/settings/qr", upload.any(), wrap(async (req, res) => {
-  const old = (await getSettings()).qrUrl || DEFAULT_SETTINGS.qrUrl; let next = DEFAULT_SETTINGS.qrUrl, uploaded: string | null = null;
+  const old = (await getSettings()).qrUrl || DEFAULT_SETTINGS.qrUrl; let next = "none", uploaded: string | null = null; // "none" = the admin deleted the QR: customers see no QR image until a new one is uploaded
   if (fld(req, "reset") !== "on") {
     const f = files(req, "qr")[0]; if (!f) return res.json({ error: "Choose an image file first" });
     const bytes = new Uint8Array(f.buffer); const v = validateImage(bytes, f.mimetype); if (!v.ok) return res.json({ error: v.error });

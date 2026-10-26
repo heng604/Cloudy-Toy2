@@ -35,7 +35,7 @@ export default function PayQr({ orderNumber, total, telegram, facebook }: { orde
   };
   const link = "block rounded-full bg-sky px-4 py-2 font-bold hover:bg-sky-hover";
   return (<div className="space-y-3 rounded-xl2 border border-sky-border bg-white p-5 text-center">
-    <img src={settings.qrUrl || "/img/qr-pay.png"} alt="ABA PAY QR code for Cloudy Toys (YIHOR THENG)" className="mx-auto w-full max-w-md rounded-xl2 border border-sky-border" />
+    {settings.qrUrl === "none" ? <p className="rounded-xl bg-sky-pale px-4 py-6 text-sm text-mute">The payment QR is not available right now. Please contact us on Telegram or Facebook to pay.</p> : <img src={settings.qrUrl || "/img/qr-pay.png"} alt="ABA PAY QR code for Cloudy Toys (YIHOR THENG)" className="mx-auto w-full max-w-md rounded-xl2 border border-sky-border" />}
     <p>Scan, pay exactly <b>{total}</b>, and write <b>{orderNumber}</b> in the note.</p>
     <div className="mx-auto max-w-md"><ProofPicker file={file} preview={preview} onPick={pick} disabled={up === "uploading"} /></div>
     <button type="button" onClick={paid} disabled={!file || up === "uploading"} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{up === "uploading" ? "Uploading…" : "2. I have paid"}</button>
