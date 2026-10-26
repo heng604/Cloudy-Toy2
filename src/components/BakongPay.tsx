@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/auth";
 type Qr = { image: string; expiresAt: number; merchant: string; qrNumber?: number; qrMax?: number };
 const POLL_MS = 2000;
 /** Bakong KHQR checkout: shows the KHQR ticket for this order, checks the bank every few seconds, and pops up a green "Payment successful" card the moment it is paid.
  *  The server confirms the payment with Bakong and emails the admin the PAID invoice; this page only shows the result. */
 export default function BakongPay({ orderNumber, total, onPaid }: { orderNumber: string; total: string; onPaid?: () => void }) {
   const navigate = useNavigate(); const doneBtn = useRef<HTMLButtonElement>(null);
-  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false); const [problem, setProblem] = useState(false); const [watcherOff, setWatcherOff] = useState(false); const since = useRef(Date.now()); const [closed, setClosed] = useState<"" | "FAILED" | "EXPIRED">(""); const [dbg, setDbg] = useState<string[] | null>(null); const debug = typeof location !== "undefined" && new URLSearchParams(location.search).get("debug") === "1";
+  const [qr, setQr] = useState<Qr | null>(null); const [err, setErr] = useState(""); const [paid, setPaid] = useState(false); const [open, setOpen] = useState(false); const [loading, setLoading] = useState(false); const [problem, setProblem] = useState(false); const [watcherOff, setWatcherOff] = useState(false); const since = useRef(Date.now()); const [closed, setClosed] = useState<"" | "FAILED" | "EXPIRED">(""); const [dbg, setDbg] = useState<string[] | null>(null); const { isAdmin } = useAuth(); const debug = isAdmin || (typeof location !== "undefined" && new URLSearchParams(location.search).get("debug") === "1"); // the admin always sees what Bakong answers while testing
   const amount = total.replace(/^\$/, "");
-  const markPaid = useCallback(() => { setPaid(true); setOpen(true); onPaid?.(); }, [onPaid]);
+  const onPaidRef = useRef(onPaid); onPaidRef.current = onPaid; // a stable callback: the page re-rendering must not restart the QR / payment checks
+  const markPaid = useCallback(() => { setPaid(true); setOpen(true); onPaidRef.current?.(); }, []);
   const load = useCallback(async (): Promise<boolean> => {
     setLoading(true); setErr("");
     try {

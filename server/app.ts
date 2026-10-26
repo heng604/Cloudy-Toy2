@@ -523,7 +523,7 @@ admin.get("/bakong/diagnose", wrap(async (_req, res) => {
   if (watcherSecret()) {
     for (const x of d.steps) if (x.label === "Reach Bakong API") x.label = "Direct check from the website";
     const seen = await watcherSeenAt(), ago = seen ? Math.round((Date.now() - seen) / 1000) : null, on = ago !== null && ago < 120;
-    d.steps.push({ label: "Shop-PC watcher", ok: on, detail: on ? `running (last contact ${ago} s ago)` : `NOT running${ago === null ? " (never contacted this site)" : ` (last contact ${Math.round(ago / 60)} min ago)`}. ${directOk ? "Not needed while the direct check works." : "Needed because Bakong blocks the website: run start-bakong-watcher.bat on a computer in Cambodia that stays on 24/7."}` });
+    d.steps.push({ label: "Shop-PC watcher (optional)", ok: on || directOk, detail: on ? `running (last contact ${ago} s ago)` : `NOT running${ago === null ? " (never contacted this site)" : ` (last contact ${Math.round(ago / 60)} min ago)`}. ${directOk ? "Not needed while the direct check works." : "Needed because Bakong blocks the website: run start-bakong-watcher.bat on a computer in Cambodia that stays on 24/7."}` });
     d.ok = directOk || on;
   }
   res.json(d);

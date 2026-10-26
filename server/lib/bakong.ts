@@ -64,8 +64,11 @@ export async function bakongDiagnose(): Promise<{ ok: boolean; steps: { label: s
 
 /** Bakong's transaction must match the order: same amount, USD, and OUR receiving account. */
 export function matchPaid(d: { hash?: string; amount?: number | string; currency?: string; toAccountId?: string }, totalCents: number): PaidCheck {
-  if (String(d.currency).toUpperCase() !== "USD" || Math.round(Number(d.amount) * 100) !== totalCents || (d.toAccountId ?? "").trim().toLowerCase() !== cfg().account.toLowerCase())
-    return { ok: false, reason: "MISMATCH", detail: `amount ${d.amount} ${d.currency} to ${d.toAccountId}` };
+  // The md5 we asked about already covers our account and the exact amount, so these checks are a second safety net. They are tolerant about HOW the account is written.
+  const local = (x: string) => x.trim().toLowerCase().split("@")[0];
+  const to = (d.toAccountId ?? "").trim(), sameAccount = !to.includes("@") || local(to) === local(cfg().account); // another format (e.g. a number) is not a reason to refuse a payment found by our own md5
+  const amountOk = Math.abs(Number(d.amount) * 100 - totalCents) < 0.5, currencyOk = String(d.currency ?? "USD").toUpperCase() === "USD";
+  if (!currencyOk || !amountOk || !sameAccount) return { ok: false, reason: "MISMATCH", detail: `amount ${d.amount} ${d.currency} to ${d.toAccountId}` };
   return { ok: true, hash: d.hash };
 }
 /** When set, a small program on a computer in Cambodia (tools/bakong-watcher.mjs) checks Bakong and tells this server; the server itself never calls Bakong. */
