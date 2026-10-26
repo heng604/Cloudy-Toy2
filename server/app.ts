@@ -256,9 +256,9 @@ api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
   if (hash) { await finalizeBakongPaid(n, hash); return res.json({ paid: true }); }
   if (watcherOn) { // tell the page whether anything can confirm the payment right now
     const seen = await watcherSeenAt(), online = !!seen && Date.now() - seen < 40_000, directDown = skipDirect || directErr;
-    return res.json({ paid: false, problem: false, watcher: online || !directDown ? "online" : "offline", ...(req.query.debug === "1" ? { debug: [directDown ? "direct check from the website: BLOCKED (normal outside Cambodia)" : "direct check from the website: working", online ? "watcher: online" : `watcher: OFFLINE (last seen ${seen ? Math.round((Date.now() - seen) / 1000) + " s ago" : "never"}); start start-bakong-watcher.bat on a computer in Cambodia, check BAKONG_WATCHER_SECRET is identical in Vercel and .env.local`, ...results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`))] } : {}) });
+    return res.json({ paid: false, problem: false, watcher: online || !directDown ? "online" : "offline", ...(false ? { debug: [directDown ? "direct check from the website: BLOCKED (normal outside Cambodia)" : "direct check from the website: working", online ? "watcher: online" : `watcher: OFFLINE (last seen ${seen ? Math.round((Date.now() - seen) / 1000) + " s ago" : "never"}); start start-bakong-watcher.bat on a computer in Cambodia, check BAKONG_WATCHER_SECRET is identical in Vercel and .env.local`, ...results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`))] } : {}) });
   }
-  res.json({ paid: false, problem, ...(req.query.debug === "1" ? { debug: results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`)) } : {}) }); // ?debug=1 on the payment page shows what Bakong answered
+  res.json({ paid: false, problem, ...(false ? { debug: results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`)) } : {}) }); // ?debug=1 on the payment page shows what Bakong answered
 }));
 let directDownAt = 0;
 /** Shop-PC watcher (runs in Cambodia, where Bakong answers). Protected by BAKONG_WATCHER_SECRET. */
