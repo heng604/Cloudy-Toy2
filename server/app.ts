@@ -366,7 +366,7 @@ admin.get("/export", wrap(async (req, res) => {
   res.set({ "Content-Disposition": `attachment; filename="cloudy-toy-${ds.name}-${date}.${format}"`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
   if (format === "csv") return res.type("text/csv; charset=utf-8").send(toCsv(ds.rows, ds.csv));
   const meta = makeMeta(await getSettings(), date, { intro: ds.intro, summary: ds.summary });
-  if (format === "xlsx") return res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").send(buildXlsx({ title: ds.title, sheet: ds.title, cols: ds.csv.map((c) => ({ header: c.header })), rows: ds.rows.map((r) => ds.csv.map((c) => c.get(r))), meta }));
+  if (format === "xlsx") return res.type("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet").send(buildXlsx({ title: ds.title, sheet: ds.title, cols: ds.pdf.map((c) => ({ header: c.header })), rows: ds.rows.map(ds.pdfRow), meta }));
   res.type("application/pdf").send(buildPdf({ title: ds.title, cols: ds.pdf, rows: ds.rows.map(ds.pdfRow), meta }));
 }));
 

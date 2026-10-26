@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { safeNext } from "@shared/safeRedirect";
-import { isAdminEmail } from "@shared/admin";
 import { fetchRole } from "@/lib/auth";
 /** Google sign-in lands here. supabase-js exchanges the ?code for a session by itself; we only decide where to send the person. */
 export default function AuthCallback() {
@@ -14,9 +13,7 @@ export default function AuthCallback() {
       if (!supabase || !sp.get("code")) return navigate(fail, { replace: true });
       const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
       if (!user) return navigate(fail, { replace: true });
-      const isAdmin = isAdminEmail(user.email, !!user.email_confirmed_at);
-      if (isAdmin) return navigate("/admin", { replace: true }); // admin email always lands on the dashboard
-      if (wantsAdmin && (await fetchRole())) return navigate(next, { replace: true }); // staff added on the Admin Permissions page
+      if (wantsAdmin && (await fetchRole())) return navigate(next, { replace: true }); // owners, admins and editors (the server decides)
       if (wantsAdmin) { await supabase.auth.signOut(); return navigate("/admin/login?error=denied", { replace: true }); }
       navigate(next, { replace: true });
     })();

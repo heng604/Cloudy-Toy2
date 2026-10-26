@@ -18,7 +18,7 @@ const KM: Record<string, string> = {
   // admin shell
   "Dashboard": "ផ្ទាំងគ្រប់គ្រង", "Orders": "ការបញ្ជាទិញ", "Transactions": "ប្រតិបត្តិការ", "Products": "ផលិតផល", "Discounts": "បញ្ចុះតម្លៃ", "Stock": "ស្តុក", "Pages": "ទំព័រ", "Settings": "ការកំណត់",
   "Sign out": "ចាកចេញ", "View shop": "មើលហាង", "Search orders…": "ស្វែងរកការបញ្ជាទិញ…", "Search": "ស្វែងរក", "Delete": "លុប", "Edit": "កែសម្រួល", "Filter": "ជ្រើសរើស", "Reset": "កំណត់ឡើងវិញ", "Try again": "សាកល្បងម្តងទៀត",
-  "Export CSV": "នាំចេញ CSV", "Export PDF": "នាំចេញ PDF", "Export Excel": "នាំចេញ Excel", "+ New product": "+ ផលិតផលថ្មី", "Product": "ផលិតផល", "Category": "ប្រភេទ", "Price": "តម្លៃ", "Store settings": "ការកំណត់ហាង", "Delete product": "លុបផលិតផល",
+  "Export CSV": "នាំចេញ CSV", "Export PDF": "នាំចេញ PDF", "Export Excel": "នាំចេញ Excel", "Export Google Sheet": "នាំចេញ Google Sheet", "+ New product": "+ ផលិតផលថ្មី", "Product": "ផលិតផល", "Category": "ប្រភេទ", "Price": "តម្លៃ", "Store settings": "ការកំណត់ហាង", "Delete product": "លុបផលិតផល",
   "Mark as paid (I verified it)": "សម្គាល់ថាបានបង់ (ខ្ញុំបានផ្ទៀងផ្ទាត់)", "PAID": "បានបង់", "PENDING": "រង់ចាំ", "Saved": "បានរក្សាទុក", "Live": "ផ្ទាល់", "Connecting…": "កំពុងភ្ជាប់…",
   // dashboard
   "Paid revenue": "ចំណូលដែលទទួលបានពីការទូទាត់", "Waiting for payment": "រង់ចាំការបង់ប្រាក់", "All orders": "ការបញ្ជាទិញទាំងអស់", "Stock value": "តម្លៃស្តុក", "{n} paid orders": "ការបញ្ជាទិញបានបង់ {n}", "{n} pending orders": "កំពុងរង់ចាំ {n}",

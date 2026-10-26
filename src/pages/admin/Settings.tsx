@@ -1,5 +1,5 @@
 import { useI18n } from "@/lib/i18n";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import Skeleton from "@/components/Skeleton";
 import FilePicker from "@/components/admin/FilePicker";
@@ -11,7 +11,8 @@ import { useTitle } from "@/lib/title";
 import { refreshAdmin, Msg } from "./hooks";
 export default function Settings() {
   const { t } = useI18n(); useTitle(t("Settings"), true);
-  const [sp, setSp] = useSearchParams(); const { settings: s, loading } = useSettings(); const [busy, setBusy] = useState(""); const [diag, setDiag] = useState<{ ok: boolean; steps: { label: string; ok: boolean; detail: string }[] } | "loading" | "error" | null>(null);
+  const [sp, setSp] = useSearchParams(); const { settings: s, loading } = useSettings(); const [busy, setBusy] = useState(""); const [zoom, setZoom] = useState(false); const [diag, setDiag] = useState<{ ok: boolean; steps: { label: string; ok: boolean; detail: string }[] } | "loading" | "error" | null>(null);
+  useEffect(() => { if (!zoom) return; const k = (e: KeyboardEvent) => e.key === "Escape" && setZoom(false); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [zoom]);
   if (loading) return <Skeleton />;
   const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3";
   const run = (name: string, send: (f: FormData) => Promise<Response>, after?: () => void) => async (e: FormEvent<HTMLFormElement>) => {
@@ -57,7 +58,8 @@ export default function Settings() {
       <button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "banners" ? "Saving…" : "Save banners"}</button></form>
     <form onSubmit={run("qr", multi("/admin/settings/qr"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Payment QR (ABA PAY)</p>
       <p className="text-sm text-mute">Shown to customers at checkout. JPG, PNG or WebP, max 5 MB.</p>
-      <img src={s.qrUrl || "/img/qr-pay.png"} alt="Current payment QR" className="w-48 rounded-xl border border-sky-border" />
+      <div className="relative inline-block"><button type="button" onClick={() => setZoom(true)} aria-label="View the payment QR bigger" className="block rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-hover"><img src={s.qrUrl || "/img/qr-pay.png"} alt="Current payment QR" className="w-48 rounded-xl border border-sky-border" /></button>
+        <button type="button" onClick={() => setZoom(true)} className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1 text-xs font-bold shadow-soft hover:bg-sky-pale"><span aria-hidden="true">🔍</span>View</button></div>
       <FilePicker name="qr" />
       <div className="flex flex-wrap gap-2"><button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "qr" ? "Saving…" : "Update QR"}</button>
       {s.qrUrl && s.qrUrl !== "/img/qr-pay.png" && <button type="button" disabled={!!busy} onClick={() => del("qr", "", async () => api("/admin/settings/qr", { method: "POST", body: reset() }))} className={btnDel}>Delete QR</button>}</div></form>
@@ -67,5 +69,6 @@ export default function Settings() {
     <label className="block">Telegram link (https://…)<input name="tg" defaultValue={s.telegramUrl} className={cls} /></label>
     <label className="block">Facebook page link (https://…)<input name="fb" defaultValue={s.facebookUrl} className={cls} /></label>
     <label className="block">Instagram link (https://…)<input name="ig" defaultValue={s.instagramUrl} className={cls} /></label>
-    <button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "store" ? "Saving…" : "Save settings"}</button></form></div>);
+    <button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "store" ? "Saving…" : "Save settings"}</button></form>
+    {zoom && <div role="dialog" aria-modal="true" aria-label="Payment QR" onClick={() => setZoom(false)} className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"><div onClick={(e) => e.stopPropagation()} className="relative max-h-full max-w-lg overflow-auto rounded-2xl bg-white p-3 shadow-lift"><button type="button" autoFocus onClick={() => setZoom(false)} aria-label="Close" className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-lg font-bold shadow-soft hover:bg-sky-pale">×</button><img src={s.qrUrl || "/img/qr-pay.png"} alt="Payment QR" className="h-auto w-full rounded-xl" /></div></div>}</div>);
 }

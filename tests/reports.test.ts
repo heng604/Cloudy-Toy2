@@ -15,4 +15,10 @@ describe("branded reports", () => {
     const x = buildXlsx({ title: "Orders", sheet: "Orders", cols: [{ header: "Order number" }, { header: "Total Sale" }], rows: [["CT-1", "12.50"], ["CT-2", 3]], meta });
     expect(x.subarray(0, 2).toString()).toBe("PK"); expect(x.includes(Buffer.from("xl/worksheets/sheet1.xml"))).toBe(true);
   });
+  it("Excel handles PDF-style money text, empty values and more than 10 columns", () => {
+    const cols = Array.from({ length: 12 }, (_, i) => ({ header: i === 3 ? "Price" : i === 4 ? "Sale" : `Col ${i + 1}` }));
+    const row = (a: string, b: string) => cols.map((_, i) => (i === 3 ? a : i === 4 ? b : `v${i}`));
+    const x = buildXlsx({ title: "Products", sheet: "Products", cols, rows: [row("$1,234.50", "-"), row("$9.00", "$7.50")], meta });
+    expect(x.subarray(0, 2).toString()).toBe("PK"); expect(x.length).toBeGreaterThan(1000);
+  });
 });

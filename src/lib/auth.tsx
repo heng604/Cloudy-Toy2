@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
-import { isAdminEmail } from "@shared/admin";
 import type { Role } from "@shared/roles";
 import { api } from "./api";
 type A = { user: User | null; ready: boolean; isAdmin: boolean; role: Role | null; signOut: () => Promise<void> };
@@ -30,7 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const uid = user?.id ?? null, mail = user?.email ?? null, verified = !!user?.email_confirmed_at;
   useEffect(() => {
     if (!uid) { setRole(null); setRoleFor(null); return; }
-    if (isAdminEmail(mail, verified)) { setRole("owner"); setRoleFor(uid); return; } // owner emails never wait for the server
     let live = true; setRoleFor((cur) => (cur === uid ? cur : null)); // keep the known role while a token refresh re-runs this
     fetchRole().then((r) => { if (live) { setRole(r); setRoleFor(uid); } });
     return () => { live = false; };

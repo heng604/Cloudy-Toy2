@@ -60,8 +60,11 @@ function zip(files: { name: string; data: Buffer; store?: boolean }[]): Buffer {
   return Buffer.concat([...out, cd, end]);
 }
 // ---- sheet ----
-const SUMMED = new Set(["Total USD", "Stock value USD", "Item count", "Stock", "Sold QTY", "Sub Amount", "Invoice Discount", "Discount", "Delivery Fee", "Total Sale"]);
-const kindOf = (h: string): "usd" | "int" | "text" => (/( USD|Amount|Discount|Fee|Total Sale)$/.test(h) ? "usd" : h === "Stock" || h === "Item count" || h === "Sold QTY" ? "int" : "text");
+// Columns are the same as the PDF report. Money / quantity columns hold real numbers (so Excel can add them up); everything else is text.
+const SUMMED = new Set(["Total", "Total USD", "Value", "Stock value USD", "Qty", "Item count", "Stock", "Sold QTY", "Sub Amount", "Invoice Discount", "Discount", "Delivery Fee", "Total Sale"]);
+const kindOf = (h: string): "usd" | "int" | "text" => (/^(Total|Price|Sale|Unit|Value)$|( USD|Amount|Discount|Fee|Total Sale)$/.test(h) ? "usd" : /^(Stock|Qty|Item count|Sold QTY)$/.test(h) ? "int" : "text");
+/** "$1,234.50" -> 1234.5 ; "-" or "" -> NaN (left empty). */
+const toNum = (v: unknown): number => { if (typeof v === "number") return v; const t = String(v ?? "").replace(/[$,\s]/g, ""); return t === "" || t === "-" ? NaN : Number(t); };
 export function buildXlsx(o: { title: string; sheet: string; cols: XlsxCol[]; rows: Cell[][]; meta: ReportMeta }): Buffer {
   const { meta } = o, logo = meta.logo, N = o.cols.length, kinds = o.cols.map((c) => kindOf(c.header)), last = colName(N), textCol = logo ? 2 : 1;
   const rowsXml: string[] = [], merges: string[] = [];
@@ -87,12 +90,12 @@ export function buildXlsx(o: { title: string; sheet: string; cols: XlsxCol[]; ro
   o.rows.forEach((vals, ri) => { const z = ri % 2 === 1; const m = new Map<number, string>();
     vals.forEach((v, i) => { const k = kinds[i];
       if (k === "text") m.set(i + 1, str(r, i + 1, z ? S.textZ : S.text, String(v ?? "")));
-      else { const n = typeof v === "number" ? v : Number(v); m.set(i + 1, Number.isFinite(n) && String(v ?? "") !== "" ? num(r, i + 1, k === "usd" ? (z ? S.usdZ : S.usd) : z ? S.intZ : S.int, n) : str(r, i + 1, z ? S.textZ : S.text, "")); } });
+      else { const n = toNum(v); m.set(i + 1, Number.isFinite(n) ? num(r, i + 1, k === "usd" ? (z ? S.usdZ : S.usd) : z ? S.intZ : S.int, n) : str(r, i + 1, z ? S.textZ : S.text, "")); } });
     row(r, 20, m); r++; });
   const lastData = r - 1;
   if (o.rows.length) { // totals row (follows the filter: SUBTOTAL ignores hidden rows)
     const m = new Map<number, string>([[1, str(r, 1, S.totLabel, "Total of the rows shown")]]);
-    o.cols.forEach((c, i) => { if (!SUMMED.has(c.header) || kinds[i] === "text") return; const col = colName(i + 1), sum = o.rows.reduce((s, v) => s + (Number(v[i]) || 0), 0);
+    o.cols.forEach((c, i) => { if (!SUMMED.has(c.header) || kinds[i] === "text") return; const col = colName(i + 1), sum = o.rows.reduce((s, v) => s + (toNum(v[i]) || 0), 0);
       m.set(i + 1, `<c r="${col}${r}" s="${kinds[i] === "usd" ? S.totUsd : S.totInt}"><f>SUBTOTAL(109,${col}${first}:${col}${lastData})</f><v>${Math.round(sum * 100) / 100}</v></c>`); });
     row(r, 22, m, S.totLabel); r++;
   }
@@ -105,14 +108,14 @@ export function buildXlsx(o: { title: string; sheet: string; cols: XlsxCol[]; ro
   const lastRow = r + 2;
   const widths = o.cols.map((c, i) => { let m = c.header.length; for (const v of o.rows) { const l = String(v[i] ?? "").length; if (l > m) m = l; } return Math.min(48, Math.max(10, m + 3)); });
   if (logo) widths[0] = Math.max(widths[0], 16);
-  const hf = (s: string) => esc(s.replace(/&/g, "&&")); // text only: codes such as &L &R &P are added around it
+  const hf = (s: string) => esc(s.slice(0, 80).replace(/&/g, "&&")); // text only: codes such as &L &R &P are added around it
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${last}${lastRow}"/>
-<sheetViews><sheetView showGridLines="0" workbookViewId="0" zoomScale="100"><pane ySplit="${headRow}" topLeftCell="A${headRow + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${headRow + 1}" sqref="A${headRow + 1}"/></sheetView></sheetViews>
+<sheetViews><sheetView showGridLines="0" workbookViewId="0" zoomScale="100"><selection activeCell="A1" sqref="A1"/></sheetView></sheetViews>
 <sheetFormatPr defaultRowHeight="18"/><cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>
 <sheetData>${rowsXml.join("")}</sheetData>${o.rows.length ? `<autoFilter ref="A${headRow}:${last}${lastData}"/>` : ""}<mergeCells count="${merges.length}">${merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>
 <pageMargins left="0.5" right="0.5" top="0.8" bottom="0.8" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
-<headerFooter><oddHeader>&amp;L&amp;B&amp;16${hf(meta.brand)}&amp;R&amp;11${hf(o.title)}</oddHeader><oddFooter>&amp;L&amp;9${hf(meta.contacts.join("  |  "))}&amp;C&amp;9${hf(COPYRIGHT(meta.year))}&amp;R&amp;9Page &amp;P of &amp;N</oddFooter></headerFooter>${logo ? `<drawing r:id="rId1"/>` : ""}</worksheet>`;
+<headerFooter><oddHeader>&amp;L&amp;B&amp;16${hf(meta.brand)}&amp;R&amp;11${hf(o.title)}</oddHeader><oddFooter>&amp;L&amp;9${hf(meta.contacts.join("  |  "))}&amp;C&amp;9${hf(COPYRIGHT(meta.year))}&amp;R&amp;9Page &amp;P of &amp;N</oddFooter></headerFooter><ignoredErrors><ignoredError sqref="A1:${last}${lastRow}" numberStoredAsText="1" formula="1" formulaRange="1" emptyCellReference="1"/></ignoredErrors>${logo ? `<drawing r:id="rId1"/>` : ""}</worksheet>`;
   const px = 9525, size = 70 * px, pic = (id: number, row0: number) => `<xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>${6 * px}</xdr:colOff><xdr:row>${row0}</xdr:row><xdr:rowOff>${4 * px}</xdr:rowOff></xdr:from><xdr:ext cx="${size}" cy="${size}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="Cloudy Toys logo ${id - 1}" descr="Cloudy Toys logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${size}" cy="${size}"/></a:xfrm><a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
   const drawing = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${pic(2, 0)}${pic(3, fStart - 1)}</xdr:wsDr>`;
   const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', RELS = "http://schemas.openxmlformats.org/package/2006/relationships", OD = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";

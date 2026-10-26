@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
-import { isAdminEmail } from "@shared/admin";
 import { fetchRole } from "@/lib/auth";
 /** Email + password sign-in (works without enabling Google in Supabase). `allowSignUp` is off for the admin page. */
 const friendly = (m: string) => /invalid login/i.test(m) ? "Wrong email or password." : /not confirmed/i.test(m) ? "Please confirm your email first (check your inbox), then sign in." : /already registered/i.test(m) ? "This email already has an account. Please sign in." : /password/i.test(m) && /least|short|weak/i.test(m) ? "Password is too short. Use at least 6 characters." : m;
@@ -26,7 +25,7 @@ export default function EmailLogin({ next = "/account", allowSignUp = true }: { 
       const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) return setErr(friendly(error.message));
       const u = data.user;
-      if (wantsAdmin && !isAdminEmail(u.email, !!u.email_confirmed_at) && !(await fetchRole())) { await supabase.auth.signOut(); return setErr("That account is not the admin account."); }
+      if (wantsAdmin && !(await fetchRole())) { await supabase.auth.signOut(); return setErr("That account is not the admin account."); }
       navigate(next, { replace: true });
     } catch { setErr("Something went wrong. Please try again."); } finally { setBusy(false); }
   }
