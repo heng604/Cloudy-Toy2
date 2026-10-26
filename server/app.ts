@@ -234,17 +234,20 @@ api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
   if (o.paymentStatus === "PAID") return res.json({ paid: true });
   if (o.paymentStatus !== "PENDING") return res.json({ paid: false, closed: true, status: o.paymentStatus });
   await expireStaleBakong();
-  if (watcherSecret()) { // watcher mode: tell the page whether the shop-PC watcher is alive
-    const seen = await watcherSeenAt(), online = !!seen && Date.now() - seen < 40_000;
-    return res.json({ paid: false, problem: false, watcher: online ? "online" : "offline", ...(req.query.debug === "1" ? { debug: [online ? "watcher online: it will confirm your payment within a few seconds" : `watcher OFFLINE (last seen ${seen ? Math.round((Date.now() - seen) / 1000) + " s ago" : "never"}): start start-bakong-watcher.bat on the shop PC and check BAKONG_WATCHER_SECRET matches in Vercel and .env.local`] } : {}) });
+  // Hybrid: this server asks Bakong directly first. If Bakong refuses it (blocked outside Cambodia), the watcher program running in Cambodia confirms instead.
+  const watcherOn = !!watcherSecret(); const skipDirect = watcherOn && Date.now() - directDownAt < 60_000; // direct path known to be down: do not make every poll wait for it
+  const md5s = [...(o.bakongMd5s ?? [])].reverse(); let hash: string | undefined; let problem = false; let directErr = false;
+  const results = skipDirect ? [] : await Promise.all(md5s.map((md5) => checkPaid(md5, payNowCents(o)).then((r) => ({ md5, r })))); // all QR codes of this order at once = fastest answer
+  for (const { md5, r } of results) { if (r.ok) { hash = hash ?? r.hash ?? md5; } else if (r.reason === "ERROR") { problem = true; directErr = true; } else if (r.reason === "MISMATCH") { problem = true; console.error("[bakong check]", n, r.reason, r.detail); } }
+  if (directErr && !hash) { directDownAt = Date.now(); if (!watcherOn) console.error("[bakong check]", n, "ERROR", results.map(({ r }) => (r.ok ? "" : r.detail)).find(Boolean)); }
+  if (hash) { await finalizeBakongPaid(n, hash); return res.json({ paid: true }); }
+  if (watcherOn) { // tell the page whether anything can confirm the payment right now
+    const seen = await watcherSeenAt(), online = !!seen && Date.now() - seen < 40_000, directDown = skipDirect || directErr;
+    return res.json({ paid: false, problem: false, watcher: online || !directDown ? "online" : "offline", ...(req.query.debug === "1" ? { debug: [directDown ? "direct check from the website: BLOCKED (normal outside Cambodia)" : "direct check from the website: working", online ? "watcher: online" : `watcher: OFFLINE (last seen ${seen ? Math.round((Date.now() - seen) / 1000) + " s ago" : "never"}); start start-bakong-watcher.bat on a computer in Cambodia, check BAKONG_WATCHER_SECRET is identical in Vercel and .env.local`, ...results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`))] } : {}) });
   }
-  const md5s = [...(o.bakongMd5s ?? [])].reverse(); let hash: string | undefined; let problem = false;
-  const results = await Promise.all(md5s.map((md5) => checkPaid(md5, payNowCents(o)).then((r) => ({ md5, r })))); // all QR codes of this order at once = fastest answer
-  for (const { md5, r } of results) { if (r.ok) { hash = hash ?? r.hash ?? md5; } else if (r.reason === "ERROR" || r.reason === "MISMATCH") { problem = true; console.error("[bakong check]", n, r.reason, r.detail); } }
-  if (!hash) return res.json({ paid: false, problem, ...(req.query.debug === "1" ? { debug: results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`)) } : {}) }); // ?debug=1 on the payment page shows what Bakong answered
-  await finalizeBakongPaid(n, hash);
-  res.json({ paid: true });
+  res.json({ paid: false, problem, ...(req.query.debug === "1" ? { debug: results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`)) } : {}) }); // ?debug=1 on the payment page shows what Bakong answered
 }));
+let directDownAt = 0;
 /** Shop-PC watcher (runs in Cambodia, where Bakong answers). Protected by BAKONG_WATCHER_SECRET. */
 const watcherOk = (req: Request) => { const s = watcherSecret(), got = String(req.headers["x-relay-secret"] ?? ""); return s.length >= 12 && got.length === s.length && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(s)); };
 api.get("/relay/pending", wrap(async (req, res) => {
@@ -516,8 +519,13 @@ admin.post("/settings", wrap(async (req, res) => {
 }));
 /** Admin: checks Bakong settings + connection so the owner can see why automatic payment confirmation fails. */
 admin.get("/bakong/diagnose", wrap(async (_req, res) => {
-  const d = await bakongDiagnose();
-  if (watcherSecret()) { const seen = await watcherSeenAt(), ago = seen ? Math.round((Date.now() - seen) / 1000) : null, on = ago !== null && ago < 120; d.steps.push({ label: "Shop-PC watcher", ok: on, detail: on ? `running (last contact ${ago} s ago)` : `NOT running${ago === null ? " (never contacted this site)" : ` (last contact ${Math.round(ago / 60)} min ago)`}. Double-click start-bakong-watcher.bat on the shop PC and keep it open; BAKONG_WATCHER_SECRET must be identical in Vercel and .env.local, and BAKONG_SITE_URL must be this site's address.` }); d.ok = d.steps.every((x) => x.ok); }
+  const d = await bakongDiagnose(); const directOk = d.ok;
+  if (watcherSecret()) {
+    for (const x of d.steps) if (x.label === "Reach Bakong API") x.label = "Direct check from the website";
+    const seen = await watcherSeenAt(), ago = seen ? Math.round((Date.now() - seen) / 1000) : null, on = ago !== null && ago < 120;
+    d.steps.push({ label: "Shop-PC watcher", ok: on, detail: on ? `running (last contact ${ago} s ago)` : `NOT running${ago === null ? " (never contacted this site)" : ` (last contact ${Math.round(ago / 60)} min ago)`}. ${directOk ? "Not needed while the direct check works." : "Needed because Bakong blocks the website: run start-bakong-watcher.bat on a computer in Cambodia that stays on 24/7."}` });
+    d.ok = directOk || on;
+  }
   res.json(d);
 }));
 /** Admin sets each payment option to on / paused / coming soon (at least one must stay on). */

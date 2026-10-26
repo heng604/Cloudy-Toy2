@@ -49,11 +49,9 @@ export async function checkPaid(md5: string, totalCents: number): Promise<PaidCh
 /** Admin connection test: tells the shop owner exactly why automatic confirmation does (not) work. Never returns the token. */
 export async function bakongDiagnose(): Promise<{ ok: boolean; steps: { label: string; ok: boolean; detail: string }[] }> {
   const c = cfg(); const steps: { label: string; ok: boolean; detail: string }[] = [];
-  if (watcherSecret()) steps.push({ label: "Watcher mode", ok: true, detail: "ON: payments are confirmed by the shop-PC watcher (start-bakong-watcher.bat). It must be running on a computer in Cambodia." });
   steps.push({ label: "BAKONG_ACCOUNT_ID", ok: !!c.account, detail: c.account ? `set (${c.account})` : "missing: add it in Vercel → Settings → Environment Variables, then redeploy" });
   steps.push({ label: "BAKONG_API_TOKEN", ok: !!c.token, detail: c.token ? "set" : "missing: get one at https://api-bakong.nbc.gov.kh/register, add it in Vercel, then redeploy" });
   if (!c.account || !c.token) return { ok: false, steps };
-  if (watcherSecret()) return { ok: steps.every((x) => x.ok), steps }; // the website does not call Bakong itself in watcher mode
   try {
     const res = await callCheck("0".repeat(32), 8000);
     const text = await res.text(); let j: { responseCode?: number; responseMessage?: string } | null = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
