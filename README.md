@@ -49,3 +49,8 @@ Bakong only answers Cambodian IP addresses, so a site on Vercel cannot confirm p
 ## Stock rules
 - A Bakong order holds its stock while the customer pays. Each order gets up to 3 QR codes of 5 minutes each = 15 minutes in total (a new one is made automatically when one expires). When the 3rd runs out, or the customer presses **Cancel order**, or nobody opens the payment page for 5 minutes after the last QR expired, the order is cancelled and the stock goes back to the shop (once only; a paid order is never touched).
 - A sold-out product shows only the "Out of stock" label. After 2 days out of stock it disappears from the Home and Product pages (it stays in the admin dashboard and database); when the admin adds stock it shows again with all its data. Only the admin can delete a product.
+
+## Customer accounts
+- Customers can create an account with email + password (name, phone, password twice). It is stored in Supabase Auth (`auth.users`) and a row is created automatically in `public.profiles` (run `supabase/setup_all.sql` once). They sign in with the same email and password next time. Google sign-in is optional: set `VITE_GOOGLE_LOGIN=false` to hide it.
+- For instant sign-in after sign-up, turn OFF Supabase > Authentication > Providers > Email > "Confirm email". If it stays ON, new customers must click the link in their email first.
+- "Sign in again" rule: set `VITE_SESSION_HOURS` (e.g. 24 or 168). After that many hours since sign-in the customer is signed out and must sign in again. Empty/0 = stay signed in.
