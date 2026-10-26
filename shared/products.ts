@@ -7,11 +7,6 @@ export const LABEL_CLASS: Record<ProductLabel, string> = { new_arrival: "bg-[#DD
 /** Short text on the card: "New", "Restock", "Limited Edition", "Pre-Order". */
 export const LABEL_SHORT: Record<ProductLabel, { en: string; km: string }> = { new_arrival: { en: "New", km: "មកថ្មី" }, restock: { en: "Restock", km: "ចូលស្តុកឡើងវិញ" }, limited_edition: { en: "Limited Edition", km: "ចំនួនកំណត់" }, preorder: { en: "Pre-Order", km: "កម្មង់មុន" }, best_seller: { en: "Best Seller", km: "លក់ដាច់បំផុត" } };
 export const LABEL_IDS: string[] = LABELS.map((l) => l.id);
-/** "New Arrival" is automatic: a product with no other type is a New Arrival, and choosing any other type (Restock, Limited Edition, Pre-Order, Best Seller) replaces it, so the product shows under that type instead. */
-export function normalizeLabels(labels: readonly ProductLabel[] | null | undefined): ProductLabel[] {
-  const others = (labels ?? []).filter((l) => l !== "new_arrival");
-  return others.length ? others : ["new_arrival"];
-}
 export const isPreorder = (p: { labels?: readonly string[] }) => !!p.labels?.includes("preorder");
 /** Each pre-order product has its OWN window: it opens on preorderStart and its deadline is preorderEnd (both YYYY-MM-DD, deadline day included). Both empty = no dates, always open. */
 const isoDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
@@ -54,4 +49,4 @@ export function slugify(s: string) { return s.toLowerCase().normalize("NFKD").re
 /** Row shape of public.products and its mapping to Product (used by both the browser and the server). */
 export type ProductRow = { id: string; slug: string; name: string; sku: string; price: number | string; sale_price: number | string | null; stock: number; created_at: string; category: string | null; description: string | null; images: { src: string; alt: string }[] | null; active: boolean; out_of_stock_at?: string | null; name_km?: string | null; brand?: string | null; uom?: string | null; variants?: string | null; labels?: string[] | null; preorder_start?: string | null; preorder_end?: string | null };
 export const toProduct = (r: ProductRow): Product => ({ id: r.id, slug: r.slug, name: r.name, sku: r.sku, price: Number(r.price), stock: r.stock, category: r.category ?? "", createdAt: r.created_at, description: r.description ?? "", images: r.images ?? [], active: r.active, ...(r.out_of_stock_at ? { outOfStockAt: r.out_of_stock_at } : {}), ...(r.preorder_start && r.preorder_end ? { preorderStart: String(r.preorder_start).slice(0, 10), preorderEnd: String(r.preorder_end).slice(0, 10) } : {}),
-  ...(r.name_km ? { nameKm: r.name_km } : {}), ...(r.brand ? { brand: r.brand } : {}), ...(r.uom ? { uom: r.uom } : {}), ...(r.variants ? { variants: r.variants } : {}), labels: normalizeLabels((r.labels ?? []).filter((l) => LABEL_IDS.includes(l)) as ProductLabel[]) });
+  ...(r.name_km ? { nameKm: r.name_km } : {}), ...(r.brand ? { brand: r.brand } : {}), ...(r.uom ? { uom: r.uom } : {}), ...(r.variants ? { variants: r.variants } : {}), ...(r.labels?.length ? { labels: r.labels.filter((l) => LABEL_IDS.includes(l)) as ProductLabel[] } : {}) });
