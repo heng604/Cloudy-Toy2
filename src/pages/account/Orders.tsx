@@ -7,14 +7,14 @@ import { useTitle } from "@/lib/title";
 import type { StoredOrder } from "@shared/types";
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-type Filter = "ALL" | "PAID" | "PENDING";
-const FILTERS: { id: Filter; label: string }[] = [{ id: "ALL", label: "All" }, { id: "PAID", label: "Paid" }, { id: "PENDING", label: "Payment pending" }];
+type Filter = "ALL" | "PAID" | "COD";
+const FILTERS: { id: Filter; label: string }[] = [{ id: "ALL", label: "All" }, { id: "PAID", label: "Paid" }, { id: "COD", label: "Pay with delivery" }];
 function List({ email }: { email: string }) {
   const [filter, setFilter] = useState<Filter>("ALL");
   const { data, loading, error, refresh } = useResource<{ orders: StoredOrder[] }>(`account:orders:${email}`, () => apiJson("/account/orders"));
   if (error && (error as Error & { status?: number }).status === 401 && !data) return <Navigate to="/login?next=%2Faccount%2Forders" replace />; // session expired
   const orders = data?.orders ?? [];
-  const shown = orders.filter((o) => filter === "ALL" || (filter === "PAID" ? o.paymentStatus === "PAID" : o.paymentStatus !== "PAID"));
+  const shown = orders.filter((o) => filter === "ALL" || (filter === "PAID" ? o.paymentStatus === "PAID" : o.method === "COD" && o.paymentStatus !== "PAID"));
   const spent = orders.filter((o) => o.paymentStatus === "PAID").reduce((s, o) => s + o.totalCents, 0);
   return (<div className="max-w-xl space-y-4"><Link to="/account" className="text-sm font-semibold underline">← My account</Link>
     <h1 className="text-2xl font-extrabold sm:text-3xl">Order history</h1>
@@ -28,14 +28,14 @@ function List({ email }: { email: string }) {
         {shown.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-6 text-sm">No orders match this filter.</p>
         : <ul className="space-y-3">{shown.map((o) => <li key={o.orderNumber} className="space-y-2 rounded-xl2 border border-sky-border bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-extrabold">{o.orderNumber}</p><p className="text-xs text-mute">{when(o.createdAt)}</p></div>
-            <span className={`rounded-full px-3 py-1 text-xs font-bold ${o.paymentStatus === "PAID" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{o.paymentStatus === "PAID" ? "Paid" : "Payment pending"}</span></div>
+            <span className={`rounded-full px-3 py-1 text-xs font-bold ${o.paymentStatus === "PAID" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{o.paymentStatus === "PAID" ? (o.method === "BAKONG" ? "Paid with Bakong" : o.method === "COD" ? "Paid on delivery" : "Paid") : "Pay with delivery"}</span></div>
           <ul className="text-sm">{o.items.map((i, n) => <li key={`${i.productId}-${n}`} className="flex justify-between gap-2"><span>{i.name} × {i.qty}</span><span>{usd(i.lineCents)}</span></li>)}</ul>
           <div className="space-y-0.5 border-t border-sky-border pt-2 text-sm">
             <p className="flex justify-between text-mute"><span>Subtotal</span><span>{usd(o.subtotalCents)}</span></p>
             {o.discountCents > 0 && <p className="flex justify-between text-green-700"><span>Discount{o.discountCode ? ` (${o.discountCode})` : ""}</span><span>−{usd(o.discountCents)}</span></p>}
             <p className="flex justify-between text-mute"><span>Delivery</span><span>{usd(o.shippingCents)}</span></p>
             <p className="flex justify-between font-extrabold"><span>Total</span><span>{usd(o.totalCents)}</span></p></div>
-          <Link to={`/payment/${o.orderNumber}`} className="inline-block text-sm font-semibold underline">{o.paymentStatus === "PAID" ? "View order" : "View order / pay"}</Link></li>)}</ul>}
+          <Link to={`/payment/${o.orderNumber}`} className="inline-block text-sm font-semibold underline">{o.paymentStatus === "PAID" ? "View order" : "View order"}</Link></li>)}</ul>}
       </>}</div>);
 }
 export default function AccountOrders() { useTitle("Order history"); return <RequireUser>{(u) => <List email={u.email ?? u.id} />}</RequireUser>; }

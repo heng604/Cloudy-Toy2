@@ -305,7 +305,7 @@ api.post("/payment/proof", upload.any(), wrap(async (req, res) => {
 }));
 
 /* ---------------- signed-in customer ---------------- */
-api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = userOf(req); res.json({ orders: u.email ? await listOrdersByEmail(u.email) : [] }); }));
+api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = userOf(req); res.json({ orders: u.email ? (await listOrdersByEmail(u.email)).filter((o) => o.paymentStatus === "PAID" || o.method === "COD") : [] }); })); // order history shows only paid orders (Bakong or any method) and pay-with-delivery orders; unpaid ones are hidden
 
 /** Which admin role (owner / admin / editor) this signed-in account has, or null. The browser uses it to show the admin area. */
 api.get("/staff/me", requireUser, wrap(async (req, res) => { const u = userOf(req); res.json({ role: await roleFor(u.email, !!u.email_confirmed_at) }); }));
