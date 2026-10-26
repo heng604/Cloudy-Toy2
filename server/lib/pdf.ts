@@ -15,37 +15,13 @@ const R = (x: number, y: number, w: number, h: number, fill: string) => `${fill}
 const L = (x1: number, y: number, x2: number, color: string, w = 0.6) => `${color} RG ${w} w ${x1} ${y} m ${x2} ${y} l S\n`;
 /** Logo (or a "CT" badge when there is no logo file) drawn size x size at x,y. */
 const mark = (x: number, y: number, size: number, hasLogo: boolean) => hasLogo ? `q ${size} 0 0 ${size} ${x} ${y} cm /Im1 Do Q\n` : R(x, y, size, size, SKY) + T(x + size / 2 - tw("CT", size * 0.42, true) / 2, y + size * 0.3, "CT", size * 0.42, "F2", BLUE);
-export function buildPdf(o: { title: string; cols: PdfCol[]; rows: string[][]; meta?: Partial<ReportMeta> }): Buffer {
-  const meta: ReportMeta = {
-    brand: o.meta?.brand ?? "Cloudy Toys",
-    tagline: o.meta?.tagline ?? "",
-    contacts: o.meta?.contacts ?? [],
-    logo: o.meta?.logo ?? null,
-    generated: o.meta?.generated ?? new Date().toISOString().slice(0, 10),
-    year: o.meta?.year ?? new Date().getFullYear(),
-    intro: o.meta?.intro,
-    summary: o.meta?.summary,
-  };
-  const logo = meta.logo ?? null;
-  const usable = W - 2 * M, totalChars = o.cols.reduce((s, c) => s + c.chars, 0) || 1;
+export function buildPdf(o: { title: string; cols: PdfCol[]; rows: string[][]; meta: ReportMeta }): Buffer {
+  const { meta } = o, logo = meta.logo, usable = W - 2 * M, totalChars = o.cols.reduce((s, c) => s + c.chars, 0);
   const xs: number[] = []; const ws = o.cols.map((c) => (c.chars / totalChars) * usable); ws.reduce((x, w) => (xs.push(x), x + w), M);
   const hasSummary = !!(meta.intro || meta.summary?.length), firstTop = hasSummary ? H - HEAD_H - 92 : H - HEAD_H - 16, nextTop = H - HEAD_H - 16;
   const cap = (top: number) => Math.max(1, Math.floor((top - TH - FOOT_H - 6) / ROW));
-  const targetPages = o.rows.length === 0 ? 1 : Math.max(3, Math.ceil(o.rows.length / 35));
   const pages: string[][][] = []; let at = 0;
-  while (at < o.rows.length) {
-    const remaining = o.rows.length - at;
-    const n = Math.max(1, Math.ceil(remaining / (targetPages - pages.length || 1)));
-    pages.push(o.rows.slice(at, at + n));
-    at += n;
-  }
-  if (pages.length === 0) pages.push([]);
-  if (pages.length > 1 && pages.length > targetPages) {
-    for (let i = 0; i < pages.length - targetPages; i++) {
-      const last = pages.pop();
-      if (last) pages[pages.length - 1].push(...last);
-    }
-  }
+  do { const n = cap(pages.length === 0 ? firstTop : nextTop); pages.push(o.rows.slice(at, at + n)); at += n; } while (at < o.rows.length);
   const bufs: Buffer[] = []; const add = (b: string | Buffer) => { bufs.push(typeof b === "string" ? Buffer.from(b, "latin1") : b); return bufs.length; };
   add("<< /Type /Catalog /Pages 2 0 R >>"); add("PAGES");
   add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
