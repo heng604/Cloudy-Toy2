@@ -1,5 +1,7 @@
 // Products in Supabase (table public.products) + images in Supabase Storage (bucket "product-images").
 // Permanent: products only disappear when an admin deletes them. No automatic re-seeding.
+import { mkdir, writeFile, unlink } from "node:fs/promises";
+import { join } from "node:path";
 import { db, must } from "./db";
 import { toProduct, slugify, type Product, type ProductRow } from "../../shared/products";
 export { stockStatus, LOW_STOCK, categoriesOf } from "../../shared/products";
@@ -43,12 +45,19 @@ export async function decrementStock(items: { productId: string; qty: number }[]
 export async function restoreStock(items: { productId: string; qty: number }[]) { must(await db().rpc("restore_stock", { items })); }
 
 /** Upload a validated image; returns its permanent public URL. */
+/** Every uploaded image is kept in two places: Supabase Storage (the database copy, always) and a copy in public/img/uploads (only where the server can write files, e.g. your own PC / server; Vercel's disk is read-only, so there the copy is skipped). */
+const LOCAL_DIR = join(process.cwd(), "public", "img", "uploads");
+const safeName = (n: string) => /^[a-z0-9-]+\.(jpg|png|webp)$/.test(n);
 export async function uploadProductImage(name: string, bytes: Uint8Array, mime: string) {
   const s = db().storage.from(BUCKET); const r = await s.upload(name, bytes, { contentType: mime, upsert: false, cacheControl: "31536000" });
   if (r.error) throw new Error(r.error.message);
+  if (safeName(name)) { try { await mkdir(LOCAL_DIR, { recursive: true }); await writeFile(join(LOCAL_DIR, name), bytes); } catch { /* read-only disk: the database copy is enough */ } }
   return s.getPublicUrl(name).data.publicUrl;
 }
+/** Deleting an image removes it from the database (Supabase Storage) and from public/img/uploads. */
 export async function deleteProductImages(srcs: string[]) {
-  const names = srcs.map((s) => s.split("/").pop() ?? "").filter((n) => /^[a-z0-9-]+\.(jpg|png|webp)$/.test(n));
-  if (names.length) await db().storage.from(BUCKET).remove(names).catch(() => undefined);
+  const names = srcs.map((s) => s.split("/").pop() ?? "").filter(safeName);
+  if (!names.length) return;
+  await db().storage.from(BUCKET).remove(names).catch(() => undefined);
+  await Promise.all(names.map((n) => unlink(join(LOCAL_DIR, n)).catch(() => undefined)));
 }
