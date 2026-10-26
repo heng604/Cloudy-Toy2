@@ -29,5 +29,5 @@ export default function Payment() {
     {o.paymentStatus === "PENDING" && o.method === "COD" && <p className="rounded-xl2 bg-sky-pale p-5">Please prepare <b>{usd(o.totalCents)}</b> in cash for the delivery driver.</p>}
     {(o.paymentStatus === "PENDING" || justPaid) && o.method === "BAKONG" && <BakongPay orderNumber={o.orderNumber} total={usd(payNowCents(o))} onPaid={() => setJustPaid(true)} />}
     {o.paymentStatus === "PENDING" && o.method === "QR_IMAGE" && <PayQr orderNumber={o.orderNumber} total={usd(payNowCents(o))} telegram={s.telegramUrl} facebook={s.facebookUrl} />}
-    <p className="text-xs text-mute">Admin email: {o.email.status === "SENT" ? "sent" : o.email.status === "SKIPPED" ? `not sent (${o.email.detail})` : o.email.status === "FAILED" ? `failed (${o.email.detail})` : o.method === "BAKONG" ? "will be sent as soon as your payment is confirmed" : o.method === "QR_IMAGE" ? "will be sent when you press “I have paid”" : "pending"}</p></div>);
+    <p className="text-xs text-mute">Admin email: {o.email.status === "SENT" ? "sent" : o.email.status === "SKIPPED" ? `not sent` : o.email.status === "FAILED" ? `failed` : o.method === "BAKONG" ? "will be sent as soon as your payment is confirmed" : o.method === "QR_IMAGE" ? "will be sent when you press “I have paid”" : "pending"}</p></div>);
 }

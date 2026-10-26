@@ -40,6 +40,7 @@ import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
 import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } from "../shared/products";
 
 import type { StoredOrder } from "../shared/types";
+import { publicOrder } from "./lib/publicOrder";
 /** "Meet your toys" e-mail with a photo of every product in the order. Never throws: the order must not fail because of an e-mail. */
 async function sendItemsMail(order: StoredOrder) {
   try { const images = await firstImagesById(order.items.map((i) => i.productId)); // one small query instead of loading the whole catalogue
@@ -54,12 +55,12 @@ const CSP = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsaf
   "img-src 'self' data: blob: https://*.supabase.co", "connect-src 'self' https://*.supabase.co wss://*.supabase.co", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"].join("; ");
 app.use((_req, res, next) => {
   res.set({ "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()", "Strict-Transport-Security": "max-age=31536000; includeSubDomains", "Cross-Origin-Opener-Policy": "same-origin" });
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()", "Strict-Transport-Security": "max-age=31536000; includeSubDomains", "Cross-Origin-Opener-Policy": "same-origin", "X-Permitted-Cross-Domain-Policies": "none", "X-DNS-Prefetch-Control": "off" });
   next();
 });
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 12 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 12, fields: 40, parts: 60, fieldSize: 64 * 1024, headerPairs: 100 } }); // hard caps on every multipart upload (memory / DoS protection)
 const api = express.Router();
 api.use((_req, res, next) => { res.set("Cache-Control", "private, no-cache"); next(); }); // API answers are per-user: browsers may keep them but must revalidate (ETag -> cheap 304), shared caches must not store them
 api.use((req, res, next) => { // overall brake per visitor: stops scripted flooding / scanning of the API
@@ -174,7 +175,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
 api.get("/orders/:n", wrap(async (req, res) => {
   if (!/^CT-[0-9]{6}-[A-Z0-9]{5}$/.test(String(req.params.n))) return res.status(404).json({ error: "Not found" }); // wrong format: never hits the database
   if (tooMany(`o:${clientKey(req)}`, 30)) return res.status(429).json({ error: "Too many tries. Please wait a minute." }); // blocks order-number guessing
-  const o = await getOrder(String(req.params.n)); return o ? res.json({ order: o }) : res.status(404).json({ error: "Not found" }); }));
+  const o = await getOrder(String(req.params.n)); return o ? res.json({ order: publicOrder(o) }) : res.status(404).json({ error: "Not found" }); })); // no personal data for anonymous callers
 
 /* ---------------- Bakong KHQR ---------------- */
 const ORDER_RE = /^CT-[0-9]{6}-[A-Z0-9]{5}$/;
@@ -324,7 +325,7 @@ api.get("/staff/me", requireUser, wrap(async (req, res) => { const u = userOf(re
 const admin = express.Router(); admin.use(requireAdmin); api.use("/admin", admin);
 admin.get("/me", (req, res) => { const u = adminOf(req); const m = (u.user_metadata ?? {}) as { full_name?: string; name?: string }; res.json({ email: u.email, role: roleOf(req), name: m.full_name || m.name || "" }); });
 // each area is limited by role (owner: all, admin: all but staff, editor: products + pages)
-admin.use(["/orders", "/transactions"], needs("orders")); admin.use("/pages", needs("pages")); admin.use(["/discounts", "/promotions"], needs("promotions")); admin.use("/settings", needs("settings")); admin.use("/staff", needs("staff"));
+admin.use(["/orders", "/transactions"], needs("orders")); admin.use("/pages", needs("pages")); admin.use(["/discounts", "/promotions"], needs("promotions")); admin.use(["/settings", "/bakong"], needs("settings")); admin.use("/staff", needs("staff"));
 admin.use(["/products", "/product-form-meta", "/categories"], needs("products"));
 admin.get("/dashboard", wrap(async (req, res) => { const [orders, products] = await Promise.all([can(roleOf(req), "orders") ? listAdminOrders() : Promise.resolve([] as Awaited<ReturnType<typeof listAllOrders>>), listAllProducts()]); res.json({ orders, products }); }));
 admin.get("/orders", wrap(async (req, res) => { const orders = await listAdminOrders(); res.json({ orders, proofs: req.query.proofs ? await proofUrls(orders.map((o) => o.paymentProof ?? "")) : {} }); }));
@@ -603,6 +604,14 @@ admin.post("/settings/qr", upload.any(), wrap(async (req, res) => {
 
 app.use("/api", api);
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));
+/** Last line of defence: bad JSON, oversized uploads and unexpected errors get a short JSON answer, never a stack trace. */
+app.use((err: unknown, _req: Request, res: Response, next: express.NextFunction) => {
+  if (res.headersSent) return next(err);
+  const e = err as { type?: string; code?: string; status?: number };
+  if (e?.type === "entity.too.large" || e?.code === "LIMIT_FILE_SIZE") return res.status(413).json({ error: "The file or request is too large." });
+  if (e?.type === "entity.parse.failed" || e?.code?.startsWith?.("LIMIT_")) return res.status(400).json({ error: "Bad request" });
+  console.error("[unhandled]", err); res.status(500).json({ error: "Server error" });
+});
 
 /* ---------------- production: serve the built React app ---------------- */
 const dist = path.resolve(process.cwd(), "dist");
