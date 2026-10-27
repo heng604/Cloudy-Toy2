@@ -54,3 +54,8 @@ Bakong only answers Cambodian IP addresses, so a site on Vercel cannot confirm p
 - Customers can create an account with email + password (name, phone, password twice). It is stored in Supabase Auth (`auth.users`) and a row is created automatically in `public.profiles` (run `supabase/setup_all.sql` once). They sign in with the same email and password next time. Google sign-in is optional: set `VITE_GOOGLE_LOGIN=false` to hide it.
 - For instant sign-in after sign-up, turn OFF Supabase > Authentication > Providers > Email > "Confirm email". If it stays ON, new customers must click the link in their email first.
 - "Sign in again" rule: set `VITE_SESSION_HOURS` (e.g. 24 or 168). After that many hours since sign-in the customer is signed out and must sign in again. Empty/0 = stay signed in.
+
+
+## Cloudflare R2 image storage (optional)
+Set the five `R2_*` variables from `.env.example` (locally in `.env.local`, on Vercel under Environment Variables, then redeploy). New product/logo/banner/QR images are then stored in R2 and served from `R2_PUBLIC_URL`; images uploaded earlier stay in Supabase and keep working. Payment screenshots always stay in the private Supabase bucket.
+If you use a custom domain for the bucket, also add it to `img-src` in `vercel.json` (the `https://*.r2.dev` entry only covers the free `r2.dev` address).

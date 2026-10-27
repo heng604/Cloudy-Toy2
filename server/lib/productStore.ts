@@ -4,6 +4,7 @@ import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { db, must } from "./db";
 import { cached, invalidate } from "./cache";
+import { r2Enabled, r2Put, r2Delete, r2PublicBase } from "./r2";
 import { toProduct, slugify, type Product, type ProductRow } from "../../shared/products";
 export { stockStatus, LOW_STOCK, categoriesOf } from "../../shared/products";
 const BUCKET = "product-images";
@@ -73,15 +74,24 @@ export async function restoreStock(items: { productId: string; qty: number }[]) 
 const LOCAL_DIR = join(process.cwd(), "public", "img", "uploads");
 const safeName = (n: string) => /^[a-z0-9-]+\.(jpg|png|webp)$/.test(n);
 export async function uploadProductImage(name: string, bytes: Uint8Array, mime: string) {
+  // Cloudflare R2 when configured (R2_* variables), otherwise Supabase Storage.
+  const url = r2Enabled() ? await r2Put(name, bytes, mime) : await uploadToSupabase(name, bytes, mime);
+  if (safeName(name)) { try { await mkdir(LOCAL_DIR, { recursive: true }); await writeFile(join(LOCAL_DIR, name), bytes); } catch { /* read-only disk: the stored copy is enough */ } }
+  return url;
+}
+async function uploadToSupabase(name: string, bytes: Uint8Array, mime: string) {
   const s = db().storage.from(BUCKET); const r = await s.upload(name, bytes, { contentType: mime, upsert: false, cacheControl: "31536000" });
   if (r.error) throw new Error(r.error.message);
-  if (safeName(name)) { try { await mkdir(LOCAL_DIR, { recursive: true }); await writeFile(join(LOCAL_DIR, name), bytes); } catch { /* read-only disk: the database copy is enough */ } }
   return s.getPublicUrl(name).data.publicUrl;
 }
-/** Deleting an image removes it from the database (Supabase Storage) and from public/img/uploads. */
+/** Deleting an image removes it from where it is stored (R2 or Supabase) and from public/img/uploads. */
 export async function deleteProductImages(srcs: string[]) {
-  const names = srcs.map((s) => s.split("/").pop() ?? "").filter(safeName);
-  if (!names.length) return;
-  await db().storage.from(BUCKET).remove(names).catch(() => undefined);
-  await Promise.all(names.map((n) => unlink(join(LOCAL_DIR, n)).catch(() => undefined)));
+  const base = r2Enabled() ? r2PublicBase() : "";
+  const onR2 = (src: string) => !!base && src.startsWith(base + "/"); // images saved before the switch still live in Supabase
+  const nameOf = (s: string) => s.split("/").pop() ?? "";
+  const r2Names = srcs.filter(onR2).map(nameOf).filter(safeName);
+  const sbNames = srcs.filter((s) => !onR2(s)).map(nameOf).filter(safeName);
+  if (r2Names.length) await r2Delete(r2Names).catch(() => undefined);
+  if (sbNames.length) await db().storage.from(BUCKET).remove(sbNames).catch(() => undefined);
+  await Promise.all([...r2Names, ...sbNames].map((n) => unlink(join(LOCAL_DIR, n)).catch(() => undefined)));
 }

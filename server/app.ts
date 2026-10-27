@@ -51,8 +51,9 @@ const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 /** Security headers on every response (clickjacking, MIME sniffing, XSS, HTTPS downgrade, leaky referrers). */
+const R2_ORIGIN = (() => { try { return process.env.R2_PUBLIC_URL ? new URL(process.env.R2_PUBLIC_URL).origin : ""; } catch { return ""; } })(); // Cloudflare R2 image address (only if configured)
 const CSP = ["default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' https://fonts.gstatic.com data:",
-  "img-src 'self' data: blob: https://*.supabase.co", "connect-src 'self' https://*.supabase.co wss://*.supabase.co", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"].join("; ");
+  `img-src 'self' data: blob: https://*.supabase.co https://*.r2.dev ${R2_ORIGIN}`.trim(), "connect-src 'self' https://*.supabase.co wss://*.supabase.co", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"].join("; ");
 app.use((_req, res, next) => {
   res.set({ "Content-Security-Policy": CSP, "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()", "Strict-Transport-Security": "max-age=31536000; includeSubDomains", "Cross-Origin-Opener-Policy": "same-origin", "X-Permitted-Cross-Domain-Policies": "none", "X-DNS-Prefetch-Control": "off" });
