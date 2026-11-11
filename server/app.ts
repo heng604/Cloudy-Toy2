@@ -33,6 +33,7 @@ import { computeTotals, type PricedProduct } from "../shared/pricing";
 import { methodAllowed, shippingFor } from "../shared/delivery";
 import { normalizeCode, CODE_RE, percentOk } from "../shared/discount";
 import { validateImage, safeFileName } from "../shared/images";
+import { r2Enabled, r2Get } from "./lib/r2";
 import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, MAX_CAMPAIGNS } from "../shared/promotions";
@@ -67,6 +68,13 @@ api.use((_req, res, next) => { res.set("Cache-Control", "private, no-cache"); ne
 api.use((req, res, next) => { // overall brake per visitor: stops scripted flooding / scanning of the API
   if (tooMany(`all:${clientKey(req)}`, 300)) return res.status(429).json({ error: "Too many requests. Please wait a minute." });
   next(); });
+/** Public product/logo/banner images stored in Cloudflare R2, served from our own address. */
+api.get("/img/:name", async (req, res) => {
+  const name = String(req.params.name);
+  if (!r2Enabled() || !/^[a-z0-9-]+\.(jpg|png|webp)$/.test(name)) return res.status(404).end();
+  try { const { bytes, mime } = await r2Get(name); res.set({ "Content-Type": mime, "Cache-Control": "public, max-age=31536000, immutable" }).end(Buffer.from(bytes)); }
+  catch { res.status(404).end(); }
+});
 api.get("/health", (_req, res) => res.json({ ok: true, db: !!(process.env.SUPABASE_SERVICE_ROLE_KEY && (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) }));
 /** Plain-language hint for the most common setup problems (shown to the admin only). */
 const hint = (m: string) => /relation .* does not exist|could not find the table|schema cache|column .* does not exist|function .* does not exist|Could not find the function/i.test(m) ? "Database tables are missing or out of date. Open Supabase > SQL Editor, paste supabase/setup_all.sql and click Run (it is safe to run again), then reload."

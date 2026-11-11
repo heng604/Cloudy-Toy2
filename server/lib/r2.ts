@@ -27,7 +27,7 @@ export function sigV4Authorization(o: { method: string; path: string; query?: st
   return `AWS4-HMAC-SHA256 Credential=${o.accessKey}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 }
 
-async function call(method: "PUT" | "DELETE", name: string, body?: Uint8Array, extra: Record<string, string> = {}) {
+async function call(method: "PUT" | "DELETE" | "GET", name: string, body?: Uint8Array, extra: Record<string, string> = {}) {
   const c = cfg(), host = `${c.account}.r2.cloudflarestorage.com`, path = `/${c.bucket}/${name}`;
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, ""); // 20260101T000000Z
   const payloadHash = sha256hex(body ?? "");
@@ -38,6 +38,7 @@ async function call(method: "PUT" | "DELETE", name: string, body?: Uint8Array, e
   if (body) init.body = body;
   const res = await fetch(`https://${host}${path}`, init);
   if (!res.ok) throw new Error(`R2 ${method} failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  return res;
 }
 
 /** Upload one image; returns its public URL. `name` must already be a safe file name (letters, digits, dash, dot). */
@@ -47,3 +48,6 @@ export async function r2Put(name: string, bytes: Uint8Array, mime: string) {
 }
 /** Delete images by file name. Missing files are not an error (R2 answers 204). */
 export async function r2Delete(names: string[]) { await Promise.all(names.map((n) => call("DELETE", n))); }
+
+/** Read one image back from the private S3 endpoint (used by /api/img so the browser never needs a public bucket address). */
+export async function r2Get(name: string) { const res = await call("GET", name); return { bytes: new Uint8Array(await res.arrayBuffer()), mime: res.headers.get("content-type") || "image/webp" }; }

@@ -4,7 +4,7 @@ import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { db, must } from "./db";
 import { cached, invalidate } from "./cache";
-import { r2Enabled, r2Put, r2Delete, r2PublicBase } from "./r2";
+import { r2Enabled, r2Put, r2Delete } from "./r2";
 import { toProduct, slugify, type Product, type ProductRow } from "../../shared/products";
 export { stockStatus, LOW_STOCK, categoriesOf } from "../../shared/products";
 const BUCKET = "product-images";
@@ -75,7 +75,8 @@ const LOCAL_DIR = join(process.cwd(), "public", "img", "uploads");
 const safeName = (n: string) => /^[a-z0-9-]+\.(jpg|png|webp)$/.test(n);
 export async function uploadProductImage(name: string, bytes: Uint8Array, mime: string) {
   // Cloudflare R2 when configured (R2_* variables), otherwise Supabase Storage.
-  const url = r2Enabled() ? await r2Put(name, bytes, mime) : await uploadToSupabase(name, bytes, mime);
+  // R2 images are served through our own /api/img/<name> (same site: no public-bucket setting, no CORS/CSP problem).
+  const url = r2Enabled() ? (await r2Put(name, bytes, mime), `/api/img/${name}`) : await uploadToSupabase(name, bytes, mime);
   if (safeName(name)) { try { await mkdir(LOCAL_DIR, { recursive: true }); await writeFile(join(LOCAL_DIR, name), bytes); } catch { /* read-only disk: the stored copy is enough */ } }
   return url;
 }
@@ -86,8 +87,7 @@ async function uploadToSupabase(name: string, bytes: Uint8Array, mime: string) {
 }
 /** Deleting an image removes it from where it is stored (R2 or Supabase) and from public/img/uploads. */
 export async function deleteProductImages(srcs: string[]) {
-  const base = r2Enabled() ? r2PublicBase() : "";
-  const onR2 = (src: string) => !!base && src.startsWith(base + "/"); // images saved before the switch still live in Supabase
+  const onR2 = (src: string) => r2Enabled() && (src.startsWith("/api/img/") || /^https?:\/\/[^/]+\/[a-z0-9-]+\.(jpg|png|webp)$/.test(src) && !src.includes(".supabase.co")); // images saved before the switch still live in Supabase
   const nameOf = (s: string) => s.split("/").pop() ?? "";
   const r2Names = srcs.filter(onR2).map(nameOf).filter(safeName);
   const sbNames = srcs.filter((s) => !onR2(s)).map(nameOf).filter(safeName);
