@@ -27,7 +27,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
   const subtotal = items.reduce((s, x) => s + unit(x.p) * x.l.qty, 0);
   const saved = items.reduce((s, x) => s + (x.p.salePrice ? (x.p.price - x.p.salePrice) * x.l.qty : 0), 0);
   const count = items.reduce((s, x) => s + x.l.qty, 0);
-  const autos = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns), autoOff = autoTotal(autos) / 100;
+  const autos = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id })), promotions.campaigns), autoOff = autoTotal(autos) / 100;
   const hasPre = items.some((x) => x.p.preorder);
   const closedPre = (p: CartProduct) => !!p.preorder && preorderPhase(p) !== "open"; // each pre-order item has its own dates
   const blocked = items.some((x) => (x.p.stock ?? Infinity) <= 0 || x.l.qty > (x.p.stock ?? Infinity) || closedPre(x.p));

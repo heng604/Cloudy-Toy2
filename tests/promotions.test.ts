@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { autoDiscounts, autoTotal, checkCampaign, checkPreorder, normalizePromotions, preorderSplit, DEFAULT_PREORDER, type Campaign } from "../shared/promotions";
+import { autoDiscounts, autoTotal, checkCampaign, checkPreorder, normalizePromotions, preorderSplit, productPromo, campaignLive, DEFAULT_PREORDER, type Campaign } from "../shared/promotions";
 import { can, initialsOf } from "../shared/roles";
 import { payNowCents } from "../shared/orders";
 import { toProduct, nameFor, isPreorder } from "../shared/products";
@@ -50,4 +50,24 @@ describe("product fields", () => {
     const p = toProduct({ id: "1", slug: "s", name: "Bunny", sku: "K", price: "3", sale_price: null, stock: 2, created_at: "", category: "C", description: null, images: null, active: true, name_km: "ទន្សាយ", labels: ["preorder", "bogus"] });
     expect(p.labels).toEqual(["preorder"]); expect(isPreorder(p)).toBe(true); expect(nameFor(p, "km")).toBe("ទន្សាយ"); expect(nameFor(p, "en")).toBe("Bunny");
   });
+});
+
+describe("festival special offer (chosen products)", () => {
+  const fest: Campaign = { id: "f", name: "Khmer New Year", kind: "product_percent", minSpendCents: 0, amountCents: 0, percent: 20, category: "", productIds: ["p1"], message: "Happy New Year!", messageKm: "", startDate: "2026-04-10", endDate: "2026-04-20", active: true, createdAt: "" };
+  const day = (d: string) => new Date(`${d}T05:00:00Z`).getTime();
+  it("needs at least one product and valid dates", () => {
+    expect(checkCampaign({ name: "Festival", kind: "product_percent", percent: 20, productIds: [] }).ok).toBe(false);
+    expect(checkCampaign({ name: "Festival", kind: "product_percent", percent: 20, productIds: ["p1"], startDate: "2026-04-20", endDate: "2026-04-10" }).ok).toBe(false);
+    const c = checkCampaign({ name: "Festival", kind: "product_percent", percent: 20, productIds: ["p1", "p1", "p2"], message: " Hi " });
+    expect(c.ok && c.value).toMatchObject({ productIds: ["p1", "p2"], message: "Hi", percent: 20 });
+  });
+  it("is live only inside its dates", () => { expect(campaignLive(fest, day("2026-04-09"))).toBe(false); expect(campaignLive(fest, day("2026-04-15"))).toBe(true); expect(campaignLive(fest, day("2026-04-21"))).toBe(false); });
+  it("discounts only the chosen products", () => {
+    const now = day("2026-04-15");
+    expect(productPromo({ id: "p1", price: 10 }, [fest], now).finalCents).toBe(800);
+    expect(productPromo({ id: "p9", price: 10 }, [fest], now).offCents).toBe(0);
+    const d = autoDiscounts([{ category: "x", lineCents: 2000, productId: "p1" }, { category: "x", lineCents: 1000, productId: "p9" }], [fest], now);
+    expect(autoTotal(d)).toBe(400);
+  });
+  it("survives storage round-trip", () => { expect(normalizePromotions({ campaigns: [fest] }).campaigns[0]).toMatchObject({ productIds: ["p1"], message: "Happy New Year!", endDate: "2026-04-20" }); });
 });

@@ -30,7 +30,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const firstOn = (["BAKONG", "QR_IMAGE", "COD"] as Method[]).find((m) => avail[m]);
   const method: Method = pick && avail[pick] ? pick : firstOn ?? "QR_IMAGE"; // the customer's own choice wins while it is available; otherwise the first option that is on
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
-  const autos = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns), autoOff = autoTotal(autos) / 100;
+  const autos = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id })), promotions.campaigns), autoOff = autoTotal(autos) / 100;
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const ship = (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
   if (!items.length) return <p className="rounded-xl2 bg-sky-pale p-8 text-center">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;

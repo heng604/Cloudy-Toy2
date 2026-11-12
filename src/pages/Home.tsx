@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import BannerSlider from "@/components/BannerSlider";
 import Skeleton from "@/components/Skeleton";
-import { useListedProducts, useSettings } from "@/lib/store";
+import { useListedProducts, useSettings, usePromotions } from "@/lib/store";
+import { liveCampaigns, campaignMessage, campaignWhen } from "@shared/promotions";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 /** Light-blue dripping edge along the top of the hero. */
@@ -16,6 +17,7 @@ export default function Home() {
   useTitle(); const { t, lang } = useI18n();
   const { data: products } = useListedProducts(); const { settings: { banners } } = useSettings();
   const banner = Array.isArray(banners) ? banners : [];
+  const { promotions } = usePromotions(); const festival = liveCampaigns(promotions.campaigns).filter((c) => c.message || c.messageKm); // festival / event text the admin wrote
   // The big banner under the header is the picture(s) the admin uploads in Settings (it fades from one to the next). The full-width text hero only shows while no banner has been uploaded; both carry the \"Shopping with Cloudy Toys now!\" button.
   return (<>
     {banner.length > 0 ? <BannerSlider images={banner} first /> : <section className="relative left-1/2 -mt-5 mb-8 w-screen -translate-x-1/2 overflow-hidden bg-[#FFF8E6] px-5 pb-20 pt-16 sm:-mt-8 sm:px-10 lg:pb-24 lg:pt-20">
@@ -29,6 +31,7 @@ export default function Home() {
           <span aria-hidden="true" className="absolute right-2 top-0 text-3xl text-[#99C3E4]">♡</span><span aria-hidden="true" className="absolute left-0 top-6 text-2xl text-[#FFB8D1]">✦</span></div></div>
       <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-8" style={{ backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(STRIP)}")`, backgroundRepeat: "repeat-x", backgroundSize: "auto 32px" }} />
     </section>}
+    {festival.length > 0 && <Link to="/shop?sale=1" className="mt-8 block space-y-1 rounded-xl2 bg-[#FFE4EE] p-4 text-center hover:brightness-95">{festival.map((c) => <p key={c.id}><b>{c.name}</b>{campaignWhen(c) && <span className="text-sm text-mute"> · {campaignWhen(c)}</span>}<span className="block">{campaignMessage(c, lang)}</span></p>)}<span className="inline-block text-sm font-extrabold underline">{t("Special Offer")} →</span></Link>}
     {[{ id: "new_arrival", title: lang === "km" ? "មកថ្មី" : t("New Arrival"), empty: false }, { id: "best_seller", title: lang === "km" ? "លក់ដាច់បំផុត" : t("Best Sellers"), empty: true }].map((sec) => (
       <section key={sec.id} className="mt-12"><div className="mb-4 flex items-end justify-between gap-3"><h2 className="text-2xl font-extrabold">{sec.title}</h2><Link to={`/shop?type=${sec.id}`} className="font-semibold underline">{t("See all")}</Link></div>
         {!products ? <Skeleton /> : (() => { const list = products.filter((p) => p.labels?.includes(sec.id as "best_seller")); return list.length === 0

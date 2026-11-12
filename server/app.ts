@@ -126,7 +126,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const ship = shippingFor(area, settings); const promos = await getPromotions();
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
     // automatic campaigns first (stack, never more than the subtotal), then the typed code takes its % off what is left
-    const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents })), promos.campaigns);
+    const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns);
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
       const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true);
@@ -178,7 +178,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
   if (!CODE_RE.test(code)) return res.status(400).json({ error: "That discount code is not valid." });
   try {
     const [products, promos] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions()]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
-    const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents })), promos.campaigns);
+    const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns);
     const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }]);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }
@@ -509,12 +509,12 @@ admin.post("/discounts/update", wrap(async (req, res) => {
 admin.post("/discounts/delete", wrap(async (req, res) => { const code = normalizeCode(String(req.body?.code ?? "")); if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" }); await deleteStoreDiscount(code); res.json({ ok: true }); }));
 
 // promotions: pre-order rules + automatic discount campaigns (the typed-code discounts above keep working too)
-admin.get("/promotions", wrap(async (_req, res) => res.json({ promotions: await getPromotions(), categories: (await categoryList()).map((c) => c.name) })));
+admin.get("/promotions", wrap(async (_req, res) => res.json({ promotions: await getPromotions(), categories: (await categoryList()).map((c) => c.name), products: (await listAllProducts()).map((p) => ({ id: p.id, name: p.name, category: p.category, price: p.price, image: p.images?.[0]?.src ?? "" })) })));
 admin.post("/promotions/preorder", wrap(async (req, res) => {
   const c = checkPreorder({ depositPercent: req.body?.depositPercent, dispatchText: req.body?.dispatchText, capSlots: req.body?.capSlots }); if (!c.ok) return res.json({ error: c.error });
   await savePromotions({ ...(await getPromotions()), preorder: c.value }); res.json({ ok: true });
 }));
-const campaignFields = (b: Record<string, unknown>) => checkCampaign({ name: b?.name, kind: b?.kind, minSpend: b?.minSpend, amount: b?.amount, percent: b?.percent, category: b?.category });
+const campaignFields = (b: Record<string, unknown>) => checkCampaign({ name: b?.name, kind: b?.kind, minSpend: b?.minSpend, amount: b?.amount, percent: b?.percent, category: b?.category, productIds: b?.productIds, message: b?.message, messageKm: b?.messageKm, startDate: b?.startDate, endDate: b?.endDate });
 admin.post("/promotions/campaigns/add", wrap(async (req, res) => {
   const c = campaignFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); if (cur.campaigns.length >= MAX_CAMPAIGNS) return res.json({ error: `At most ${MAX_CAMPAIGNS} campaigns. Delete one first.` });
