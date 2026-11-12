@@ -64,6 +64,17 @@ export function autoDiscounts(lines: { category: string; lineCents: number }[], 
   }
   return out;
 }
+/** What ONE product costs after the "% off a category" campaigns (the only kind that belongs to a single product). Same maths as autoDiscounts, for one unit.
+ *  The shop uses it to show the discounted price on product cards and product pages; the server still recomputes the real total at checkout. */
+export function productPromo(p: { category?: string; price: number; salePrice?: number | null }, campaigns: Campaign[]) {
+  const cat = (p.category ?? "").trim().toLowerCase();
+  const hits = campaigns.filter((c) => c.active && c.kind === "category_percent" && c.category.trim().toLowerCase() === cat);
+  const baseCents = Math.round((p.salePrice ?? p.price) * 100); let left = baseCents, offCents = 0;
+  for (const c of hits) { const x = Math.min(Math.round((baseCents * c.percent) / 100), left); offCents += x; left -= x; }
+  return { hits, baseCents, offCents, finalCents: baseCents - offCents, percent: baseCents > 0 ? Math.round((offCents * 100) / baseCents) : 0 };
+}
+/** Campaigns that depend on the whole order (spend $X, get Y off) instead of one product. */
+export const orderCampaigns = (campaigns: Campaign[]) => campaigns.filter((c) => c.active && c.kind !== "category_percent");
 export const autoTotal = (d: AutoDiscount[]) => d.reduce((s, x) => s + x.cents, 0);
 /** Pre-order orders pay only this deposit now (or the full price when `full` is true: the customer's choice at checkout); any rest is paid when the order is dispatched. */
 export function preorderSplit(totalCents: number, rules: PreorderRules, full = false) {

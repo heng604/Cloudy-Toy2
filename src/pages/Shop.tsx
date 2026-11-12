@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
-import { useListedProducts } from "@/lib/store";
+import { useListedProducts, usePromotions } from "@/lib/store";
+import { productPromo, campaignDetail } from "@shared/promotions";
 import { LABELS, categoriesOf } from "@shared/products";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
@@ -22,14 +23,16 @@ function CategoryMenu({ cats, category, active, chip, on, allLabel }: { cats: st
 }
 export default function Shop() {
   const { t, lang } = useI18n(); useTitle(t("Product"));
-  const [sp] = useSearchParams(); const { data: all } = useListedProducts();
+  const [sp] = useSearchParams(); const { data: all } = useListedProducts(); const { promotions } = usePromotions();
   if (!all) return <Skeleton />;
   const q = (sp.get("q") ?? "").toLowerCase(), category = sp.get("category"), sort = sp.get("sort"), type = LABELS.find((l) => l.id === sp.get("type")), sale = sp.get("sale") === "1";
   const chip = "rounded-full border border-sky-border bg-white px-4 py-2", on = "!border-sky !bg-sky font-bold";
-  let list = all.filter((p) => p.name.toLowerCase().includes(q) && (!category || p.category === category) && (!type || !!p.labels?.includes(type.id)) && (!sale || p.salePrice != null));
-  if (sort === "price-asc") list = [...list].sort((a, b) => (a.salePrice ?? a.price) - (b.salePrice ?? b.price));
-  if (sort === "price-desc") list = [...list].sort((a, b) => (b.salePrice ?? b.price) - (a.salePrice ?? a.price));
+  let list = all.filter((p) => p.name.toLowerCase().includes(q) && (!category || p.category === category) && (!type || !!p.labels?.includes(type.id)) && (!sale || p.salePrice != null || productPromo(p, promotions.campaigns).offCents > 0));
+  const now = (p: (typeof list)[number]) => productPromo(p, promotions.campaigns).finalCents; // price after any category discount
+  if (sort === "price-asc") list = [...list].sort((a, b) => now(a) - now(b));
+  if (sort === "price-desc") list = [...list].sort((a, b) => now(b) - now(a));
   return (<div><h1 className="mb-4 text-2xl font-extrabold sm:text-3xl">{t("Product")}</h1>
+    {sale && promotions.campaigns.some((c) => c.active) && <div className="mb-4 space-y-1 rounded-xl2 bg-[#FFE4EE] p-4 text-sm"><b>Special offers</b>{promotions.campaigns.filter((c) => c.active).map((c) => <p key={c.id}><b>{c.name}</b>: {campaignDetail(c)}</p>)}</div>}
     <nav className="mb-6 flex flex-wrap gap-2 text-sm sm:text-base" aria-label="Categories"><CategoryMenu cats={categoriesOf(all)} category={category} active={!type} chip={chip} on={on} allLabel={t("All")} />
       {LABELS.map((l) => <Link key={l.id} to={`/shop?type=${l.id}`} aria-current={type?.id === l.id ? "page" : undefined} className={`${chip} ${type?.id === l.id ? on : ""}`}>{lang === "km" ? l.km : l.en}</Link>)}
       <Link to="?sort=price-asc" className="ml-auto text-sm text-mute">{t("Price ↑")}</Link><Link to="?sort=price-desc" className="text-sm text-mute">{t("Price ↓")}</Link></nav>

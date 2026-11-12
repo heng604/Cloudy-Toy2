@@ -5,9 +5,11 @@ import { compressFormData } from "@/lib/compress";
 import { usePromotions } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import FilePicker from "./FilePicker";
+import SafeImg from "../SafeImg";
 import Icon from "./Icons";
 import Modal from "./Modal";
 export const LABEL_STYLE: Record<string, string> = { new_arrival: "bg-[#DD0000] text-white", restock: "bg-[#40F146] text-white", limited_edition: "bg-[#C1ADE4] text-white", preorder: "bg-[#FFE597] text-white", best_seller: "bg-[#99C3E4] text-white" };
+export const MAX_IMAGES = 10; // photos per product (the server enforces the same limit)
 const field = "w-full rounded-xl border border-sky-border bg-[#F3F9FE] px-3.5 py-2.5 outline-none";
 const lab = "block text-sm font-bold";
 const box = "space-y-3 rounded-2xl border border-sky-border bg-white p-4";
@@ -54,10 +56,10 @@ export default function ProductModal({ p, categories, onClose, onSaved, onManage
             <label className={lab}>{t("Brand")}<input name="brand" maxLength={60} defaultValue={p?.brand} placeholder="Cloudy Custom" className={`${field} mt-1`} /></label></div>
         </div>
         <div className="space-y-4">
-          <section className={box}><div className="flex items-center justify-between"><h3 className="text-sm font-extrabold">{t("Product Images")}</h3><span className="text-xs text-mute">{t("Max 5 MB each (.jpg, .png, .webp)")}</span></div>
-            <FilePicker name="images" multiple label={t("Click or drag image to upload")} />
+          <section className={box}><div className="flex items-center justify-between"><h3 className="text-sm font-extrabold">{t("Product Images")}</h3><span className="text-xs text-mute">{t("Max 5 MB each (.jpg, .png, .webp)")} · {kept.length}/{MAX_IMAGES}</span></div>
+            <FilePicker name="images" multiple max={Math.max(0, MAX_IMAGES - kept.length)} label={t("Click or drag image to upload")} />
             {p && p.images.length > 0 && <ul className="space-y-2">{p.images.map((i) => { const on = kept.includes(i.src); return (<li key={i.src} className={`flex items-center gap-3 rounded-xl bg-[#F3F9FE] p-2 ${on ? "" : "opacity-50"}`}>
-              <img src={i.src} alt={i.alt} className="h-11 w-11 rounded-lg object-cover" /><div className="min-w-0 flex-1 text-xs"><p className="font-bold">{on ? t("Existing Product Image") : t("Will be removed")}</p>{on && <p className="font-semibold text-[#2F8F5B]">✓ {t("Uploaded & Ready")}</p>}</div>
+              <SafeImg src={i.src} alt={i.alt} className="h-11 w-11 rounded-lg object-cover" /><div className="min-w-0 flex-1 text-xs"><p className="font-bold">{on ? t("Existing Product Image") : t("Will be removed")}</p>{on && <p className="font-semibold text-[#2F8F5B]">✓ {t("Uploaded & Ready")}</p>}</div>
               <button type="button" onClick={() => setKept((k) => (on ? k.filter((s) => s !== i.src) : [...k, i.src]))} aria-label={on ? t("Remove image") : t("Keep image")} className="grid h-8 w-8 place-items-center rounded-full text-mute hover:bg-white hover:text-red-600"><Icon name={on ? "trash" : "plus"} size={16} /></button></li>); })}</ul>}</section>
           <section className={box}><label className={lab}>{t("Product Option / Variants")}<input name="variants" maxLength={300} defaultValue={p?.variants} placeholder="e.g. Size: 11cm, Color: Pastel Pink" className={`${field} mt-2 bg-white`} /></label></section>
           <section className={box}><h3 className="text-sm font-extrabold">{t("Type of product / Product Labels")}</h3>

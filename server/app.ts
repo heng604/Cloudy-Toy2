@@ -62,19 +62,23 @@ app.use((_req, res, next) => {
 });
 app.use(compression());
 app.use(express.json({ limit: "1mb" }));
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 12, fields: 40, parts: 60, fieldSize: 64 * 1024, headerPairs: 100 } }); // hard caps on every multipart upload (memory / DoS protection)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024, files: 12, fields: 60, parts: 80, fieldSize: 64 * 1024, headerPairs: 100 } }); // hard caps on every multipart upload (memory / DoS protection)
 const api = express.Router();
+/** Public product/logo/banner images stored in Cloudflare R2, served from our own address.
+ *  Registered BEFORE the per-visitor request limiter: a page with many product photos fires dozens of image requests at once, and counting them
+ *  against the 300/min API limit made later photos fail (broken images) as soon as a product had several pictures. Files are immutable (random name), so browsers/CDN cache them for a year. */
+api.get("/img/:name", async (req, res) => {
+  const name = String(req.params.name);
+  if (!r2Enabled() || !/^[a-z0-9-]+\.(jpg|png|webp)$/.test(name)) return res.status(404).end();
+  const etag = `"${name}"`;
+  if (req.headers["if-none-match"] === etag) return res.status(304).set({ ETag: etag, "Cache-Control": "public, max-age=31536000, immutable" }).end();
+  try { const { bytes, mime } = await r2Get(name); res.set({ "Content-Type": mime, ETag: etag, "Cache-Control": "public, max-age=31536000, immutable" }).end(Buffer.from(bytes)); }
+  catch { res.status(404).set("Cache-Control", "no-store").end(); }
+});
 api.use((_req, res, next) => { res.set("Cache-Control", "private, no-cache"); next(); }); // API answers are per-user: browsers may keep them but must revalidate (ETag -> cheap 304), shared caches must not store them
 api.use((req, res, next) => { // overall brake per visitor: stops scripted flooding / scanning of the API
   if (tooMany(`all:${clientKey(req)}`, 300)) return res.status(429).json({ error: "Too many requests. Please wait a minute." });
   next(); });
-/** Public product/logo/banner images stored in Cloudflare R2, served from our own address. */
-api.get("/img/:name", async (req, res) => {
-  const name = String(req.params.name);
-  if (!r2Enabled() || !/^[a-z0-9-]+\.(jpg|png|webp)$/.test(name)) return res.status(404).end();
-  try { const { bytes, mime } = await r2Get(name); res.set({ "Content-Type": mime, "Cache-Control": "public, max-age=31536000, immutable" }).end(Buffer.from(bytes)); }
-  catch { res.status(404).end(); }
-});
 api.get("/health", (_req, res) => res.json({ ok: true, db: !!(process.env.SUPABASE_SERVICE_ROLE_KEY && (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) }));
 /** Plain-language hint for the most common setup problems (shown to the admin only). */
 const hint = (m: string) => /relation .* does not exist|could not find the table|schema cache|column .* does not exist|function .* does not exist|Could not find the function/i.test(m) ? "Database tables are missing or out of date. Open Supabase > SQL Editor, paste supabase/setup_all.sql and click Run (it is safe to run again), then reload."
@@ -394,7 +398,7 @@ admin.get("/export", wrap(async (req, res) => {
 }));
 
 // products
-const MAX_IMAGES = 6;
+const MAX_IMAGES = 10; // photos per product
 const Schema = z.object({
   name: z.string().trim().min(2, "Name needs at least 2 characters").max(120),
   sku: z.string().trim().min(2, "SKU needs at least 2 characters").max(40).regex(/^[A-Za-z0-9_#*-]+$/, "SKU: letters, numbers and the symbols # * _ - only (no spaces)"),

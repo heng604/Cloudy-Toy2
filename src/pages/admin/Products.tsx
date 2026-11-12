@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SafeImg from "@/components/SafeImg";
 import { useSearchParams } from "react-router-dom";
 import { LABELS, stockStatus, isListed, isPreorder, isPreorderClosed, type Product } from "@shared/products";
 import ExportButtons from "@/components/admin/ExportButtons";
@@ -44,7 +45,7 @@ export default function AdminProducts() {
         <button type="button" onClick={() => open("new", "1")} className="inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-2.5 font-extrabold shadow-soft hover:bg-sky-hover"><Icon name="plus" size={18} />{t("Add Product")}</button></div></div>
     <div className="overflow-x-auto rounded-3xl bg-white shadow-soft"><table className="w-full min-w-[820px] text-left text-sm"><thead><tr className="border-b border-sky-border">{["Product", "Code", "Category", "Price", "Stock", "Badges", ""].map((h, i) => <th key={i} className={`${th} ${i === 6 ? "text-right" : ""}`}>{h && t(h)}</th>)}</tr></thead>
       <tbody>{list.map((p) => { const st = stockStatus(p.stock), pre = isPreorder(p); return (<tr key={p.id} className="border-b border-sky-border/70 last:border-0">
-        <td className="px-4 py-3"><div className="flex items-center gap-3">{p.images[0] ? <img loading="lazy" src={p.images[0].src} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" /> : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-sky-pale text-sky-hover"><Icon name="products" size={20} /></span>}
+        <td className="px-4 py-3"><div className="flex items-center gap-3">{p.images[0] ? <SafeImg loading="lazy" src={p.images[0].src} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover" /> : <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-sky-pale text-sky-hover"><Icon name="products" size={20} /></span>}
           <div className="min-w-0"><p className="truncate font-extrabold">{p.name}</p>{p.nameKm && <p lang="km" className="truncate text-xs text-mute">{p.nameKm}</p>}</div></div></td>
         <td className="px-4 py-3 font-mono text-xs">{p.sku}</td><td className="px-4 py-3">{p.category}</td>
         <td className="px-4 py-3 font-extrabold">{p.salePrice != null ? <>${p.salePrice.toFixed(2)} <s className="font-normal text-mute">${p.price.toFixed(2)}</s></> : `$${p.price.toFixed(2)}`}</td>
