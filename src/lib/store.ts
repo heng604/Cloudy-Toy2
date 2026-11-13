@@ -27,7 +27,8 @@ export const fetchSettings = async (): Promise<Settings> => {
 };
 export const fetchPages = async (): Promise<PagesStore> => { try { const r = await need().from("site_settings").select("value").eq("key", "pages").maybeSingle(); return (r.data?.value as PagesStore) ?? {}; } catch { return {}; } };
 export const fetchPromotions = async (): Promise<Promotions> => { try { const r = await need().from("site_settings").select("value").eq("key", "promotions").maybeSingle(); return normalizePromotions(r.data?.value); } catch { return DEFAULT_PROMOTIONS; } };
-export const usePromotions = () => { const r = useResource("promotions", fetchPromotions, { persist: true, staleMs: 30_000 }); return { ...r, promotions: r.data ?? DEFAULT_PROMOTIONS }; };
+/** The browser keeps the last copy of the promotions. A copy saved before festivals / new rule types existed has no `festivals`, so it is repaired here (normalizePromotions is safe to run on already-good data). */
+export const usePromotions = () => { const r = useResource("promotions", fetchPromotions, { persist: true, staleMs: 30_000 }); const promotions = useMemo(() => (r.data ? normalizePromotions(r.data) : DEFAULT_PROMOTIONS), [r.data]); return { ...r, promotions }; };
 export const useProducts = () => useResource("products", fetchProducts, { persist: true, staleMs: 15_000 });
 /** Products the shop shows: out-of-stock ones disappear after 2 days until the admin adds stock again. */
 export const useListedProducts = () => { const r = useProducts(); const data = useMemo(() => r.data?.filter((p) => isShopVisible(p)), [r.data]); return { ...r, data }; };

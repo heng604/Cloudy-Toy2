@@ -98,7 +98,7 @@ export function campaignDetail(c: Campaign, nameOf: (id: string) => string = () 
 export const campaignLabel = (c: Campaign) => ({ spend_amount: "Spend & Save", spend_percent: "Spend & Save", category_percent: `${c.percent}% OFF Collection`, product_percent: `${c.percent}% OFF Collection`, bogo: "BOGO Bundle", free_shipping: "Free Shipping" })[c.kind];
 /** Rule is switched on AND today (shop time) is inside its dates (no dates = always). */
 export function campaignLive(c: Pick<Campaign, "active" | "startDate" | "endDate">, now = Date.now()) { if (!c.active) return false; if (!c.startDate || !c.endDate) return true; const d = shopToday(now); return d >= c.startDate && d <= c.endDate; }
-export const liveCampaigns = (cs: Campaign[], now = Date.now()) => cs.filter((c) => campaignLive(c, now));
+export const liveCampaigns = (cs: Campaign[] | undefined, now = Date.now()) => (cs ?? []).filter((c) => campaignLive(c, now));
 const isoDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 /** Validates the "Special Offer / Festival" form. Dates: both or none (none = always on while the offer is switched on). */
 export function checkFestival(i: { name: unknown; code?: unknown; nameKm?: unknown; text?: unknown; textKm?: unknown; startDate?: unknown; endDate?: unknown; percent?: unknown; productIds?: unknown }): Checked<Omit<Festival, "id" | "active" | "createdAt">> {
@@ -122,7 +122,7 @@ export function festivalPhase(f: Pick<Festival, "active" | "startDate" | "endDat
   if (!f.active) return "paused"; if (!f.startDate || !f.endDate) return "live"; const d = shopToday(now);
   return d < f.startDate ? "upcoming" : d > f.endDate ? "ended" : "live";
 }
-export const liveFestivals = (festivals: Festival[], now = Date.now()) => festivals.filter((f) => festivalPhase(f, now) === "live");
+export const liveFestivals = (festivals: Festival[] | undefined, now = Date.now()) => (festivals ?? []).filter((f) => festivalPhase(f, now) === "live");
 export const festivalName = (f: Pick<Festival, "name" | "nameKm">, lang: string) => (lang === "km" && f.nameKm ? f.nameKm : f.name);
 export const festivalText = (f: Pick<Festival, "text" | "textKm">, lang: string) => (lang === "km" && f.textKm ? f.textKm : f.text);
 /** "-15% on the selected products" / "Selected products" for the banner. */
