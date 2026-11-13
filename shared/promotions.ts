@@ -4,8 +4,8 @@
 export type PreorderRules = { depositPercent: number; dispatchText: string; capSlots: number };
 export const DEFAULT_PREORDER: PreorderRules = { depositPercent: 50, dispatchText: "10 - 14 Business Days", capSlots: 50 };
 import { shopToday } from "./products";
-export type CampaignKind = "spend_amount" | "spend_percent" | "category_percent" | "product_percent" | "bogo" | "free_shipping";
-export const CAMPAIGN_KINDS: CampaignKind[] = ["spend_amount", "spend_percent", "category_percent", "product_percent", "bogo", "free_shipping"];
+export type CampaignKind = "spend_amount" | "spend_percent" | "spend_gift" | "category_percent" | "category_amount" | "product_percent" | "product_amount" | "bogo" | "free_shipping";
+export const CAMPAIGN_KINDS: CampaignKind[] = ["spend_amount", "spend_percent", "spend_gift", "category_percent", "category_amount", "product_percent", "product_amount", "bogo", "free_shipping"];
 /** One automatic promotion rule. Dates are optional (both or none). product_percent = % off the products picked from the database; bogo = buy X of a category/product, get Y of a free bonus product; free_shipping = delivery fee waived (always, over a minimum spend, or over a minimum item count). */
 export type Campaign = { id: string; name: string; kind: CampaignKind; minSpendCents: number; amountCents: number; percent: number; category: string; active: boolean; createdAt: string;
   startDate?: string; endDate?: string; productIds?: string[]; buyQty?: number; buyType?: "category" | "product"; buyTarget?: string; getQty?: number; bonusProductId?: string; minQty?: number; area?: "all" | "PHNOM_PENH" };
@@ -38,7 +38,7 @@ export function checkCampaign(i: { name: unknown; kind: unknown; minSpend?: unkn
   if ((startDate === "") !== (endDate === "")) return { ok: false, error: "Set both the start date and the end date, or leave both empty" };
   if (startDate && (!isoDay0(startDate) || !isoDay0(endDate))) return { ok: false, error: "Dates must be real calendar dates" };
   if (startDate && endDate < startDate) return { ok: false, error: "The end date cannot be before the start date" };
-  const usesSpend = kind === "spend_amount" || kind === "spend_percent" || kind === "free_shipping";
+  const usesSpend = kind === "spend_amount" || kind === "spend_percent" || kind === "spend_gift" || kind === "free_shipping";
   const minSpendCents = usesSpend ? Math.round(int(i.minSpend ?? 0) * 100) : 0, amountCents = Math.round(int(i.amount ?? 0) * 100), percent = int(i.percent ?? 0), category = String(i.category ?? "").trim();
   const base = { name, kind, minSpendCents, amountCents: 0, percent: 0, category: "", startDate, endDate, productIds: [] as string[], buyQty: 0, buyType: "category" as "category" | "product", buyTarget: "", getQty: 0, bonusProductId: "", minQty: 0, area: "all" as "all" | "PHNOM_PENH" };
   if (usesSpend && (!Number.isFinite(minSpendCents) || minSpendCents < 0 || minSpendCents > 10_000_000)) return { ok: false, error: "Minimum spend must be $0 or more" };
@@ -46,6 +46,20 @@ export function checkCampaign(i: { name: unknown; kind: unknown; minSpend?: unkn
     if (!Number.isFinite(amountCents) || amountCents < 1 || amountCents > 10_000_000) return { ok: false, error: "Discount amount must be more than $0" };
     if (minSpendCents > 0 && amountCents >= minSpendCents) return { ok: false, error: "Discount amount must be smaller than the minimum spend" };
     return { ok: true, value: { ...base, amountCents } };
+  }
+  if (kind === "category_amount" || kind === "product_amount") { // fixed $ off EACH unit of the category / the picked products
+    if (!Number.isFinite(amountCents) || amountCents < 1 || amountCents > 10_000_000) return { ok: false, error: "Discount amount must be more than $0" };
+    if (kind === "category_amount") { if (category.length < 1 || category.length > 40) return { ok: false, error: "Choose the category this discount applies to" }; return { ok: true, value: { ...base, amountCents, category } }; }
+    const ids = [...new Set((Array.isArray(i.productIds) ? i.productIds : []).map((x) => String(x)).filter((x) => x.length > 0 && x.length <= 64))];
+    if (ids.length < 1) return { ok: false, error: "Pick at least one product for this discount" }; if (ids.length > MAX_FESTIVAL_PRODUCTS) return { ok: false, error: `At most ${MAX_FESTIVAL_PRODUCTS} products per rule` };
+    return { ok: true, value: { ...base, amountCents, productIds: ids } };
+  }
+  if (kind === "spend_gift") { // spend a minimum, get a free gift product
+    const bonusProductId = String(i.bonusProductId ?? "").trim(), getQty = i.getQty === undefined || i.getQty === "" ? 1 : int(i.getQty);
+    if (minSpendCents < 1) return { ok: false, error: "Minimum spend must be more than $0 for a free gift" };
+    if (!Number.isInteger(getQty) || getQty < 1 || getQty > 20) return { ok: false, error: "Free gift quantity must be a whole number from 1 to 20" };
+    if (bonusProductId.length < 1 || bonusProductId.length > 64) return { ok: false, error: "Choose the free gift product" };
+    return { ok: true, value: { ...base, minSpendCents, getQty, bonusProductId } };
   }
   if (kind === "spend_percent" || kind === "category_percent" || kind === "product_percent") {
     if (!Number.isInteger(percent) || percent < 1 || percent > 90) return { ok: false, error: "Discount % must be a whole number from 1 to 90" };
@@ -90,12 +104,15 @@ export function normalizePromotions(v: unknown): Promotions {
 export function campaignDetail(c: Campaign, nameOf: (id: string) => string = () => "the free gift"): string {
   if (c.kind === "spend_amount") return c.minSpendCents > 0 ? `Orders of ${usd(c.minSpendCents)} or more get ${usd(c.amountCents)} off` : `${usd(c.amountCents)} off every order`;
   if (c.kind === "spend_percent") return c.minSpendCents > 0 ? `Orders of ${usd(c.minSpendCents)} or more get ${c.percent}% off` : `${c.percent}% off every order`;
+  if (c.kind === "spend_gift") return `Orders of ${usd(c.minSpendCents)} or more get ${c.getQty ?? 1} ${nameOf(c.bonusProductId ?? "")} FREE`;
+  if (c.kind === "category_amount") return `${usd(c.amountCents)} off each ${c.category} product`;
+  if (c.kind === "product_amount") return `${usd(c.amountCents)} off each of ${(c.productIds ?? []).length} selected product${(c.productIds ?? []).length === 1 ? "" : "s"}`;
   if (c.kind === "product_percent") return `${c.percent}% off ${(c.productIds ?? []).length} selected product${(c.productIds ?? []).length === 1 ? "" : "s"}`;
   if (c.kind === "bogo") return `Buy ${c.buyQty ?? 1}${c.buyType === "product" && c.buyTarget ? ` ${nameOf(c.buyTarget)}` : c.buyTarget ? ` ${c.buyTarget}` : ""}, get ${c.getQty ?? 1} ${nameOf(c.bonusProductId ?? "")} FREE`;
   if (c.kind === "free_shipping") { const where = c.area === "PHNOM_PENH" ? "Free Phnom Penh delivery" : "Free delivery"; return (c.minQty ?? 0) > 0 ? `${where} on orders of ${c.minQty} items or more` : c.minSpendCents > 0 ? `${where} on orders of ${usd(c.minSpendCents)} or more` : `${where} on every order`; }
   return `${c.percent}% off all ${c.category} products`;
 }
-export const campaignLabel = (c: Campaign) => ({ spend_amount: "Spend & Save", spend_percent: "Spend & Save", category_percent: `${c.percent}% OFF Collection`, product_percent: `${c.percent}% OFF Collection`, bogo: "BOGO Bundle", free_shipping: "Free Shipping" })[c.kind];
+export const campaignLabel = (c: Campaign) => ({ spend_amount: "Spend & Save", spend_percent: "Spend & Save", spend_gift: "Spend & Save", category_percent: `${c.percent}% OFF Collection`, product_percent: `${c.percent}% OFF Collection`, category_amount: `$${(c.amountCents / 100).toFixed(2)} OFF Collection`, product_amount: `$${(c.amountCents / 100).toFixed(2)} OFF Collection`, bogo: "BOGO Bundle", free_shipping: "Free Shipping" })[c.kind];
 /** Rule is switched on AND today (shop time) is inside its dates (no dates = always). */
 export function campaignLive(c: Pick<Campaign, "active" | "startDate" | "endDate">, now = Date.now()) { if (!c.active) return false; if (!c.startDate || !c.endDate) return true; const d = shopToday(now); return d >= c.startDate && d <= c.endDate; }
 export const liveCampaigns = (cs: Campaign[] | undefined, now = Date.now()) => (cs ?? []).filter((c) => campaignLive(c, now));
@@ -129,13 +146,15 @@ export const festivalText = (f: Pick<Festival, "text" | "textKm">, lang: string)
 export const festivalDetail = (f: Pick<Festival, "percent" | "productIds">) => (f.percent > 0 ? `${f.percent}% off ${f.productIds.length} selected product${f.productIds.length === 1 ? "" : "s"}` : `${f.productIds.length} selected product${f.productIds.length === 1 ? "" : "s"}`);
 export type AutoDiscount = { id: string; name: string; cents: number };
 /** Automatic discounts for a cart. All active campaigns that match stack, and never take off more than the subtotal. Delivery is never discounted. */
-export function autoDiscounts(lines: { category: string; lineCents: number; productId?: string }[], campaigns: Campaign[], festivals: Festival[] = [], now = Date.now()): AutoDiscount[] {
+export function autoDiscounts(lines: { category: string; lineCents: number; productId?: string; qty?: number }[], campaigns: Campaign[], festivals: Festival[] = [], now = Date.now()): AutoDiscount[] {
   const subtotal = lines.reduce((s, l) => s + l.lineCents, 0); let left = subtotal; const out: AutoDiscount[] = [];
   for (const c of liveCampaigns(campaigns, now)) {
     let cents = 0;
     if (c.kind === "spend_amount") cents = subtotal >= c.minSpendCents ? c.amountCents : 0;
     else if (c.kind === "spend_percent") cents = subtotal >= c.minSpendCents ? Math.round((subtotal * c.percent) / 100) : 0;
     else if (c.kind === "category_percent") { const base = lines.filter((l) => l.category.trim().toLowerCase() === c.category.trim().toLowerCase()).reduce((s, l) => s + l.lineCents, 0); cents = Math.round((base * c.percent) / 100); }
+    else if (c.kind === "category_amount") { const units = lines.filter((l) => l.category.trim().toLowerCase() === c.category.trim().toLowerCase()).reduce((n, l) => n + (l.qty ?? 1), 0); cents = Math.min(units * c.amountCents, lines.filter((l) => l.category.trim().toLowerCase() === c.category.trim().toLowerCase()).reduce((s, l) => s + l.lineCents, 0)); }
+    else if (c.kind === "product_amount") { const ids = new Set(c.productIds ?? []); const hit = lines.filter((l) => l.productId && ids.has(l.productId)); cents = Math.min(hit.reduce((n, l) => n + (l.qty ?? 1), 0) * c.amountCents, hit.reduce((s, l) => s + l.lineCents, 0)); }
     else if (c.kind === "product_percent") { const ids = new Set(c.productIds ?? []); const base = lines.filter((l) => l.productId && ids.has(l.productId)).reduce((s, l) => s + l.lineCents, 0); cents = Math.round((base * c.percent) / 100); }
     cents = Math.min(cents, left); if (cents > 0) { out.push({ id: c.id, name: c.name, cents }); left -= cents; }
   }
@@ -151,23 +170,24 @@ export function autoDiscounts(lines: { category: string; lineCents: number; prod
  *  The shop uses it to show the discounted price on product cards and product pages; the server still recomputes the real total at checkout. */
 export function productPromo(p: { id?: string; category?: string; price: number; salePrice?: number | null }, campaigns: Campaign[], festivals: Festival[] = [], now = Date.now()) {
   const cat = (p.category ?? "").trim().toLowerCase();
-  const hits = liveCampaigns(campaigns, now).filter((c) => (c.kind === "category_percent" && c.category.trim().toLowerCase() === cat) || (c.kind === "product_percent" && !!p.id && (c.productIds ?? []).includes(p.id)));
+  const hits = liveCampaigns(campaigns, now).filter((c) => ((c.kind === "category_percent" || c.kind === "category_amount") && c.category.trim().toLowerCase() === cat) || ((c.kind === "product_percent" || c.kind === "product_amount") && !!p.id && (c.productIds ?? []).includes(p.id)));
   const festivalHits = p.id ? liveFestivals(festivals, now).filter((f) => f.productIds.includes(p.id!)) : [];
   const baseCents = Math.round((p.salePrice ?? p.price) * 100); let left = baseCents, offCents = 0;
-  for (const c of hits) { const x = Math.min(Math.round((baseCents * c.percent) / 100), left); offCents += x; left -= x; }
+  for (const c of hits) { const x = Math.min(c.kind === "category_amount" || c.kind === "product_amount" ? c.amountCents : Math.round((baseCents * c.percent) / 100), left); offCents += x; left -= x; }
   for (const f of festivalHits) { const x = Math.min(Math.round((baseCents * f.percent) / 100), left); offCents += x; left -= x; }
   return { hits, festivalHits, baseCents, offCents, finalCents: baseCents - offCents, percent: baseCents > 0 ? Math.round((offCents * 100) / baseCents) : 0 };
 }
 /** Is this product part of the shop's "Special Offer" list? (sale price, a category discount, or picked for a live festival / event) */
 export const inSpecialOffer = (p: Parameters<typeof productPromo>[0], campaigns: Campaign[], festivals: Festival[], now = Date.now()) => { const x = productPromo(p, campaigns, festivals, now); return p.salePrice != null || x.offCents > 0 || x.festivalHits.length > 0 || liveCampaigns(campaigns, now).some((c) => c.kind === "bogo" && (c.buyType === "product" ? !!p.id && c.buyTarget === p.id : (c.buyTarget ?? "").trim().toLowerCase() === (p.category ?? "").trim().toLowerCase())); };
 /** Campaigns that depend on the whole order (spend $X, get Y off) instead of one product. */
-export const isProductRule = (c: Campaign) => c.kind === "category_percent" || c.kind === "product_percent";
+export const isProductRule = (c: Campaign) => c.kind === "category_percent" || c.kind === "product_percent" || c.kind === "category_amount" || c.kind === "product_amount";
 export const orderCampaigns = (campaigns: Campaign[], now = Date.now()) => liveCampaigns(campaigns, now).filter((c) => !isProductRule(c));
 /** Buy X Get Y: free bonus items earned by a cart. Whole multiples only (buy 4 with "buy 2 get 1" = 2 free). */
 export type Gift = { campaignId: string; name: string; productId: string; qty: number };
-export function bogoGifts(lines: { productId: string; category: string; qty: number }[], campaigns: Campaign[], now = Date.now()): Gift[] {
-  const out: Gift[] = [];
+export function bogoGifts(lines: { productId: string; category: string; qty: number; lineCents?: number }[], campaigns: Campaign[], now = Date.now()): Gift[] {
+  const out: Gift[] = []; const subtotal = lines.reduce((s, l) => s + (l.lineCents ?? 0), 0);
   for (const c of liveCampaigns(campaigns, now)) {
+    if (c.kind === "spend_gift") { if (c.bonusProductId && c.minSpendCents > 0 && subtotal >= c.minSpendCents) out.push({ campaignId: c.id, name: c.name, productId: c.bonusProductId, qty: Math.min(c.getQty || 1, 99) }); continue; } // spend $X, get a free gift (once per order)
     if (c.kind !== "bogo" || !c.buyQty || !c.getQty || !c.bonusProductId) continue;
     const have = lines.filter((l) => (c.buyType === "product" ? l.productId === c.buyTarget : l.category.trim().toLowerCase() === (c.buyTarget ?? "").trim().toLowerCase())).reduce((n, l) => n + l.qty, 0);
     const qty = Math.min(Math.floor(have / c.buyQty) * c.getQty, 99); if (qty > 0) out.push({ campaignId: c.id, name: c.name, productId: c.bonusProductId, qty });

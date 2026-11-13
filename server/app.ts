@@ -119,7 +119,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const acct = userOf(req); const ids = lines.map((l) => l.productId); // only the products in this cart are read (a cart has a few items, the catalogue has hundreds)
   // abandoned Bakong orders give their stock back BEFORE the stock check (swept at most every 5 s); settings load at the same time
-  const promos = await getPromotions(); const bonusIds = promos.campaigns.filter((c) => c.kind === "bogo" && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
+  const promos = await getPromotions(); const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
   const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds([...new Set([...ids, ...bonusIds])]))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   const catalog = catalogOf(products.filter((p) => ids.includes(p.id))); let usedCode: string | undefined;
@@ -128,7 +128,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const ship = freeShip ? 0 : shippingFor(area, settings); // a live "Free Shipping" rule waives the delivery fee
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
     // automatic campaigns first (stack, never more than the subtotal), then the typed code takes its % off what is left
-    const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns, promos.festivals);
+    const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
       const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true);
@@ -150,7 +150,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
     // Buy X Get Y: the free bonus items are added to the order at $0 and taken from stock (only as many as are in stock)
     const taken = new Map<string, number>(); for (const i of t.items) taken.set(i.productId, (taken.get(i.productId) ?? 0) + i.qty); const giftItems: typeof order.items = [];
-    for (const g of bogoGifts(t.items.map((i) => ({ productId: i.productId, category: byId.get(i.productId)?.category ?? "", qty: i.qty })), promos.campaigns)) {
+    for (const g of bogoGifts(t.items.map((i) => ({ productId: i.productId, category: byId.get(i.productId)?.category ?? "", qty: i.qty, lineCents: i.lineCents })), promos.campaigns)) {
       const bp = byId.get(g.productId); if (!bp || bp.active === false || isPreorder(bp)) continue; const room = Math.max(0, bp.stock - (taken.get(bp.id) ?? 0)); const qty = Math.min(g.qty, room); if (qty < 1) continue;
       taken.set(bp.id, (taken.get(bp.id) ?? 0) + qty); giftItems.push({ productId: bp.id, sku: bp.sku, name: `${bp.name} (free gift)`, qty, unitCents: 0, lineCents: 0 });
     }
@@ -187,7 +187,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
   if (!CODE_RE.test(code)) return res.status(400).json({ error: "That discount code is not valid." });
   try {
     const [products, promos] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions()]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
-    const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns, promos.festivals);
+    const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
     const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }]);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }

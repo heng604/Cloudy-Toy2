@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { productPromo } from "../shared/promotions";
 import { autoDiscounts, autoTotal, checkCampaign, checkPreorder, normalizePromotions, preorderSplit, DEFAULT_PREORDER, type Campaign } from "../shared/promotions";
 import { can, initialsOf } from "../shared/roles";
 import { payNowCents } from "../shared/orders";
@@ -88,5 +89,31 @@ describe("promotion rules: dates, BOGO, free shipping, product targets", () => {
     const pr: Campaign = { ...base, kind: "product_percent", percent: 20, productIds: ["a"] };
     expect(autoDiscounts([{ category: "", lineCents: 1000, productId: "a" }, { category: "", lineCents: 1000, productId: "b" }], [pr])[0].cents).toBe(200);
     expect(productPromo({ id: "a", price: 10 }, [pr]).finalCents).toBe(800); expect(campaignDetail({ ...pr })).toContain("1 selected product");
+  });
+});
+
+describe("fixed-amount and free-gift rewards", () => {
+  const catAmt: Campaign = { id: "ca", name: "$3 off plush", kind: "category_amount", minSpendCents: 0, amountCents: 300, percent: 0, category: "Plushies", active: true, createdAt: "" };
+  const prodAmt: Campaign = { ...catAmt, id: "pa", kind: "product_amount", category: "", productIds: ["x"] };
+  const gift: Campaign = { ...catAmt, id: "g", kind: "spend_gift", amountCents: 0, minSpendCents: 5000, bonusProductId: "sticker", getQty: 2 };
+  it("validates the new kinds", () => {
+    expect(checkCampaign({ name: "Cat", kind: "category_amount", amount: 3, category: "Plushies" }).ok).toBe(true);
+    expect(checkCampaign({ name: "Cat", kind: "category_amount", amount: 0, category: "Plushies" }).ok).toBe(false);
+    expect(checkCampaign({ name: "Prod", kind: "product_amount", amount: 2, productIds: [] }).ok).toBe(false);
+    expect(checkCampaign({ name: "Prod", kind: "product_amount", amount: 2, productIds: ["x"] }).ok).toBe(true);
+    expect(checkCampaign({ name: "Gift", kind: "spend_gift", minSpend: 50, bonusProductId: "s" }).ok).toBe(true);
+    expect(checkCampaign({ name: "Gift", kind: "spend_gift", minSpend: 0, bonusProductId: "s" }).ok).toBe(false);
+    expect(checkCampaign({ name: "Gift", kind: "spend_gift", minSpend: 50 }).ok).toBe(false);
+  });
+  it("takes a fixed amount off each unit, never more than the lines", () => {
+    expect(autoTotal(autoDiscounts([{ category: "plushies", lineCents: 4000, qty: 2 }], [catAmt]))).toBe(600);
+    expect(autoTotal(autoDiscounts([{ category: "plushies", lineCents: 200, qty: 1 }], [catAmt]))).toBe(200);
+    expect(autoTotal(autoDiscounts([{ category: "x", lineCents: 900, productId: "x", qty: 3 }], [prodAmt]))).toBe(900);
+    expect(productPromo({ id: "x", category: "z", price: 10 }, [prodAmt]).finalCents).toBe(700);
+  });
+  it("gives the free gift only at the minimum spend", () => {
+    const l = (c: number) => [{ productId: "a", category: "c", qty: 1, lineCents: c }];
+    expect(bogoGifts(l(4999), [gift])).toEqual([]);
+    expect(bogoGifts(l(5000), [gift])).toEqual([{ campaignId: "g", name: "$3 off plush", productId: "sticker", qty: 2 }]);
   });
 });
