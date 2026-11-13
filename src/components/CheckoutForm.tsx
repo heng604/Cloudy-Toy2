@@ -21,7 +21,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState("");
   const pickProof = (f: File | null) => { setErr(""); if (f && f.size > 25 * 1024 * 1024) { setFile(null); setPreview(""); setErr("Screenshot is too large (max 25 MB)."); return; } setFile(f); setPreview(f ? URL.createObjectURL(f) : ""); };
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
-  const [code, setCode] = useState(() => { try { return sessionStorage.getItem("ct-event-code") ?? ""; } catch { return ""; } }); // an event code picked on the Special Offer page is pre-filled (press Apply) const [applied, setApplied] = useState<{ code: string; cents: number } | null>(null); const [codeMsg, setCodeMsg] = useState(""); const [checking, setChecking] = useState(false);
+  const [code, setCode] = useState(() => { try { return sessionStorage.getItem("ct-event-code") ?? ""; } catch { return ""; } }); const [applied, setApplied] = useState<{ code: string; cents: number } | null>(null); const [codeMsg, setCodeMsg] = useState(""); const [checking, setChecking] = useState(false); // an event code picked on the Special Offer page is pre-filled in the code box (press Apply)
   const [area, setArea] = useState<Area>("PHNOM_PENH"); const [pick, setPick] = useState<Method | null>(null); const setMethod = (m: Method) => setPick(m);
   const [bakong, setBakong] = useState(false); const [payFull, setPayFull] = useState(false); // pre-order carts: 50% deposit (default) or the full price now
   useEffect(() => { let live = true; fetch("/api/payment/bakong/enabled").then((r) => r.json()).then((j) => { if (live && j?.enabled) setBakong(true); }).catch(() => {}); return () => { live = false; }; }, []);
@@ -30,10 +30,10 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const firstOn = (["BAKONG", "QR_IMAGE", "COD"] as Method[]).find((m) => avail[m]);
   const method: Method = pick && avail[pick] ? pick : firstOn ?? "QR_IMAGE"; // the customer's own choice wins while it is available; otherwise the first option that is on
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
-  const autos = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id })), promotions.campaigns, promotions.festivals), autoOff = autoTotal(autos) / 100;
+  const autos = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals), autoOff = autoTotal(autos) / 100;
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
-  const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
+  const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
   const ship = freeShip ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
   if (!items.length) return <p className="rounded-xl2 bg-sky-pale p-8 text-center">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;
   async function applyCode() {

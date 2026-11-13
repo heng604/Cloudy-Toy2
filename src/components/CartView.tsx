@@ -27,8 +27,8 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
   const subtotal = items.reduce((s, x) => s + unit(x.p) * x.l.qty, 0);
   const saved = items.reduce((s, x) => s + (x.p.salePrice ? (x.p.price - x.p.salePrice) * x.l.qty : 0), 0);
   const count = items.reduce((s, x) => s + x.l.qty, 0);
-  const autos = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id })), promotions.campaigns, promotions.festivals), autoOff = autoTotal(autos) / 100;
-  const gifts = bogoGifts(items.map((x) => ({ productId: x.p.id, category: x.p.category ?? "", qty: x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
+  const autos = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals), autoOff = autoTotal(autos) / 100;
+  const gifts = bogoGifts(items.map((x) => ({ productId: x.p.id, category: x.p.category ?? "", qty: x.l.qty, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
   const cartInfo = { subtotalCents: Math.round(subtotal * 100), qty: count }, freeAll = freeShippingRule({ ...cartInfo, area: "PROVINCE" }, promotions.campaigns), freePP = freeAll ?? freeShippingRule({ ...cartInfo, area: "PHNOM_PENH" }, promotions.campaigns);
   const hasPre = items.some((x) => x.p.preorder);
   const closedPre = (p: CartProduct) => !!p.preorder && preorderPhase(p) !== "open"; // each pre-order item has its own dates
