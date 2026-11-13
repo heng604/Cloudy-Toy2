@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { autoDiscounts, autoTotal, checkCampaign, checkPreorder, normalizePromotions, preorderSplit, productPromo, campaignLive, DEFAULT_PREORDER, type Campaign } from "../shared/promotions";
+import { autoDiscounts, autoTotal, checkCampaign, checkPreorder, normalizePromotions, preorderSplit, DEFAULT_PREORDER, type Campaign } from "../shared/promotions";
 import { can, initialsOf } from "../shared/roles";
 import { payNowCents } from "../shared/orders";
 import { toProduct, nameFor, isPreorder } from "../shared/products";
@@ -52,22 +52,41 @@ describe("product fields", () => {
   });
 });
 
-describe("festival special offer (chosen products)", () => {
-  const fest: Campaign = { id: "f", name: "Khmer New Year", kind: "product_percent", minSpendCents: 0, amountCents: 0, percent: 20, category: "", productIds: ["p1"], message: "Happy New Year!", messageKm: "", startDate: "2026-04-10", endDate: "2026-04-20", active: true, createdAt: "" };
-  const day = (d: string) => new Date(`${d}T05:00:00Z`).getTime();
-  it("needs at least one product and valid dates", () => {
-    expect(checkCampaign({ name: "Festival", kind: "product_percent", percent: 20, productIds: [] }).ok).toBe(false);
-    expect(checkCampaign({ name: "Festival", kind: "product_percent", percent: 20, productIds: ["p1"], startDate: "2026-04-20", endDate: "2026-04-10" }).ok).toBe(false);
-    const c = checkCampaign({ name: "Festival", kind: "product_percent", percent: 20, productIds: ["p1", "p1", "p2"], message: " Hi " });
-    expect(c.ok && c.value).toMatchObject({ productIds: ["p1", "p2"], message: "Hi", percent: 20 });
+import { checkFestival, productPromo, inSpecialOffer, festivalPhase, type Festival } from "../shared/promotions";
+describe("festival special offers", () => {
+  const v = checkFestival({ name: "Khmer New Year", percent: 20, productIds: ["a", "b"], startDate: "2026-01-01", endDate: "2099-01-01" });
+  const f: Festival = { ...(v as { ok: true; value: Omit<Festival, "id" | "active" | "createdAt"> }).value, id: "x", active: true, createdAt: "" };
+  it("validates the form", () => { expect(v.ok).toBe(true); expect(checkFestival({ name: "x" }).ok).toBe(false); expect(checkFestival({ name: "Fest", startDate: "2026-01-01" }).ok).toBe(false); });
+  it("is live only inside its dates and while switched on", () => { expect(festivalPhase(f)).toBe("live"); expect(festivalPhase({ ...f, active: false })).toBe("paused"); expect(festivalPhase({ ...f, endDate: "2026-01-02" })).toBe("ended"); });
+  it("discounts only the picked products", () => { expect(productPromo({ id: "a", price: 10 }, [], [f]).finalCents).toBe(800); expect(productPromo({ id: "z", price: 10 }, [], [f]).finalCents).toBe(1000); });
+  it("lists picked products under Special Offer", () => { expect(inSpecialOffer({ id: "a", price: 5 }, [], [f])).toBe(true); expect(inSpecialOffer({ id: "q", price: 5 }, [], [f])).toBe(false); });
+  it("applies at checkout", () => expect(autoDiscounts([{ category: "", lineCents: 2000, productId: "a" }, { category: "", lineCents: 1000, productId: "z" }], [], [f])[0].cents).toBe(400));
+});
+
+import { bogoGifts, freeShippingRule, campaignLive, campaignDetail } from "../shared/promotions";
+describe("promotion rules: dates, BOGO, free shipping, product targets", () => {
+  const base = { id: "r", name: "Rule", minSpendCents: 0, amountCents: 0, percent: 0, category: "", active: true, createdAt: "" };
+  it("respects start / end dates", () => { expect(campaignLive({ active: true, startDate: "2026-01-01", endDate: "2099-01-01" })).toBe(true); expect(campaignLive({ active: true, startDate: "2020-01-01", endDate: "2020-02-01" })).toBe(false); expect(campaignLive({ active: false })).toBe(false); });
+  it("validates Buy X Get Y", () => {
+    expect(checkCampaign({ name: "Bundle", kind: "bogo", buyQty: 2, buyType: "category", buyTarget: "Plush", getQty: 1, bonusProductId: "sticker" }).ok).toBe(true);
+    expect(checkCampaign({ name: "Bundle", kind: "bogo", buyQty: 0, buyTarget: "Plush", getQty: 1, bonusProductId: "s" }).ok).toBe(false);
+    expect(checkCampaign({ name: "Bundle", kind: "bogo", buyQty: 2, buyTarget: "Plush", getQty: 1 }).ok).toBe(false);
   });
-  it("is live only inside its dates", () => { expect(campaignLive(fest, day("2026-04-09"))).toBe(false); expect(campaignLive(fest, day("2026-04-15"))).toBe(true); expect(campaignLive(fest, day("2026-04-21"))).toBe(false); });
-  it("discounts only the chosen products", () => {
-    const now = day("2026-04-15");
-    expect(productPromo({ id: "p1", price: 10 }, [fest], now).finalCents).toBe(800);
-    expect(productPromo({ id: "p9", price: 10 }, [fest], now).offCents).toBe(0);
-    const d = autoDiscounts([{ category: "x", lineCents: 2000, productId: "p1" }, { category: "x", lineCents: 1000, productId: "p9" }], [fest], now);
-    expect(autoTotal(d)).toBe(400);
+  it("gives whole multiples of free bonus items", () => {
+    const bogo: Campaign = { ...base, kind: "bogo", buyQty: 2, buyType: "category", buyTarget: "Plush", getQty: 1, bonusProductId: "sticker" };
+    expect(bogoGifts([{ productId: "a", category: "plush", qty: 5 }], [bogo])).toEqual([{ campaignId: "r", name: "Rule", productId: "sticker", qty: 2 }]);
+    expect(bogoGifts([{ productId: "a", category: "plush", qty: 1 }], [bogo])).toEqual([]);
+    expect(bogoGifts([{ productId: "a", category: "Other", qty: 9 }], [bogo])).toEqual([]);
   });
-  it("survives storage round-trip", () => { expect(normalizePromotions({ campaigns: [fest] }).campaigns[0]).toMatchObject({ productIds: ["p1"], message: "Happy New Year!", endDate: "2026-04-20" }); });
+  it("waives delivery by spend, item count and area", () => {
+    const fs: Campaign = { ...base, kind: "free_shipping", minSpendCents: 2000 }; const q: Campaign = { ...base, kind: "free_shipping", minQty: 3 }; const pp: Campaign = { ...base, kind: "free_shipping", area: "PHNOM_PENH" };
+    expect(freeShippingRule({ subtotalCents: 2500, qty: 1, area: "PROVINCE" }, [fs])).not.toBeNull(); expect(freeShippingRule({ subtotalCents: 1500, qty: 1, area: "PROVINCE" }, [fs])).toBeNull();
+    expect(freeShippingRule({ subtotalCents: 100, qty: 3, area: "PROVINCE" }, [q])).not.toBeNull(); expect(freeShippingRule({ subtotalCents: 100, qty: 2, area: "PROVINCE" }, [q])).toBeNull();
+    expect(freeShippingRule({ subtotalCents: 100, qty: 1, area: "PROVINCE" }, [pp])).toBeNull(); expect(freeShippingRule({ subtotalCents: 100, qty: 1, area: "PHNOM_PENH" }, [pp])).not.toBeNull();
+  });
+  it("discounts only picked products", () => {
+    const pr: Campaign = { ...base, kind: "product_percent", percent: 20, productIds: ["a"] };
+    expect(autoDiscounts([{ category: "", lineCents: 1000, productId: "a" }, { category: "", lineCents: 1000, productId: "b" }], [pr])[0].cents).toBe(200);
+    expect(productPromo({ id: "a", price: 10 }, [pr]).finalCents).toBe(800); expect(campaignDetail({ ...pr })).toContain("1 selected product");
+  });
 });

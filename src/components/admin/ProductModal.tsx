@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { LABELS, type Product } from "@shared/products";
+import { festivalPhase } from "@shared/promotions";
 import { api } from "@/lib/api";
 import { compressFormData } from "@/lib/compress";
 import { usePromotions } from "@/lib/store";
@@ -32,6 +33,7 @@ export default function ProductModal({ p, categories, onClose, onSaved, onManage
   return (<Modal wide icon="products" title={p ? t("Edit Product Details") : t("Add Product")} onClose={onClose}>{(close) => (
     <form onSubmit={(e) => submit(e, close)} className="p-5 sm:p-7">
       {p && <input type="hidden" name="id" value={p.id} />}
+      <input type="hidden" name="festivalsSent" value="1" />
       {kept.map((src) => <input key={src} type="hidden" name="keep" value={src} />)}
       {error && <p role="alert" className="mb-4 rounded-xl bg-red-100 p-3 text-sm font-semibold text-red-800">{error}</p>}
       <div className="grid gap-5 lg:grid-cols-[1.15fr_1fr]">
@@ -62,6 +64,9 @@ export default function ProductModal({ p, categories, onClose, onSaved, onManage
               <SafeImg src={i.src} alt={i.alt} className="h-11 w-11 rounded-lg object-cover" /><div className="min-w-0 flex-1 text-xs"><p className="font-bold">{on ? t("Existing Product Image") : t("Will be removed")}</p>{on && <p className="font-semibold text-[#2F8F5B]">✓ {t("Uploaded & Ready")}</p>}</div>
               <button type="button" onClick={() => setKept((k) => (on ? k.filter((s) => s !== i.src) : [...k, i.src]))} aria-label={on ? t("Remove image") : t("Keep image")} className="grid h-8 w-8 place-items-center rounded-full text-mute hover:bg-white hover:text-red-600"><Icon name={on ? "trash" : "plus"} size={16} /></button></li>); })}</ul>}</section>
           <section className={box}><label className={lab}>{t("Product Option / Variants")}<input name="variants" maxLength={300} defaultValue={p?.variants} placeholder="e.g. Size: 11cm, Color: Pastel Pink" className={`${field} mt-2 bg-white`} /></label></section>
+          {promotions.festivals.some((f) => festivalPhase(f) !== "ended" || f.productIds.includes(p?.id ?? "")) && <section className={box}><h3 className="text-sm font-extrabold">{t("Special Offer / Festival")}</h3>
+            <div className="space-y-2">{promotions.festivals.filter((f) => festivalPhase(f) !== "ended" || (!!p && f.productIds.includes(p.id))).map((f) => <label key={f.id} className="flex items-start gap-2 text-xs font-bold"><input type="checkbox" name="festival" value={f.id} defaultChecked={!!p && f.productIds.includes(p.id)} className="mt-0.5 h-4 w-4" /><span>{f.name}{f.percent > 0 && <span className="ml-1 rounded-md bg-rose-500 px-1.5 py-0.5 text-white">-{f.percent}%</span>}<span className="ml-1 font-semibold text-mute">({festivalPhase(f) === "live" ? t("LIVE NOW") : festivalPhase(f) === "upcoming" ? t("SCHEDULED") : festivalPhase(f) === "paused" ? t("PAUSED") : t("ENDED")})</span></span></label>)}</div>
+            <p className="text-xs text-mute">{t("Tick the festival / event offers this product belongs to. Create them in Promotions.")}</p></section>}
           <section className={box}><h3 className="text-sm font-extrabold">{t("Type of product / Product Labels")}</h3>
             <div className="grid grid-cols-2 gap-x-3 gap-y-2">{LABELS.map((l) => <label key={l.id} className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" name="labels" value={l.id} checked={sel.includes(l.id)} onChange={(e) => { const on = e.target.checked; setSel((a) => { let n = l.id === "new_arrival" ? (on ? [...a, l.id] : a.filter((x) => x !== l.id)) : [...a.filter((x) => x === "new_arrival"), ...(on ? [l.id] : [])]; /* only ONE type at a time (Restock / Limited Edition / Pre-Order / Best Seller); New Arrival is a separate tick */ if (!p) { // NEW product only: New Arrival is automatic (ticked while no other type is chosen; choosing another type replaces it). The admin can still untick anything.
           if (on && l.id !== "new_arrival") n = n.filter((x) => x !== "new_arrival"); else if (!on && l.id !== "new_arrival" && n.length === 0) n = ["new_arrival"]; } return n; }); if (l.id !== "new_arrival") setPre(l.id === "preorder" && on); }} className="h-4 w-4" /><span className={`rounded-md px-2 py-1 ${LABEL_STYLE[l.id]}`}>{t(l.en)}</span></label>)}</div></section>

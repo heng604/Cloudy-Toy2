@@ -6,7 +6,7 @@ import SafeImg from "./SafeImg";
 import { usePromotions } from "@/lib/store";
 import { productPromo } from "@shared/promotions";
 export default function ProductCard({p}:{p:Product}) {
-  const { add } = useCart(); const { t, lang } = useI18n(); const { promotions } = usePromotions(); const promo = productPromo(p, promotions.campaigns);
+  const { add } = useCart(); const { t, lang } = useI18n(); const { promotions } = usePromotions(); const promo = productPromo(p, promotions.campaigns, promotions.festivals);
   const img = p.images[0];
   const out = p.stock<=0; const pre = isPreorder(p); const name = nameFor(p, lang);
   // badges: "Out of stock" when sold out, then (only when it is in stock) one badge for every label the admin ticked (New / Restock / Limited Edition / Pre-Order)

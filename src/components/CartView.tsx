@@ -5,7 +5,7 @@ import type { CartProduct } from "@shared/cartTypes";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { usePromotions } from "@/lib/store";
-import { autoDiscounts, autoTotal } from "@shared/promotions";
+import { autoDiscounts, autoTotal, bogoGifts, freeShippingRule } from "@shared/promotions";
 
 const iconBtn = "grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-ink transition hover:bg-sky disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 
@@ -27,7 +27,9 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
   const subtotal = items.reduce((s, x) => s + unit(x.p) * x.l.qty, 0);
   const saved = items.reduce((s, x) => s + (x.p.salePrice ? (x.p.price - x.p.salePrice) * x.l.qty : 0), 0);
   const count = items.reduce((s, x) => s + x.l.qty, 0);
-  const autos = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id })), promotions.campaigns), autoOff = autoTotal(autos) / 100;
+  const autos = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id })), promotions.campaigns, promotions.festivals), autoOff = autoTotal(autos) / 100;
+  const gifts = bogoGifts(items.map((x) => ({ productId: x.p.id, category: x.p.category ?? "", qty: x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
+  const cartInfo = { subtotalCents: Math.round(subtotal * 100), qty: count }, freeAll = freeShippingRule({ ...cartInfo, area: "PROVINCE" }, promotions.campaigns), freePP = freeAll ?? freeShippingRule({ ...cartInfo, area: "PHNOM_PENH" }, promotions.campaigns);
   const hasPre = items.some((x) => x.p.preorder);
   const closedPre = (p: CartProduct) => !!p.preorder && preorderPhase(p) !== "open"; // each pre-order item has its own dates
   const blocked = items.some((x) => (x.p.stock ?? Infinity) <= 0 || x.l.qty > (x.p.stock ?? Infinity) || closedPre(x.p));
@@ -108,7 +110,8 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
             <div className="flex justify-between"><dt className="text-mute">Items ({count})</dt><dd className="font-semibold">{money(subtotal)}</dd></div>
             {saved > 0 && <div className="flex justify-between text-green-700"><dt>{t("You save")}</dt><dd className="font-semibold">−{money(saved)}</dd></div>}
             {autos.map((a) => <div key={a.id} className="flex justify-between text-green-700"><dt>{a.name}</dt><dd className="font-semibold">−{money(a.cents / 100)}</dd></div>)}
-            <div className="flex justify-between"><dt className="text-mute">{t("Delivery")}</dt><dd className="font-semibold">{t("Calculated at checkout")}</dd></div>
+            {gifts.map((g) => <div key={g.campaignId} className="flex justify-between text-green-700"><dt>🎁 {g.name} × {g.qty}</dt><dd className="font-semibold">{t("FREE")}</dd></div>)}
+            <div className="flex justify-between"><dt className="text-mute">{t("Delivery")}</dt><dd className={`font-semibold ${freePP ? "text-green-700" : ""}`}>{freeAll ? t("FREE") : freePP ? t("FREE in Phnom Penh") : t("Calculated at checkout")}</dd></div>
           </dl>
           <div className="flex items-baseline justify-between border-t border-sky-border pt-4">
             <span className="font-bold">{t("Subtotal")}</span>

@@ -8,7 +8,7 @@ import type { Area, Method } from "@shared/delivery";
 import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings, usePromotions } from "@/lib/store";
-import { autoDiscounts, autoTotal, preorderSplit } from "@shared/promotions";
+import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule } from "@shared/promotions";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -21,7 +21,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState("");
   const pickProof = (f: File | null) => { setErr(""); if (f && f.size > 25 * 1024 * 1024) { setFile(null); setPreview(""); setErr("Screenshot is too large (max 25 MB)."); return; } setFile(f); setPreview(f ? URL.createObjectURL(f) : ""); };
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
-  const [code, setCode] = useState(""); const [applied, setApplied] = useState<{ code: string; cents: number } | null>(null); const [codeMsg, setCodeMsg] = useState(""); const [checking, setChecking] = useState(false);
+  const [code, setCode] = useState(() => { try { return sessionStorage.getItem("ct-event-code") ?? ""; } catch { return ""; } }); // an event code picked on the Special Offer page is pre-filled (press Apply) const [applied, setApplied] = useState<{ code: string; cents: number } | null>(null); const [codeMsg, setCodeMsg] = useState(""); const [checking, setChecking] = useState(false);
   const [area, setArea] = useState<Area>("PHNOM_PENH"); const [pick, setPick] = useState<Method | null>(null); const setMethod = (m: Method) => setPick(m);
   const [bakong, setBakong] = useState(false); const [payFull, setPayFull] = useState(false); // pre-order carts: 50% deposit (default) or the full price now
   useEffect(() => { let live = true; fetch("/api/payment/bakong/enabled").then((r) => r.json()).then((j) => { if (live && j?.enabled) setBakong(true); }).catch(() => {}); return () => { live = false; }; }, []);
@@ -30,9 +30,11 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const firstOn = (["BAKONG", "QR_IMAGE", "COD"] as Method[]).find((m) => avail[m]);
   const method: Method = pick && avail[pick] ? pick : firstOn ?? "QR_IMAGE"; // the customer's own choice wins while it is available; otherwise the first option that is on
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
-  const autos = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id })), promotions.campaigns), autoOff = autoTotal(autos) / 100;
+  const autos = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id })), promotions.campaigns, promotions.festivals), autoOff = autoTotal(autos) / 100;
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
-  const ship = (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
+  const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
+  const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
+  const ship = freeShip ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
   if (!items.length) return <p className="rounded-xl2 bg-sky-pale p-8 text-center">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;
   async function applyCode() {
     if (!code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
@@ -104,8 +106,9 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5 lg:sticky lg:top-24"><h2 className="font-extrabold">{t("Order summary")}</h2>
       {items.map(({ l, p }) => <p key={l.id} className="flex justify-between text-sm"><span>{p!.name} × {l.qty}</span><span>{money((p!.salePrice ?? p!.price) * l.qty)}</span></p>)}
       {autos.map((a) => <p key={a.id} className="flex justify-between text-sm text-green-700"><span>{a.name}</span><span>−{money(a.cents / 100)}</span></p>)}
+      {gifts.map((g) => <p key={g.campaignId} className="flex justify-between text-sm text-green-700"><span>🎁 {g.name} × {g.qty}</span><span>{t("FREE")}</span></p>)}
       {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}
-      <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span>{money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(totalC / 100)}</span></p>
+      <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span className={freeShip ? "font-semibold text-green-700" : ""}>{freeShip ? t("FREE") : money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(totalC / 100)}</span></p>
       {split && <><p className="flex justify-between text-sm font-bold text-[#A97A0B]"><span>{split.balanceCents > 0 ? `Deposit due now (${split.percent}%)` : "Full price due now"}</span><span>{money(split.depositCents / 100)}</span></p>{split.balanceCents > 0 && <p className="flex justify-between text-sm text-mute"><span>Balance at dispatch ({split.dispatch})</span><span>{money(split.balanceCents / 100)}</span></p>}</>}
       <p className="text-xs text-mute">The server sets the final total.</p></aside>
     <dialog ref={dlg} onClose={onClosePopup} className="max-w-sm rounded-xl2 p-6 backdrop:bg-black/40"><h2 className="text-lg font-extrabold">Please contact our admin</h2>

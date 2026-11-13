@@ -36,7 +36,7 @@ import { validateImage, safeFileName } from "../shared/images";
 import { r2Enabled, r2Get } from "./lib/r2";
 import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
-import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, MAX_CAMPAIGNS } from "../shared/promotions";
+import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
 import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
 import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } from "../shared/products";
 
@@ -119,14 +119,16 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const acct = userOf(req); const ids = lines.map((l) => l.productId); // only the products in this cart are read (a cart has a few items, the catalogue has hundreds)
   // abandoned Bakong orders give their stock back BEFORE the stock check (swept at most every 5 s); settings load at the same time
-  const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds(ids))]);
+  const promos = await getPromotions(); const bonusIds = promos.campaigns.filter((c) => c.kind === "bogo" && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
+  const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds([...new Set([...ids, ...bonusIds])]))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
-  const catalog = catalogOf(products); let usedCode: string | undefined;
+  const catalog = catalogOf(products.filter((p) => ids.includes(p.id))); let usedCode: string | undefined;
   try {
-    const ship = shippingFor(area, settings); const promos = await getPromotions();
+    const t00 = computeTotals(lines, catalog, 0); const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
+    const ship = freeShip ? 0 : shippingFor(area, settings); // a live "Free Shipping" rule waives the delivery fee
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
     // automatic campaigns first (stack, never more than the subtotal), then the typed code takes its % off what is left
-    const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns);
+    const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns, promos.festivals);
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
       const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true);
@@ -142,11 +144,18 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     }
     if (hasPre && method === "COD") return res.status(400).json({ error: "Pre-order items are paid with a deposit online. Please choose Bakong or QR payment." });
     const orderNumber = `CT-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
-    const order = { orderNumber, createdAt: new Date().toISOString(), area, ...(area === "PROVINCE" ? { province: parsed.data.province } : {}), method, customer,
+    const order: StoredOrder = { orderNumber, createdAt: new Date().toISOString(), area, ...(area === "PROVINCE" ? { province: parsed.data.province } : {}), method, customer,
       items: t.items.map((i) => ({ productId: i.productId, sku: byId.get(i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents, ...itemDates(byId.get(i.productId)) })),
       subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(auto.length ? { autoDiscounts: auto } : {}), ...(hasPre ? { preorder: preorderSplit(t.totalCents, promos.preorder, parsed.data.preorderPay === "full") } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
-    const lines2 = t.items.map((i) => ({ productId: i.productId, qty: i.qty }));
+    // Buy X Get Y: the free bonus items are added to the order at $0 and taken from stock (only as many as are in stock)
+    const taken = new Map<string, number>(); for (const i of t.items) taken.set(i.productId, (taken.get(i.productId) ?? 0) + i.qty); const giftItems: typeof order.items = [];
+    for (const g of bogoGifts(t.items.map((i) => ({ productId: i.productId, category: byId.get(i.productId)?.category ?? "", qty: i.qty })), promos.campaigns)) {
+      const bp = byId.get(g.productId); if (!bp || bp.active === false || isPreorder(bp)) continue; const room = Math.max(0, bp.stock - (taken.get(bp.id) ?? 0)); const qty = Math.min(g.qty, room); if (qty < 1) continue;
+      taken.set(bp.id, (taken.get(bp.id) ?? 0) + qty); giftItems.push({ productId: bp.id, sku: bp.sku, name: `${bp.name} (free gift)`, qty, unitCents: 0, lineCents: 0 });
+    }
+    if (giftItems.length) order.items = [...order.items, ...giftItems];
+    const lines2 = [...taken].map(([productId, qty]) => ({ productId, qty }));
     await decrementStock(lines2); // atomic in the database; throws INSUFFICIENT_STOCK without changing anything
     try { await saveOrder(order); } catch (e) { await restoreStock(lines2); throw e; }
     if (method === "BAKONG") return res.json({ orderNumber }); // Bakong: the admin is emailed once the bank confirms the payment (see /payment/bakong/status)
@@ -178,7 +187,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
   if (!CODE_RE.test(code)) return res.status(400).json({ error: "That discount code is not valid." });
   try {
     const [products, promos] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions()]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
-    const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns);
+    const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId })), promos.campaigns, promos.festivals);
     const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }]);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }
@@ -463,9 +472,15 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
     const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer());
     const src = await uploadProductImage(safeFileName(d.sku, "webp"), small, "image/webp"); uploaded.push(src); images.push({ src, alt: d.name });
   }
-  try { await upsertProduct({ id: id || undefined, name: d.name, nameKm: d.nameKm, brand: d.brand, uom: d.uom, variants: d.variants, labels, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, ...(dates.start ? { preorderStart: dates.start, preorderEnd: dates.end } : {}), active: fld(req, "active") === "on" }); }
+  let savedId = id; try { savedId = await upsertProduct({ id: id || undefined, name: d.name, nameKm: d.nameKm, brand: d.brand, uom: d.uom, variants: d.variants, labels, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, ...(dates.start ? { preorderStart: dates.start, preorderEnd: dates.end } : {}), active: fld(req, "active") === "on" }); }
   catch (e) { await deleteProductImages(uploaded); return fail(hint(e instanceof Error ? e.message : "") || "Could not save to the database. Nothing was lost; please try again."); }
   await deleteProductImages(removed); // only after the product row is safely saved
+  if (fld(req, "festivalsSent") === "1" && savedId) { // the "Special offer / festival" ticks in the product window (only when the form sent them)
+    try { const want = new Set(all(req, "festival")); const cur = await getPromotions();
+      const next = cur.festivals.map((f) => { const has = f.productIds.includes(savedId), should = want.has(f.id); return has === should ? f : { ...f, productIds: should ? [...f.productIds, savedId] : f.productIds.filter((x) => x !== savedId) }; });
+      if (next.some((f, i) => f !== cur.festivals[i])) await savePromotions({ ...cur, festivals: next });
+    } catch { return res.json({ error: "The product was saved, but its special offers could not be updated. Please open it again and re-tick them." }); }
+  }
   res.json({ ok: true });
 }));
 /** Quick remove from the admin table: only takes labels OFF (adding a label is done in the Edit window). Nothing else ever removes a label. */
@@ -475,7 +490,9 @@ admin.post("/products/:id/labels", wrap(async (req, res) => {
   if (next.some((l: string) => !(p.labels ?? []).includes(l as NonNullable<typeof p.labels>[number]))) return res.json({ error: "Labels can only be removed here. Use Edit to add a label." });
   await setLabels(p.id, next); res.json({ ok: true });
 }));
-admin.delete("/products/:id", wrap(async (req, res) => { await deleteProduct(String(req.params.id)); res.json({ ok: true }); }));
+admin.delete("/products/:id", wrap(async (req, res) => { const pid = String(req.params.id); await deleteProduct(pid);
+  try { const cur = await getPromotions(); if (cur.festivals.some((f) => f.productIds.includes(pid))) await savePromotions({ ...cur, festivals: cur.festivals.map((f) => ({ ...f, productIds: f.productIds.filter((x) => x !== pid) })) }); } catch { /* the product is gone; a leftover id in an offer is ignored by the shop */ }
+  res.json({ ok: true }); }));
 admin.post("/products/:id/stock", wrap(async (req, res) => { const n = Number(req.body?.stock); if (Number.isInteger(n) && n >= 0 && n <= 100000) await setStock(String(req.params.id), n); res.json({ ok: true }); }));
 
 // pages
@@ -509,27 +526,44 @@ admin.post("/discounts/update", wrap(async (req, res) => {
 admin.post("/discounts/delete", wrap(async (req, res) => { const code = normalizeCode(String(req.body?.code ?? "")); if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" }); await deleteStoreDiscount(code); res.json({ ok: true }); }));
 
 // promotions: pre-order rules + automatic discount campaigns (the typed-code discounts above keep working too)
-admin.get("/promotions", wrap(async (_req, res) => res.json({ promotions: await getPromotions(), categories: (await categoryList()).map((c) => c.name), products: (await listAllProducts()).map((p) => ({ id: p.id, name: p.name, category: p.category, price: p.price, image: p.images?.[0]?.src ?? "" })) })));
+admin.get("/promotions", wrap(async (_req, res) => res.json({ promotions: await getPromotions(), categories: (await categoryList()).map((c) => c.name), products: (await listAllProducts()).map((p) => ({ id: p.id, name: p.name, nameKm: p.nameKm, sku: p.sku, category: p.category, price: p.price, image: p.images[0]?.src ?? "", active: p.active !== false })) })));
 admin.post("/promotions/preorder", wrap(async (req, res) => {
   const c = checkPreorder({ depositPercent: req.body?.depositPercent, dispatchText: req.body?.dispatchText, capSlots: req.body?.capSlots }); if (!c.ok) return res.json({ error: c.error });
   await savePromotions({ ...(await getPromotions()), preorder: c.value }); res.json({ ok: true });
 }));
-const campaignFields = (b: Record<string, unknown>) => checkCampaign({ name: b?.name, kind: b?.kind, minSpend: b?.minSpend, amount: b?.amount, percent: b?.percent, category: b?.category, productIds: b?.productIds, message: b?.message, messageKm: b?.messageKm, startDate: b?.startDate, endDate: b?.endDate });
+const campaignFields = (b: Record<string, unknown>) => checkCampaign({ name: b?.name, kind: b?.kind, minSpend: b?.minSpend, amount: b?.amount, percent: b?.percent, category: b?.category, startDate: b?.startDate, endDate: b?.endDate, productIds: b?.productIds, buyQty: b?.buyQty, buyType: b?.buyType, buyTarget: b?.buyTarget, getQty: b?.getQty, bonusProductId: b?.bonusProductId, minQty: b?.minQty, area: b?.area });
 admin.post("/promotions/campaigns/add", wrap(async (req, res) => {
   const c = campaignFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); if (cur.campaigns.length >= MAX_CAMPAIGNS) return res.json({ error: `At most ${MAX_CAMPAIGNS} campaigns. Delete one first.` });
-  await savePromotions({ ...cur, campaigns: [...cur.campaigns, { ...c.value, id: crypto.randomUUID().slice(0, 8), active: true, createdAt: new Date().toISOString() }] }); res.json({ ok: true });
+  await savePromotions({ ...cur, campaigns: [...cur.campaigns, { ...c.value, id: crypto.randomUUID().slice(0, 8), active: req.body?.active !== false, createdAt: new Date().toISOString() }] }); res.json({ ok: true });
 }));
 admin.post("/promotions/campaigns/update", wrap(async (req, res) => {
   const c = campaignFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.campaigns.some((x) => x.id === id)) return res.json({ error: "Campaign not found" });
-  await savePromotions({ ...cur, campaigns: cur.campaigns.map((x) => (x.id === id ? { ...x, ...c.value } : x)) }); res.json({ ok: true });
+  await savePromotions({ ...cur, campaigns: cur.campaigns.map((x) => (x.id === id ? { ...x, ...c.value, ...(typeof req.body?.active === "boolean" ? { active: req.body.active } : {}) } : x)) }); res.json({ ok: true });
 }));
 admin.post("/promotions/campaigns/toggle", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.campaigns.some((x) => x.id === id)) return res.json({ error: "Campaign not found" });
   await savePromotions({ ...cur, campaigns: cur.campaigns.map((x) => (x.id === id ? { ...x, active: req.body?.active === true } : x)) }); res.json({ ok: true });
 }));
 admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur = await getPromotions(); await savePromotions({ ...cur, campaigns: cur.campaigns.filter((x) => x.id !== String(req.body?.id ?? "")) }); res.json({ ok: true }); }));
+// festival / event special offers: the admin writes the promotion text, picks the products (and an optional % off); the shop's "Special Offer" button shows them
+const festivalFields = (b: Record<string, unknown>) => checkFestival({ name: b?.name, code: b?.code, nameKm: b?.nameKm, text: b?.text, textKm: b?.textKm, startDate: b?.startDate, endDate: b?.endDate, percent: b?.percent, productIds: b?.productIds });
+admin.post("/promotions/festivals/add", wrap(async (req, res) => {
+  const f = festivalFields(req.body); if (!f.ok) return res.json({ error: f.error });
+  const cur = await getPromotions(); if (cur.festivals.length >= MAX_FESTIVALS) return res.json({ error: `At most ${MAX_FESTIVALS} special offers. Delete one first.` });
+  await savePromotions({ ...cur, festivals: [...cur.festivals, { ...f.value, id: crypto.randomUUID().slice(0, 8), active: true, createdAt: new Date().toISOString() }] }); res.json({ ok: true });
+}));
+admin.post("/promotions/festivals/update", wrap(async (req, res) => {
+  const f = festivalFields(req.body); if (!f.ok) return res.json({ error: f.error });
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.festivals.some((x) => x.id === id)) return res.json({ error: "Special offer not found" });
+  await savePromotions({ ...cur, festivals: cur.festivals.map((x) => (x.id === id ? { ...x, ...f.value } : x)) }); res.json({ ok: true });
+}));
+admin.post("/promotions/festivals/toggle", wrap(async (req, res) => {
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.festivals.some((x) => x.id === id)) return res.json({ error: "Special offer not found" });
+  await savePromotions({ ...cur, festivals: cur.festivals.map((x) => (x.id === id ? { ...x, active: req.body?.active === true } : x)) }); res.json({ ok: true });
+}));
+admin.post("/promotions/festivals/delete", wrap(async (req, res) => { const cur = await getPromotions(); await savePromotions({ ...cur, festivals: cur.festivals.filter((x) => x.id !== String(req.body?.id ?? "")) }); res.json({ ok: true }); }));
 
 // staff (Admin Permissions page, owners only)
 admin.get("/staff", wrap(async (req, res) => res.json({ ...(await listStaff()), me: (adminOf(req).email ?? "").toLowerCase() })));

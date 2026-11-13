@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
+import SpecialOffers from "@/components/SpecialOffers";
 import { useListedProducts, usePromotions } from "@/lib/store";
-import { productPromo, campaignDetail, campaignMessage, campaignWhen, liveCampaigns } from "@shared/promotions";
+import { productPromo } from "@shared/promotions";
 import { LABELS, categoriesOf } from "@shared/products";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
@@ -25,18 +26,17 @@ export default function Shop() {
   const { t, lang } = useI18n(); useTitle(t("Product"));
   const [sp] = useSearchParams(); const { data: all } = useListedProducts(); const { promotions } = usePromotions();
   if (!all) return <Skeleton />;
-  const q = (sp.get("q") ?? "").toLowerCase(), category = sp.get("category"), sort = sp.get("sort"), type = LABELS.find((l) => l.id === sp.get("type")), sale = sp.get("sale") === "1";
+  const q = (sp.get("q") ?? "").toLowerCase(), category = sp.get("category"), sort = sp.get("sort"), type = LABELS.find((l) => l.id === sp.get("type")), sale = sp.get("sale") === "1", fid = sp.get("festival");
   const chip = "rounded-full border border-sky-border bg-white px-4 py-2", on = "!border-sky !bg-sky font-bold";
-  let list = all.filter((p) => p.name.toLowerCase().includes(q) && (!category || p.category === category) && (!type || !!p.labels?.includes(type.id)) && (!sale || productPromo(p, promotions.campaigns).offCents > 0));
-  const live = liveCampaigns(promotions.campaigns);
-  const now = (p: (typeof list)[number]) => productPromo(p, promotions.campaigns).finalCents; // price after any category discount
+  if (sale) return <SpecialOffers all={all} festivalId={fid} />; // the Special Offer button: event hero, promotion cards, offer products
+  let list = all.filter((p) => p.name.toLowerCase().includes(q) && (!category || p.category === category) && (!type || !!p.labels?.includes(type.id)));
+  const now = (p: (typeof list)[number]) => productPromo(p, promotions.campaigns, promotions.festivals).finalCents; // price after any category / festival discount
   if (sort === "price-asc") list = [...list].sort((a, b) => now(a) - now(b));
   if (sort === "price-desc") list = [...list].sort((a, b) => now(b) - now(a));
   return (<div><h1 className="mb-4 text-2xl font-extrabold sm:text-3xl">{t("Product")}</h1>
-    {sale && <div className="mb-4 space-y-2 rounded-xl2 bg-[#FFE4EE] p-4 text-sm"><b className="text-base">{t("Special Offers")}</b>{live.length === 0 ? <p>{t("No special offers right now. Please check back soon!")}</p> : live.map((c) => <div key={c.id}><p><b>{c.name}</b>: {campaignDetail(c)}{campaignWhen(c) && <span className="text-mute"> · {campaignWhen(c)}</span>}</p>{campaignMessage(c, lang) && <p className="mt-0.5">{campaignMessage(c, lang)}</p>}</div>)}</div>}
     <nav className="mb-6 flex flex-wrap gap-2 text-sm sm:text-base" aria-label="Categories"><CategoryMenu cats={categoriesOf(all)} category={category} active={!type} chip={chip} on={on} allLabel={t("All")} />
       {LABELS.map((l) => <Link key={l.id} to={`/shop?type=${l.id}`} aria-current={type?.id === l.id ? "page" : undefined} className={`${chip} ${type?.id === l.id ? on : ""}`}>{lang === "km" ? l.km : l.en}</Link>)}
       <Link to="?sort=price-asc" className="ml-auto text-sm text-mute">{t("Price ↑")}</Link><Link to="?sort=price-desc" className="text-sm text-mute">{t("Price ↓")}</Link></nav>
-    {list.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center">{sale ? t("No products are on special offer right now.") : t("No products match.")} <Link to="/shop" className="underline">{t("Clear filters")}</Link></p>
+    {list.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center">{t("No products match.")} <Link to="/shop" className="underline">{t("Clear filters")}</Link></p>
       : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">{list.map((p) => <ProductCard key={p.id} p={p} />)}</div>}</div>);
 }

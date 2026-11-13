@@ -3,7 +3,7 @@ import ProductCard from "@/components/ProductCard";
 import BannerSlider from "@/components/BannerSlider";
 import Skeleton from "@/components/Skeleton";
 import { useListedProducts, useSettings, usePromotions } from "@/lib/store";
-import { liveCampaigns, campaignMessage, campaignWhen } from "@shared/promotions";
+import { liveFestivals, festivalName, festivalText } from "@shared/promotions";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 /** Light-blue dripping edge along the top of the hero. */
@@ -15,9 +15,8 @@ const TILES = [["#CFE8FA", "M14 21C6 15 8 9 12 10c1 .3 2 1.5 2 1.5S15 10.300 16 
 const STRIP = `<svg xmlns="http://www.w3.org/2000/svg" width="${TILES.length * 2 * 34}" height="32" viewBox="0 0 ${TILES.length * 2 * 34} 32">${[...TILES, ...TILES].map(([c, d], i) => `<g transform="translate(${i * 34 + 2} 2)"><rect width="28" height="28" rx="7" fill="${c}"/><path d="${d}" fill="#fff" fill-opacity=".9"/></g>`).join("")}</svg>`;
 export default function Home() {
   useTitle(); const { t, lang } = useI18n();
-  const { data: products } = useListedProducts(); const { settings: { banners } } = useSettings();
+  const { data: products } = useListedProducts(); const { settings: { banners } } = useSettings(); const { promotions } = usePromotions(); const fests = liveFestivals(promotions.festivals).filter((f) => f.productIds.length > 0 || f.text);
   const banner = Array.isArray(banners) ? banners : [];
-  const { promotions } = usePromotions(); const festival = liveCampaigns(promotions.campaigns).filter((c) => c.message || c.messageKm); // festival / event text the admin wrote
   // The big banner under the header is the picture(s) the admin uploads in Settings (it fades from one to the next). The full-width text hero only shows while no banner has been uploaded; both carry the \"Shopping with Cloudy Toys now!\" button.
   return (<>
     {banner.length > 0 ? <BannerSlider images={banner} first /> : <section className="relative left-1/2 -mt-5 mb-8 w-screen -translate-x-1/2 overflow-hidden bg-[#FFF8E6] px-5 pb-20 pt-16 sm:-mt-8 sm:px-10 lg:pb-24 lg:pt-20">
@@ -31,7 +30,7 @@ export default function Home() {
           <span aria-hidden="true" className="absolute right-2 top-0 text-3xl text-[#99C3E4]">♡</span><span aria-hidden="true" className="absolute left-0 top-6 text-2xl text-[#FFB8D1]">✦</span></div></div>
       <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-8" style={{ backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(STRIP)}")`, backgroundRepeat: "repeat-x", backgroundSize: "auto 32px" }} />
     </section>}
-    {festival.length > 0 && <Link to="/shop?sale=1" className="mt-8 block space-y-1 rounded-xl2 bg-[#FFE4EE] p-4 text-center hover:brightness-95">{festival.map((c) => <p key={c.id}><b>{c.name}</b>{campaignWhen(c) && <span className="text-sm text-mute"> · {campaignWhen(c)}</span>}<span className="block">{campaignMessage(c, lang)}</span></p>)}<span className="inline-block text-sm font-extrabold underline">{t("Special Offer")} →</span></Link>}
+    {fests.length > 0 && <section className="mt-8 space-y-3">{fests.map((f) => <Link key={f.id} to={fests.length > 1 ? `/shop?sale=1&festival=${f.id}` : "/shop?sale=1"} className="block rounded-xl2 bg-gradient-to-r from-[#FFE4EE] to-[#EFE6FF] p-4 shadow-soft transition hover:-translate-y-0.5 sm:p-5"><div className="flex flex-wrap items-center gap-2"><span aria-hidden="true">🎉</span><h2 className="text-lg font-extrabold sm:text-xl">{festivalName(f, lang)}</h2>{f.percent > 0 && <span className="rounded-full bg-rose-500 px-2.5 py-0.5 text-xs font-extrabold text-white">-{f.percent}%</span>}<span className="ml-auto text-sm font-bold underline">{t("Special Offer")} →</span></div>{festivalText(f, lang) && <p className="mt-1.5 line-clamp-3 whitespace-pre-line text-sm">{festivalText(f, lang)}</p>}</Link>)}</section>}
     {[{ id: "new_arrival", title: lang === "km" ? "មកថ្មី" : t("New Arrival"), empty: false }, { id: "best_seller", title: lang === "km" ? "លក់ដាច់បំផុត" : t("Best Sellers"), empty: true }].map((sec) => (
       <section key={sec.id} className="mt-12"><div className="mb-4 flex items-end justify-between gap-3"><h2 className="text-2xl font-extrabold">{sec.title}</h2><Link to={`/shop?type=${sec.id}`} className="font-semibold underline">{t("See all")}</Link></div>
         {!products ? <Skeleton /> : (() => { const list = products.filter((p) => p.labels?.includes(sec.id as "best_seller")); return list.length === 0
