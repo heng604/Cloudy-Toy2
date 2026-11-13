@@ -3,10 +3,13 @@ import { post } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useAdmin, refreshAdmin } from "@/pages/admin/hooks";
 import Modal from "./Modal";
+import ImageUpload from "./ImageUpload";
+import { useSettings } from "@/lib/store";
 type Cat = { name: string; count: number };
 /** "Manage Categories": add a category, rename one (renaming to an existing name merges them), or delete an empty one. */
 export default function CategoriesModal({ onClose }: { onClose: () => void }) {
-  const { t } = useI18n(); const { data } = useAdmin<{ categories: Cat[] }>("/admin/categories");
+  const { t } = useI18n(); const { data } = useAdmin<{ categories: Cat[] }>("/admin/categories"); const { settings } = useSettings(); const icons = settings.categoryImages ?? {};
+  const icon = (key: string, fallback: string, round = true) => <ImageUpload round={round} fallback={fallback} value={icons[key]} path="/admin/categories/image" fields={{ name: key }} removeFields={{ remove: "on" }} onChange={() => refreshAdmin()} />;
   const [name, setName] = useState(""); const [edit, setEdit] = useState<{ from: string; to: string } | null>(null); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null); const [busy, setBusy] = useState(false);
   async function run(path: string, body: object, ok: string) {
     if (busy) return false; setBusy(true); setMsg(null);
@@ -18,8 +21,11 @@ export default function CategoriesModal({ onClose }: { onClose: () => void }) {
   return (<Modal icon="folder" title={t("Manage Categories")} onClose={onClose}>{() => (<div className="space-y-4 p-5 sm:p-7">
     {msg && <p role={msg.ok ? "status" : "alert"} className={`rounded-xl p-3 text-sm font-semibold ${msg.ok ? "bg-green-100 text-green-900" : "bg-red-100 text-red-800"}`}>{msg.text}</p>}
     <form onSubmit={add} className="flex gap-2"><input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} required placeholder={t("New category name")} aria-label={t("New category name")} className={inp} /><button disabled={busy} className="rounded-xl bg-sky px-5 py-2.5 font-extrabold hover:bg-sky-hover disabled:opacity-50">{t("Add")}</button></form>
+    <div className="space-y-2 rounded-2xl border border-sky-border bg-[#F6FAFF] p-3"><p className="text-xs font-extrabold uppercase tracking-wide text-mute">{t("Home page icons")}</p>
+      <div className="grid gap-3 sm:grid-cols-2"><div><p className="mb-1 text-sm font-bold">{t("All Products")}</p>{icon("__all", "☁️")}</div><div><p className="mb-1 text-sm font-bold">{t("New Arrival")}</p>{icon("__new", "⭐")}</div></div>
+      <p className="text-xs text-mute">{t("Each category has its own icon below. With no picture, the shop shows a default icon.")}</p></div>
     {!data ? <p className="text-mute">…</p> : data.categories.length === 0 ? <p className="rounded-xl border border-dashed border-sky-border p-4 text-center text-sm text-mute">{t("No categories yet.")}</p>
-      : <ul className="divide-y divide-sky-border rounded-2xl border border-sky-border">{data.categories.map((c) => <li key={c.name} className="flex flex-wrap items-center gap-2 p-3 text-sm">
+      : <ul className="divide-y divide-sky-border rounded-2xl border border-sky-border">{data.categories.map((c) => <li key={c.name} className="flex flex-wrap items-center gap-3 p-3 text-sm"><div className="shrink-0">{icon(c.name, "☁️")}</div>
         {edit?.from === c.name ? <form className="flex min-w-0 flex-1 gap-2" onSubmit={async (e) => { e.preventDefault(); if (await run("/admin/categories/rename", edit, t("Category renamed"))) setEdit(null); }}>
           <input autoFocus value={edit.to} onChange={(e) => setEdit({ from: c.name, to: e.target.value })} maxLength={40} required aria-label={t("New category name")} className={inp} /><button disabled={busy} className="rounded-lg bg-sky px-3 font-bold">{t("Save")}</button><button type="button" onClick={() => setEdit(null)} className="rounded-lg border border-sky-border px-3 font-bold">{t("Cancel")}</button></form>
           : <><span className="min-w-0 flex-1 truncate font-bold">{c.name}</span><span className="text-xs text-mute">{t("{n} products", { n: c.count })}</span>

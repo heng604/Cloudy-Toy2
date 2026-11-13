@@ -8,15 +8,17 @@ export type CampaignKind = "spend_amount" | "spend_percent" | "spend_gift" | "ca
 export const CAMPAIGN_KINDS: CampaignKind[] = ["spend_amount", "spend_percent", "spend_gift", "category_percent", "category_amount", "product_percent", "product_amount", "bogo", "free_shipping"];
 /** One automatic promotion rule. Dates are optional (both or none). product_percent = % off the products picked from the database; bogo = buy X of a category/product, get Y of a free bonus product; free_shipping = delivery fee waived (always, over a minimum spend, or over a minimum item count). */
 export type Campaign = { id: string; name: string; kind: CampaignKind; minSpendCents: number; amountCents: number; percent: number; category: string; active: boolean; createdAt: string;
-  startDate?: string; endDate?: string; productIds?: string[]; buyQty?: number; buyType?: "category" | "product"; buyTarget?: string; getQty?: number; bonusProductId?: string; minQty?: number; area?: "all" | "PHNOM_PENH" };
+  startDate?: string; endDate?: string; productIds?: string[]; buyQty?: number; buyType?: "category" | "product"; buyTarget?: string; getQty?: number; bonusProductId?: string; minQty?: number; area?: "all" | "PHNOM_PENH"; image?: string };
 /** A festival / event special offer (Khmer New Year, Pchum Ben, Christmas ...). The admin writes the promotion text, picks the products and optionally a % off; the shop's "Special Offer" button lists those products. */
-export type Festival = { id: string; name: string; nameKm: string; text: string; textKm: string; code?: string; startDate: string; endDate: string; percent: number; productIds: string[]; active: boolean; createdAt: string };
+export type Festival = { id: string; name: string; nameKm: string; text: string; textKm: string; code?: string; startDate: string; endDate: string; percent: number; productIds: string[]; active: boolean; createdAt: string; image?: string };
 export type Promotions = { preorder: PreorderRules; campaigns: Campaign[]; festivals: Festival[] };
 export const DEFAULT_PROMOTIONS: Promotions = { preorder: DEFAULT_PREORDER, campaigns: [], festivals: [] };
 export const MAX_CAMPAIGNS = 20;
 export const MAX_FESTIVALS = 20;
 export const MAX_FESTIVAL_PRODUCTS = 500;
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
+/** Picture the admin picked for an offer card: empty, one of our own uploads (/api/img/...) or an https link. */
+export const cleanImage = (v: unknown): string | null => { const s = String(v ?? "").trim(); return s === "" ? "" : s.length <= 300 && /^(\/api\/img\/[a-z0-9-]+\.(webp|jpg|png)|https:\/\/[^\s"'<>]+)$/.test(s) ? s : null; };
 const int = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : NaN; };
 
 export type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -30,7 +32,7 @@ export function checkPreorder(i: { depositPercent: unknown; dispatchText: unknow
 }
 const isoDay0 = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 /** Validates the "Create Promotion Rule" form (dollars in, cents out). */
-export function checkCampaign(i: { name: unknown; kind: unknown; minSpend?: unknown; amount?: unknown; percent?: unknown; category?: unknown; startDate?: unknown; endDate?: unknown; productIds?: unknown; buyQty?: unknown; buyType?: unknown; buyTarget?: unknown; getQty?: unknown; bonusProductId?: unknown; minQty?: unknown; area?: unknown }): Checked<Omit<Campaign, "id" | "active" | "createdAt">> {
+export function checkCampaign(i: { name: unknown; kind: unknown; minSpend?: unknown; amount?: unknown; percent?: unknown; category?: unknown; startDate?: unknown; endDate?: unknown; productIds?: unknown; buyQty?: unknown; buyType?: unknown; buyTarget?: unknown; getQty?: unknown; bonusProductId?: unknown; minQty?: unknown; area?: unknown; image?: unknown }): Checked<Omit<Campaign, "id" | "active" | "createdAt">> {
   const name = String(i.name ?? "").trim(), kind = i.kind as CampaignKind;
   if (name.length < 2 || name.length > 60) return { ok: false, error: "Campaign name needs 2 to 60 characters" };
   if (!CAMPAIGN_KINDS.includes(kind)) return { ok: false, error: "Choose a campaign type" };
@@ -40,7 +42,8 @@ export function checkCampaign(i: { name: unknown; kind: unknown; minSpend?: unkn
   if (startDate && endDate < startDate) return { ok: false, error: "The end date cannot be before the start date" };
   const usesSpend = kind === "spend_amount" || kind === "spend_percent" || kind === "spend_gift" || kind === "free_shipping";
   const minSpendCents = usesSpend ? Math.round(int(i.minSpend ?? 0) * 100) : 0, amountCents = Math.round(int(i.amount ?? 0) * 100), percent = int(i.percent ?? 0), category = String(i.category ?? "").trim();
-  const base = { name, kind, minSpendCents, amountCents: 0, percent: 0, category: "", startDate, endDate, productIds: [] as string[], buyQty: 0, buyType: "category" as "category" | "product", buyTarget: "", getQty: 0, bonusProductId: "", minQty: 0, area: "all" as "all" | "PHNOM_PENH" };
+  const image = cleanImage(i.image); if (image === null) return { ok: false, error: "The offer picture is not valid. Upload it again." };
+  const base = { image, name, kind, minSpendCents, amountCents: 0, percent: 0, category: "", startDate, endDate, productIds: [] as string[], buyQty: 0, buyType: "category" as "category" | "product", buyTarget: "", getQty: 0, bonusProductId: "", minQty: 0, area: "all" as "all" | "PHNOM_PENH" };
   if (usesSpend && (!Number.isFinite(minSpendCents) || minSpendCents < 0 || minSpendCents > 10_000_000)) return { ok: false, error: "Minimum spend must be $0 or more" };
   if (kind === "spend_amount") {
     if (!Number.isFinite(amountCents) || amountCents < 1 || amountCents > 10_000_000) return { ok: false, error: "Discount amount must be more than $0" };
@@ -90,12 +93,12 @@ export function normalizePromotions(v: unknown): Promotions {
   const pre = checkPreorder({ ...DEFAULT_PREORDER, ...(o.preorder ?? {}) });
   const campaigns = (Array.isArray(o.campaigns) ? o.campaigns : []).flatMap((c): Campaign[] => {
     const x = c as Partial<Campaign>; if (!x || typeof x.id !== "string" || !CAMPAIGN_KINDS.includes(x.kind as CampaignKind)) return [];
-    const chk = checkCampaign({ name: x.name, kind: x.kind, minSpend: (x.minSpendCents ?? 0) / 100, amount: (x.amountCents ?? 0) / 100, percent: x.percent, category: x.category, startDate: x.startDate, endDate: x.endDate, productIds: x.productIds, buyQty: x.buyQty, buyType: x.buyType, buyTarget: x.buyTarget, getQty: x.getQty, bonusProductId: x.bonusProductId, minQty: x.minQty, area: x.area });
+    const chk = checkCampaign({ name: x.name, kind: x.kind, minSpend: (x.minSpendCents ?? 0) / 100, amount: (x.amountCents ?? 0) / 100, percent: x.percent, category: x.category, startDate: x.startDate, endDate: x.endDate, productIds: x.productIds, buyQty: x.buyQty, buyType: x.buyType, buyTarget: x.buyTarget, getQty: x.getQty, bonusProductId: x.bonusProductId, minQty: x.minQty, area: x.area, image: x.image });
     return chk.ok ? [{ ...chk.value, id: x.id, active: x.active !== false, createdAt: String(x.createdAt ?? "") }] : [];
   }).slice(0, MAX_CAMPAIGNS);
   const festivals = (Array.isArray(o.festivals) ? o.festivals : []).flatMap((f): Festival[] => {
     const x = f as Partial<Festival>; if (!x || typeof x.id !== "string") return [];
-    const chk = checkFestival({ name: x.name, nameKm: x.nameKm, text: x.text, textKm: x.textKm, code: x.code, startDate: x.startDate, endDate: x.endDate, percent: x.percent, productIds: x.productIds });
+    const chk = checkFestival({ name: x.name, nameKm: x.nameKm, text: x.text, textKm: x.textKm, code: x.code, startDate: x.startDate, endDate: x.endDate, percent: x.percent, productIds: x.productIds, image: x.image });
     return chk.ok ? [{ ...chk.value, id: x.id, active: x.active !== false, createdAt: String(x.createdAt ?? "") }] : [];
   }).slice(0, MAX_FESTIVALS);
   return { preorder: pre.ok ? pre.value : DEFAULT_PREORDER, campaigns, festivals };
@@ -118,7 +121,7 @@ export function campaignLive(c: Pick<Campaign, "active" | "startDate" | "endDate
 export const liveCampaigns = (cs: Campaign[] | undefined, now = Date.now()) => (cs ?? []).filter((c) => campaignLive(c, now));
 const isoDay = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 /** Validates the "Special Offer / Festival" form. Dates: both or none (none = always on while the offer is switched on). */
-export function checkFestival(i: { name: unknown; code?: unknown; nameKm?: unknown; text?: unknown; textKm?: unknown; startDate?: unknown; endDate?: unknown; percent?: unknown; productIds?: unknown }): Checked<Omit<Festival, "id" | "active" | "createdAt">> {
+export function checkFestival(i: { name: unknown; code?: unknown; nameKm?: unknown; text?: unknown; textKm?: unknown; startDate?: unknown; endDate?: unknown; percent?: unknown; productIds?: unknown; image?: unknown }): Checked<Omit<Festival, "id" | "active" | "createdAt">> {
   const name = String(i.name ?? "").trim(), nameKm = String(i.nameKm ?? "").trim(), text = String(i.text ?? "").trim(), textKm = String(i.textKm ?? "").trim();
   const startDate = String(i.startDate ?? "").trim(), endDate = String(i.endDate ?? "").trim(), percent = i.percent === "" || i.percent == null ? 0 : int(i.percent);
   if (name.length < 2 || name.length > 60) return { ok: false, error: "Festival / event name needs 2 to 60 characters" };
@@ -132,7 +135,8 @@ export function checkFestival(i: { name: unknown; code?: unknown; nameKm?: unkno
   const ids = Array.isArray(i.productIds) ? i.productIds : [];
   const productIds = [...new Set(ids.map((x) => String(x)).filter((x) => x.length > 0 && x.length <= 64))];
   if (productIds.length > MAX_FESTIVAL_PRODUCTS) return { ok: false, error: `At most ${MAX_FESTIVAL_PRODUCTS} products per offer` };
-  return { ok: true, value: { name, nameKm, text, textKm, code, startDate, endDate, percent, productIds } };
+  const image = cleanImage(i.image); if (image === null) return { ok: false, error: "The offer picture is not valid. Upload it again." };
+  return { ok: true, value: { name, nameKm, text, textKm, code, startDate, endDate, percent, productIds, image } };
 }
 /** "upcoming" = not started, "live" = shown in the shop now, "ended" = past its end date, "paused" = switched off by the admin. */
 export function festivalPhase(f: Pick<Festival, "active" | "startDate" | "endDate">, now = Date.now()): "upcoming" | "live" | "ended" | "paused" {

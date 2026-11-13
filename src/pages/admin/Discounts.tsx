@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import Icon from "@/components/admin/Icons";
 import Modal from "@/components/admin/Modal";
 import Skeleton from "@/components/Skeleton";
+import ImageUpload from "@/components/admin/ImageUpload";
 import { post } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useTitle } from "@/lib/title";
@@ -55,7 +56,7 @@ function CampaignModal({ c, categories, products, onClose, onDone }: { c?: Campa
   const [category, setCategory] = useState(c?.category ?? ""); const [picked, setPicked] = useState<string[]>(c?.productIds ?? []);
   const [buyQty, setBuyQty] = useState(String(c?.buyQty || 2)); const [buyType, setBuyType] = useState<"category" | "product">(c?.buyType ?? "category"); const [buyTarget, setBuyTarget] = useState(c?.buyTarget ?? ""); const [getQty, setGetQty] = useState(String(c?.getQty || 1)); const [bonus, setBonus] = useState(c?.bonusProductId ?? "");
   const [cond, setCond] = useState<"none" | "spend" | "qty">(c?.kind === "free_shipping" ? ((c.minQty ?? 0) > 0 ? "qty" : c.minSpendCents > 0 ? "spend" : "none") : "spend"); const [threshold, setThreshold] = useState(String(c?.kind === "free_shipping" ? ((c.minQty ?? 0) > 0 ? c.minQty : c.minSpendCents > 0 ? c.minSpendCents / 100 : 20) : 20)); const [area, setArea] = useState<"all" | "PHNOM_PENH">(c?.area ?? "all");
-  const [start, setStart] = useState(c?.startDate ?? ""); const [end, setEnd] = useState(c?.endDate ?? ""); const [test, setTest] = useState("30");
+  const [start, setStart] = useState(c?.startDate ?? ""); const [end, setEnd] = useState(c?.endDate ?? ""); const [test, setTest] = useState("30"); const [image, setImage] = useState(c?.image ?? "");
   const nameOf = (id: string) => products.find((p) => p.id === id)?.name ?? t("the free gift");
   const draft: Campaign = { id: "", name, kind, active, createdAt: "", minSpendCents: Math.round(Number(kind === "free_shipping" ? (cond === "spend" ? threshold : 0) : minSpend) * 100) || 0, amountCents: Math.round(Number(amount) * 100) || 0, percent: Number(percent) || 0, category, productIds: picked,
     buyQty: Number(buyQty) || 0, buyType, buyTarget, getQty: Number(getQty) || 0, bonusProductId: bonus, minQty: kind === "free_shipping" && cond === "qty" ? Number(threshold) || 0 : 0, area, startDate: start, endDate: end };
@@ -64,7 +65,7 @@ function CampaignModal({ c, categories, products, onClose, onDone }: { c?: Campa
   const icon = { spend_amount: "💵", spend_percent: "💵", spend_gift: "🎁", category_percent: "🏷️", product_percent: "🏷️", category_amount: "🏷️", product_amount: "🏷️", bogo: "🎁", free_shipping: "🚚" }[kind];
   async function submit(e: FormEvent<HTMLFormElement>, close: () => void) {
     e.preventDefault(); if (busy) return; setBusy(true); setErr("");
-    const body = { id: c?.id, active, name, kind, minSpend: kind === "free_shipping" ? (cond === "spend" ? threshold : 0) : minSpend, amount, percent, category, productIds: picked, buyQty, buyType, buyTarget, getQty, bonusProductId: bonus, minQty: kind === "free_shipping" && cond === "qty" ? threshold : 0, area, startDate: start, endDate: end };
+    const body = { id: c?.id, active, name, kind, minSpend: kind === "free_shipping" ? (cond === "spend" ? threshold : 0) : minSpend, amount, percent, category, productIds: picked, buyQty, buyType, buyTarget, getQty, bonusProductId: bonus, minQty: kind === "free_shipping" && cond === "qty" ? threshold : 0, area, startDate: start, endDate: end, image };
     const r = await send(c ? "/admin/promotions/campaigns/update" : "/admin/promotions/campaigns/add", body, c ? t("Campaign updated") : t("Campaign added")); setBusy(false);
     if (r.ok) { onDone(r); close(); } else setErr(r.text);
   }
@@ -99,8 +100,9 @@ function CampaignModal({ c, categories, products, onClose, onDone }: { c?: Campa
           <label className={lab}>{t("Where")}<select value={area} onChange={(e) => setArea(e.target.value as "all" | "PHNOM_PENH")} className={`${field} mt-1 bg-white`}><option value="all">{t("All of Cambodia")}</option><option value="PHNOM_PENH">{t("Phnom Penh only")}</option></select></label></div>
         {cond !== "none" && <label className={lab}>{t("Threshold value (spend $ or item qty)")}<input type="number" min="1" step={cond === "qty" ? 1 : 0.01} required value={threshold} onChange={(e) => setThreshold(e.target.value)} className={`${field} mt-1 bg-white`} /></label>}</>}</section>
     <DateLine start={start} end={end} setStart={setStart} setEnd={setEnd} />
+    <section className={sec}><h3 className={head}>{t("Card picture")}</h3><ImageUpload value={image} path="/admin/promotions/image" onChange={setImage} hint={t("Shown on the Special Offer card. Leave it empty to use the offer's product photo.")} /></section>
     <section className={sec}><div className="flex items-center justify-between"><h3 className={head}>3. {t("Live Cloudy storefront preview")}</h3><span className="rounded-full bg-[#7C93F5] px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-white">{kind === "bogo" ? "Bundle BOGO" : kind === "free_shipping" ? "Free shipping" : "Discount"}</span></div>
-      <div className="flex items-center gap-3 rounded-xl border border-sky-border bg-white p-3"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#FFF1C9] text-2xl" aria-hidden="true">{icon}</span><div className="min-w-0"><p className="truncate font-extrabold">{name || t("Your promotion name")}</p><p className="text-sm text-mute">{campaignDetail(draft, nameOf)}</p>{start && end && <p className="text-xs text-mute">{dayShort(start)} – {dayShort(end)}</p>}</div></div>
+      <div className="flex items-center gap-3 rounded-xl border border-sky-border bg-white p-3"><span className="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-[#FFF1C9] text-2xl" aria-hidden="true">{image ? <img src={image} alt="" className="h-full w-full object-cover" /> : icon}</span><div className="min-w-0"><p className="truncate font-extrabold">{name || t("Your promotion name")}</p><p className="text-sm text-mute">{campaignDetail(draft, nameOf)}</p>{start && end && <p className="text-xs text-mute">{dayShort(start)} – {dayShort(end)}</p>}</div></div>
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><label className="flex items-center gap-2 font-bold">{t("Test cart ($)")}<input type="number" min="0" step="1" value={test} onChange={(e) => setTest(e.target.value)} className="w-24 rounded-lg border border-sky-border bg-white px-2 py-1" /></label><p className="font-bold">{t("Savings")}: <span className="text-[#2F8F5B]">{saving}</span></p></div></section>
     <p className="text-xs text-mute">{t("Applied automatically at checkout. Delivery is never discounted except by a Free Shipping rule. Active rules stack, and a typed promo code then takes its % off what is left.")}</p>
     <div className="flex justify-end gap-3 border-t border-sky-border pt-4"><button type="button" onClick={close} className="rounded-xl border border-sky-border bg-white px-6 py-2.5 font-bold hover:bg-sky-pale">{t("Cancel")}</button><button disabled={busy} className="rounded-xl bg-[#7C93F5] px-6 py-2.5 font-extrabold text-white shadow-soft hover:opacity-90 disabled:opacity-50">{busy ? t("Saving…") : `✓ ${t("Save Rule")}`}</button></div>
@@ -109,10 +111,10 @@ function CampaignModal({ c, categories, products, onClose, onDone }: { c?: Campa
 type LiteProduct = { id: string; name: string; nameKm?: string; sku: string; category: string; price: number; image: string; active: boolean };
 /** Add / edit a festival or event special offer: name, promotion text (English + Khmer), dates, optional % off, and the products that belong to it. */
 function FestivalModal({ f, products, onClose, onDone }: { f?: Festival; products: LiteProduct[]; onClose: () => void; onDone: (m: Msg) => void }) {
-  const { t } = useI18n(); const [busy, setBusy] = useState(false); const [err, setErr] = useState(""); const [picked, setPicked] = useState<string[]>(f?.productIds ?? []); const [start, setStart] = useState(f?.startDate ?? ""); const [end, setEnd] = useState(f?.endDate ?? "");
+  const { t } = useI18n(); const [busy, setBusy] = useState(false); const [err, setErr] = useState(""); const [picked, setPicked] = useState<string[]>(f?.productIds ?? []); const [start, setStart] = useState(f?.startDate ?? ""); const [end, setEnd] = useState(f?.endDate ?? ""); const [image, setImage] = useState(f?.image ?? "");
   async function submit(e: FormEvent<HTMLFormElement>, close: () => void) {
     e.preventDefault(); if (busy) return; setBusy(true); setErr(""); const d = new FormData(e.currentTarget); const v = (k: string) => String(d.get(k) ?? "");
-    const body = { id: f?.id, name: v("name"), nameKm: v("nameKm"), text: v("text"), textKm: v("textKm"), code: v("code"), startDate: start, endDate: end, percent: v("percent"), productIds: picked };
+    const body = { id: f?.id, name: v("name"), nameKm: v("nameKm"), text: v("text"), textKm: v("textKm"), code: v("code"), startDate: start, endDate: end, percent: v("percent"), productIds: picked, image };
     const r = await send(f ? "/admin/promotions/festivals/update" : "/admin/promotions/festivals/add", body, f ? t("Special offer updated") : t("Special offer added")); setBusy(false);
     if (r.ok) { onDone(r); close(); } else setErr(r.text);
   }
@@ -126,6 +128,7 @@ function FestivalModal({ f, products, onClose, onDone }: { f?: Festival; product
       <label className={lab}>{t("Quick event code (optional)")}<input name="code" maxLength={30} defaultValue={f?.code} placeholder="KNY2026" className={`${field} mt-1 font-mono uppercase`} /></label></div>
     <p className="-mt-2 text-xs text-mute">{t("0% = no discount, the products are only featured under the Special Offer button. The event code is shown on the offer page; create the same code under Promo codes so it works at checkout.")}</p>
     <DateLine start={start} end={end} setStart={setStart} setEnd={setEnd} />
+    <div className="space-y-2 rounded-2xl border border-sky-border bg-[#F6FAFF] p-4"><p className="text-xs font-extrabold uppercase tracking-wide text-mute">{t("Card picture")}</p><ImageUpload value={image} path="/admin/promotions/image" onChange={setImage} hint={t("Shown on the Special Offer card. Leave it empty to use the first selected product's photo.")} /></div>
     <ProductPicker products={products} picked={picked} setPicked={setPicked} label={t("Products in this special offer")} />
     <div className="flex justify-end gap-3 border-t border-sky-border pt-4"><button type="button" onClick={close} className="rounded-xl border border-sky-border bg-white px-6 py-2.5 font-bold hover:bg-sky-pale">{t("Cancel")}</button><button disabled={busy} className="rounded-xl bg-sky px-6 py-2.5 font-extrabold shadow-soft hover:bg-sky-hover disabled:opacity-50">{busy ? t("Saving…") : t("Save Special Offer")}</button></div>
   </form>)}</Modal>);

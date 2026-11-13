@@ -117,3 +117,17 @@ describe("fixed-amount and free-gift rewards", () => {
     expect(bogoGifts(l(5000), [gift])).toEqual([{ campaignId: "g", name: "$3 off plush", productId: "sticker", qty: 2 }]);
   });
 });
+
+describe("offer card picture", () => {
+  it("accepts our own uploads and https links, rejects anything else", () => {
+    const ok = (image: unknown) => checkCampaign({ name: "Free ship", kind: "free_shipping", image }).ok;
+    expect(ok("")).toBe(true); expect(ok(undefined)).toBe(true);
+    expect(ok("/api/img/offer-ab12cd34.webp")).toBe(true); expect(ok("https://x.supabase.co/storage/v1/object/public/p/offer-1.webp")).toBe(true);
+    expect(ok("javascript:alert(1)")).toBe(false); expect(ok("http://insecure.test/a.png")).toBe(false); expect(ok("/api/img/../secret.png")).toBe(false);
+  });
+  it("keeps the picture through save / load and on festivals", () => {
+    const n = normalizePromotions({ campaigns: [{ id: "a", name: "Free ship", kind: "free_shipping", active: true, image: "/api/img/offer-ab12cd34.webp" }], festivals: [{ id: "f", name: "Water Festival", startDate: "", endDate: "", percent: 30, productIds: ["p"], image: "/api/img/offer-zz99.webp" }] });
+    expect(n.campaigns[0]?.image).toBe("/api/img/offer-ab12cd34.webp"); expect(n.festivals[0]?.image).toBe("/api/img/offer-zz99.webp");
+    expect(normalizePromotions({ festivals: [{ id: "f", name: "Bad", image: "javascript:x" }] }).festivals).toEqual([]);
+  });
+});

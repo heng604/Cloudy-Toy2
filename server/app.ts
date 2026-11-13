@@ -422,6 +422,14 @@ const categoryList = async () => {
   for (const [c, n] of used) counts.set(c, n);
   return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
 };
+/** Pictures the admin uploads for category icons and offer cards: re-encoded small, stored like banners, never trusted from the browser. */
+const ownImage = (s?: string) => !!s && (s.startsWith("/api/img/") || s.includes(".supabase.co"));
+const dropImage = async (s?: string) => { if (ownImage(s)) await deleteProductImages([s!]); };
+async function savePicture(f: Express.Multer.File, prefix: string, size: number, fit: "cover" | "inside"): Promise<{ url: string } | { error: string }> {
+  const bytes = new Uint8Array(f.buffer); const v = validateImage(bytes, f.mimetype); if (!v.ok) return { error: `${f.originalname}: ${v.error}` };
+  const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: size, height: size, fit, withoutEnlargement: fit === "inside" }).webp({ quality: 85 }).toBuffer());
+  return { url: await uploadProductImage(`${prefix}-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}.webp`, small, "image/webp") };
+}
 const catName = (v: unknown) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
 admin.get("/categories", wrap(async (_req, res) => res.json({ categories: await categoryList() })));
 admin.post("/categories/add", wrap(async (req, res) => {
@@ -436,12 +444,25 @@ admin.post("/categories/rename", wrap(async (req, res) => {
   const same = list.find((c) => c.name.toLowerCase() === to.toLowerCase() && c.name !== from); const target = same?.name ?? to;
   await renameCategory(from, target);
   const extra = ((await getSettings()).categories ?? []).filter((c) => c !== from); if (!extra.includes(target) && (list.find((c) => c.name === from)?.count ?? 0) === 0) extra.push(target);
-  await saveSettings({ categories: extra }); res.json({ ok: true });
+  const imgs = { ...((await getSettings()).categoryImages ?? {}) }; if (from !== target && imgs[from]) { if (!imgs[target]) imgs[target] = imgs[from]; else await dropImage(imgs[from]); delete imgs[from]; } // the icon follows the rename (or is dropped when merging into a category that has its own)
+  await saveSettings({ categories: extra, categoryImages: imgs }); res.json({ ok: true });
 }));
 admin.post("/categories/delete", wrap(async (req, res) => {
   const name = catName(req.body?.name); const c = (await categoryList()).find((x) => x.name === name); if (!c) return res.json({ error: "Category not found" });
   if (c.count > 0) return res.json({ error: `${c.count} product${c.count === 1 ? " uses" : "s use"} this category. Rename it to merge it into another one, or move those products first.` });
-  await saveSettings({ categories: ((await getSettings()).categories ?? []).filter((x) => x !== name) }); res.json({ ok: true });
+  const s = await getSettings(); const imgs = { ...(s.categoryImages ?? {}) }; const old = imgs[name]; delete imgs[name];
+  await saveSettings({ categories: (s.categories ?? []).filter((x) => x !== name), categoryImages: imgs }); await dropImage(old); res.json({ ok: true });
+}));
+/** Home page category icon: a picture for one category, or for the "All Products" (__all) / "New Arrival" (__new) circles. Send remove=on to go back to the default icon. */
+admin.post("/categories/image", upload.any(), wrap(async (req, res) => {
+  const raw = fld(req, "name").trim(); const special = raw === "__all" || raw === "__new"; const key = special ? raw : catName(raw);
+  if (!special && !(await categoryList()).some((c) => c.name === key)) return res.json({ error: "Category not found" });
+  const cur = (await getSettings()).categoryImages ?? {}; const old = cur[key]; const next = { ...cur }; let uploaded = ""; const f = files(req, "image")[0];
+  if (f) { const r = await savePicture(f, "cat", 320, "cover"); if ("error" in r) return res.json({ error: r.error }); uploaded = r.url; next[key] = uploaded; }
+  else if (fld(req, "remove") === "on") delete next[key]; else return res.json({ error: "Choose a picture first" });
+  try { await saveSettings({ categoryImages: next }); } catch { await dropImage(uploaded); return res.json({ error: "Could not save the icon. Please try again." }); }
+  if (old && old !== next[key]) await dropImage(old);
+  res.json({ ok: true, url: next[key] ?? "" });
 }));
 admin.get("/products", wrap(async (_req, res) => res.json({ products: await listAllProducts() })));
 admin.get("/products/:id", wrap(async (req, res) => {
@@ -531,7 +552,7 @@ admin.post("/promotions/preorder", wrap(async (req, res) => {
   const c = checkPreorder({ depositPercent: req.body?.depositPercent, dispatchText: req.body?.dispatchText, capSlots: req.body?.capSlots }); if (!c.ok) return res.json({ error: c.error });
   await savePromotions({ ...(await getPromotions()), preorder: c.value }); res.json({ ok: true });
 }));
-const campaignFields = (b: Record<string, unknown>) => checkCampaign({ name: b?.name, kind: b?.kind, minSpend: b?.minSpend, amount: b?.amount, percent: b?.percent, category: b?.category, startDate: b?.startDate, endDate: b?.endDate, productIds: b?.productIds, buyQty: b?.buyQty, buyType: b?.buyType, buyTarget: b?.buyTarget, getQty: b?.getQty, bonusProductId: b?.bonusProductId, minQty: b?.minQty, area: b?.area });
+const campaignFields = (b: Record<string, unknown>) => checkCampaign({ name: b?.name, kind: b?.kind, minSpend: b?.minSpend, amount: b?.amount, percent: b?.percent, category: b?.category, startDate: b?.startDate, endDate: b?.endDate, productIds: b?.productIds, image: b?.image, buyQty: b?.buyQty, buyType: b?.buyType, buyTarget: b?.buyTarget, getQty: b?.getQty, bonusProductId: b?.bonusProductId, minQty: b?.minQty, area: b?.area });
 admin.post("/promotions/campaigns/add", wrap(async (req, res) => {
   const c = campaignFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); if (cur.campaigns.length >= MAX_CAMPAIGNS) return res.json({ error: `At most ${MAX_CAMPAIGNS} campaigns. Delete one first.` });
@@ -539,16 +560,21 @@ admin.post("/promotions/campaigns/add", wrap(async (req, res) => {
 }));
 admin.post("/promotions/campaigns/update", wrap(async (req, res) => {
   const c = campaignFields(req.body); if (!c.ok) return res.json({ error: c.error });
-  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.campaigns.some((x) => x.id === id)) return res.json({ error: "Campaign not found" });
-  await savePromotions({ ...cur, campaigns: cur.campaigns.map((x) => (x.id === id ? { ...x, ...c.value, ...(typeof req.body?.active === "boolean" ? { active: req.body.active } : {}) } : x)) }); res.json({ ok: true });
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const prev = cur.campaigns.find((x) => x.id === id); if (!prev) return res.json({ error: "Campaign not found" });
+  await savePromotions({ ...cur, campaigns: cur.campaigns.map((x) => (x.id === id ? { ...x, ...c.value, ...(typeof req.body?.active === "boolean" ? { active: req.body.active } : {}) } : x)) }); if (prev.image && prev.image !== c.value.image) await dropImage(prev.image); res.json({ ok: true });
 }));
 admin.post("/promotions/campaigns/toggle", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.campaigns.some((x) => x.id === id)) return res.json({ error: "Campaign not found" });
   await savePromotions({ ...cur, campaigns: cur.campaigns.map((x) => (x.id === id ? { ...x, active: req.body?.active === true } : x)) }); res.json({ ok: true });
 }));
-admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur = await getPromotions(); await savePromotions({ ...cur, campaigns: cur.campaigns.filter((x) => x.id !== String(req.body?.id ?? "")) }); res.json({ ok: true }); }));
+admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const gone = cur.campaigns.find((x) => x.id === id); await savePromotions({ ...cur, campaigns: cur.campaigns.filter((x) => x.id !== id) }); await dropImage(gone?.image); res.json({ ok: true }); }));
+/** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
+admin.post("/promotions/image", upload.any(), wrap(async (req, res) => {
+  const f = files(req, "image")[0]; if (!f) return res.json({ error: "Choose a picture first" });
+  const r = await savePicture(f, "offer", 900, "inside"); if ("error" in r) return res.json({ error: r.error }); res.json({ ok: true, url: r.url });
+}));
 // festival / event special offers: the admin writes the promotion text, picks the products (and an optional % off); the shop's "Special Offer" button shows them
-const festivalFields = (b: Record<string, unknown>) => checkFestival({ name: b?.name, code: b?.code, nameKm: b?.nameKm, text: b?.text, textKm: b?.textKm, startDate: b?.startDate, endDate: b?.endDate, percent: b?.percent, productIds: b?.productIds });
+const festivalFields = (b: Record<string, unknown>) => checkFestival({ name: b?.name, code: b?.code, nameKm: b?.nameKm, text: b?.text, textKm: b?.textKm, startDate: b?.startDate, endDate: b?.endDate, percent: b?.percent, productIds: b?.productIds, image: b?.image });
 admin.post("/promotions/festivals/add", wrap(async (req, res) => {
   const f = festivalFields(req.body); if (!f.ok) return res.json({ error: f.error });
   const cur = await getPromotions(); if (cur.festivals.length >= MAX_FESTIVALS) return res.json({ error: `At most ${MAX_FESTIVALS} special offers. Delete one first.` });
@@ -556,14 +582,14 @@ admin.post("/promotions/festivals/add", wrap(async (req, res) => {
 }));
 admin.post("/promotions/festivals/update", wrap(async (req, res) => {
   const f = festivalFields(req.body); if (!f.ok) return res.json({ error: f.error });
-  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.festivals.some((x) => x.id === id)) return res.json({ error: "Special offer not found" });
-  await savePromotions({ ...cur, festivals: cur.festivals.map((x) => (x.id === id ? { ...x, ...f.value } : x)) }); res.json({ ok: true });
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const prev = cur.festivals.find((x) => x.id === id); if (!prev) return res.json({ error: "Special offer not found" });
+  await savePromotions({ ...cur, festivals: cur.festivals.map((x) => (x.id === id ? { ...x, ...f.value } : x)) }); if (prev.image && prev.image !== f.value.image) await dropImage(prev.image); res.json({ ok: true });
 }));
 admin.post("/promotions/festivals/toggle", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.festivals.some((x) => x.id === id)) return res.json({ error: "Special offer not found" });
   await savePromotions({ ...cur, festivals: cur.festivals.map((x) => (x.id === id ? { ...x, active: req.body?.active === true } : x)) }); res.json({ ok: true });
 }));
-admin.post("/promotions/festivals/delete", wrap(async (req, res) => { const cur = await getPromotions(); await savePromotions({ ...cur, festivals: cur.festivals.filter((x) => x.id !== String(req.body?.id ?? "")) }); res.json({ ok: true }); }));
+admin.post("/promotions/festivals/delete", wrap(async (req, res) => { const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const gone = cur.festivals.find((x) => x.id === id); await savePromotions({ ...cur, festivals: cur.festivals.filter((x) => x.id !== id) }); await dropImage(gone?.image); res.json({ ok: true }); }));
 
 // staff (Admin Permissions page, owners only)
 admin.get("/staff", wrap(async (req, res) => res.json({ ...(await listStaff()), me: (adminOf(req).email ?? "").toLowerCase() })));
