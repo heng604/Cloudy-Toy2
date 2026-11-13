@@ -38,11 +38,12 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
   const offers = buildOffers(promotions, all, lang, t); const total = rules.length + fests.length;
   const useCode = (code: string) => { try { sessionStorage.setItem("ct-event-code", code); } catch { /* private mode: the code is shown anyway */ } setSaved(code); };
   const spark = (c: string, cls: string) => <span aria-hidden="true" className={`pointer-events-none absolute ${cls}`} style={{ color: c }}>✦</span>;
-  return (<div className="space-y-6">
-    <section className="relative overflow-hidden rounded-3xl border border-white bg-gradient-to-b from-[#BFDDFB] via-[#D9EBFF] to-[#EEF6FF] p-5 shadow-soft sm:p-8">
+  // full screen: the page breaks out of the shop's centred column and runs edge to edge (banner touches the header and both sides)
+  return (<div className="relative left-1/2 -mt-5 w-screen -translate-x-1/2 space-y-6 sm:-mt-8">
+    <section className="relative overflow-hidden bg-gradient-to-b from-[#BFDDFB] via-[#D9EBFF] to-[#EEF6FF] px-4 py-6 sm:px-10 sm:py-8 lg:px-16">
       <span aria-hidden="true" className="pointer-events-none absolute -left-10 bottom-[-3rem] h-32 w-72 rounded-full bg-white/80 blur-xl" /><span aria-hidden="true" className="pointer-events-none absolute -right-8 bottom-[-3rem] h-32 w-80 rounded-full bg-white/80 blur-xl" />
       {spark("#FFD84D", "left-4 top-5 text-3xl")}{spark("#FFD84D", "left-[38%] top-24 text-2xl")}{spark("#FFB6CD", "left-[44%] top-3 text-xl")}{spark("#8EC5FF", "right-[30%] top-8 text-lg")}
-      <div className="relative grid items-center gap-4 lg:grid-cols-[1.25fr_1fr_1fr]">
+      <div className="relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.25fr_1fr_1fr]">
         <div className="text-center lg:text-left">
           {hero && <span className="mb-2 inline-block rounded-full bg-white/80 px-3 py-1 text-xs font-extrabold text-[#C2305F]">✨ {festivalName(hero, lang)}</span>}
           <h1 className={`${HAND} text-6xl font-bold leading-none text-[#1F4E9C] drop-shadow-[0_2px_0_#fff] sm:text-7xl`}>{t("Special Offer")}</h1>
@@ -52,6 +53,7 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
         <div className="mx-auto w-full max-w-xs space-y-3">
           {up > 0 && <div className="mx-auto w-44 rounded-[2.5rem] bg-white px-4 py-3 text-center shadow-lift"><p className="text-sm font-extrabold text-[#1F4E9C]">{t("UP TO")}</p><p className="text-5xl font-extrabold leading-none text-[#FF3D83]">{up}%</p><p className="text-sm font-extrabold text-[#1F4E9C]">{t("OFF")}</p></div>}
           {end > 0 && <Countdown end={end} t={t} />}</div></div></section>
+  <div className="space-y-6 px-3 sm:px-6 lg:px-10">
     {hero?.code && <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl bg-white p-3 text-sm shadow-soft"><span className="font-bold">🎟️ {t("Quick event code")}:</span><span className="rounded-xl bg-[#EFE6FF] px-4 py-1.5 font-mono text-base font-extrabold text-[#4B2A99]">{hero.code}</span>
       <button type="button" onClick={() => useCode(hero.code!)} className="rounded-full bg-[#7A3FD8] px-4 py-1.5 text-xs font-extrabold text-white hover:bg-[#6930C4]">{t("Apply to Bag")}</button>
       {saved === hero.code && <span role="status" className="text-xs">{t("Saved! It is filled in at checkout.")} <Link to="/cart" className="font-bold underline">{t("Go to cart")}</Link></span>}</div>}
@@ -66,7 +68,8 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
       <section aria-label={t("Featured Cloudy Products")}>{shown.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center">{t("No products match.")}</p>
         : <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">{shown.map((p) => <OfferProductCard key={p.id} p={p} />)}</div>}</section></div>}
     {list.length === 0 && total > 0 && <p className="rounded-xl2 bg-sky-pale p-6 text-center">{t("No products match.")} <Link to="/shop" className="underline">{t("Browse all products")}</Link></p>}
-    <section className="relative flex flex-wrap items-center justify-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-r from-[#E4EEFF] via-[#EEE9FF] to-[#FFE6F0] px-5 py-4 shadow-soft sm:justify-between sm:px-8">
+  </div>
+    <section className="relative flex flex-wrap items-center justify-center gap-4 overflow-hidden bg-gradient-to-r from-[#E4EEFF] via-[#EEE9FF] to-[#FFE6F0] px-5 py-4 sm:justify-between sm:px-10 lg:px-16">
       <Mascot className="hidden h-16 w-auto sm:block" /><p className={`${HAND} text-center text-2xl font-bold text-[#1F4E9C] sm:text-3xl`}>{t("Shop now and enjoy special savings!")} <span aria-hidden="true" className="text-[#8E7CF0]">♡</span></p>
       <Link to="/shop" className={`${HAND} rounded-full bg-[#FF7BA9] px-8 py-2.5 text-2xl font-bold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-[#F2679A]`}>{t("Happy Shopping")} ♡</Link></section>
   </div>);
