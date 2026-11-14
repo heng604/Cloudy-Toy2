@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TIERS, checkTier, memberBenefits, memberSpendOf, nextTier, normalizeTiers, tierFor } from "../shared/membership";
+import { DEFAULT_TIERS, checkTier, memberBenefits, monthUsage, shopMonth, memberSpendOf, nextTier, normalizeTiers, tierFor } from "../shared/membership";
 import { DEFAULT_PROMOTIONS, normalizePromotions } from "../shared/promotions";
 
 describe("membership levels", () => {
@@ -30,7 +30,7 @@ describe("membership levels", () => {
     expect(a.discounts.map((d) => d.cents)).toEqual([1000, 200]); expect(a.freeShipping).toBe(true);
     expect(memberBenefits(tier.value, { subtotalCents: 4000, leftCents: 4000 }).discounts.map((d) => d.cents)).toEqual([400]);
     expect(memberBenefits(tier.value, { subtotalCents: 10000, leftCents: 500 }).discounts.reduce((s, d) => s + d.cents, 0)).toBe(500);
-    expect(memberBenefits(null, { subtotalCents: 10000, leftCents: 10000 })).toEqual({ discounts: [], freeShipping: false });
+    expect(memberBenefits(null, { subtotalCents: 10000, leftCents: 10000 })).toEqual({ discounts: [], freeShipping: false, perks: [], shipPerks: [] });
   });
   it("rejects bad input", () => {
     expect(checkTier({ name: "x", minSpend: 10 }).ok).toBe(false);
@@ -44,5 +44,27 @@ describe("membership levels", () => {
     expect(DEFAULT_PROMOTIONS.membership.length).toBe(3);
     const saved = normalizeTiers([{ id: "g", name: "Gold", emoji: "🥇", minSpendCents: 30000, active: true, perks: [{ id: "p1", kind: "percent", title: "5% off", percent: 5, amountCents: 0, minSpendCents: 0, active: true }] }]);
     expect(saved[0].perks[0].percent).toBe(5); expect(normalizeTiers(saved)).toEqual(saved);
+  });
+});
+
+describe("monthly limits", () => {
+  const tier = checkTier({ id: "g", name: "Gold", minSpend: 300, image: "/api/img/x.webp", perks: [{ id: "p1", kind: "percent", title: "10% off", percent: 10, monthlyLimit: 2 }, { id: "p2", kind: "free_shipping", title: "Free delivery", monthlyLimit: 1 }] });
+  if (!tier.ok) throw new Error(tier.error);
+  it("keeps the picture and the limit", () => { expect(tier.value.image).toBe("/api/img/x.webp"); expect(tier.value.perks.map((p) => p.monthlyLimit)).toEqual([2, 1]); });
+  it("rejects a bad limit or picture", () => {
+    expect(checkTier({ name: "Silver", minSpend: 10, perks: [{ kind: "percent", title: "x%", percent: 5, monthlyLimit: -1 }] }).ok).toBe(false);
+    expect(checkTier({ name: "Silver", minSpend: 10, image: "javascript:alert(1)" }).ok).toBe(false);
+  });
+  it("skips a special that reached its monthly limit", () => {
+    const cart = { subtotalCents: 10000, leftCents: 10000 };
+    expect(memberBenefits(tier.value, cart, { p1: 1 }).discounts).toHaveLength(1);
+    expect(memberBenefits(tier.value, cart, { p1: 2 }).discounts).toHaveLength(0);
+    expect(memberBenefits(tier.value, cart, { p2: 1 }).freeShipping).toBe(false);
+    expect(memberBenefits(tier.value, cart, {}).perks).toEqual(["p1"]);
+  });
+  it("counts this month's uses, ignoring other months and failed orders", () => {
+    const now = new Date().toISOString(), old = new Date(Date.now() - 70 * 86400000).toISOString();
+    const u = monthUsage([{ createdAt: now, paymentStatus: "PAID", memberPerks: ["p1"] }, { createdAt: now, paymentStatus: "PENDING", memberPerks: ["p1", "p2"] }, { createdAt: now, paymentStatus: "FAILED", memberPerks: ["p1"] }, { createdAt: old, paymentStatus: "PAID", memberPerks: ["p1"] }], shopMonth());
+    expect(u).toEqual({ p1: 2, p2: 1 });
   });
 });

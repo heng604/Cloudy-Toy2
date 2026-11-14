@@ -37,7 +37,8 @@ import { validateImage, safeFileName } from "../shared/images";
 import { r2Enabled, r2Get } from "./lib/r2";
 import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
-import { tierFor, nextTier, memberBenefits, memberSpendOf, checkTier, MAX_TIERS, type Tier } from "../shared/membership";
+import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier, MAX_TIERS, type Tier } from "../shared/membership";
+import { getOverrides, setOverride } from "./lib/memberStore";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
 import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
 import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } from "../shared/products";
@@ -100,9 +101,14 @@ const catalogOf = (products: Awaited<ReturnType<typeof listProducts>>) => new Ma
 
 /** The customer's level, worked out from what they have paid so far (always read fresh from the orders, so it is automatic). */
 const memberOf = async (email: string | undefined, tiers: Tier[]) => {
-  if (!email || tiers.length === 0) return { spendCents: 0, tier: null as Tier | null };
-  const spendCents = memberSpendOf(await listOrdersByEmail(email)); return { spendCents, tier: tierFor(spendCents, tiers) };
+  const none = { spendCents: 0, tier: null as Tier | null, used: {} as Record<string, number> };
+  if (!email || tiers.length === 0) return none;
+  const orders = await listOrdersByEmail(email); const spendCents = memberSpendOf(orders); const ov = (await getOverrides())[email.toLowerCase()];
+  const forced = ov?.tierId ? tiers.find((t) => t.id === ov.tierId && t.active) ?? null : null; // the admin can fix a member's level
+  const tier = ov?.blocked ? null : forced ?? tierFor(spendCents, tiers); // blocked = no level specials at all
+  return { spendCents, tier, used: monthUsage(orders) };
 };
+const noMember = { spendCents: 0, tier: null as Tier | null, used: {} as Record<string, number> };
 /* ---------------- public: checkout ---------------- */
 const Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
@@ -126,21 +132,21 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const acct = userOf(req); const ids = lines.map((l) => l.productId); // only the products in this cart are read (a cart has a few items, the catalogue has hundreds)
   // abandoned Bakong orders give their stock back BEFORE the stock check (swept at most every 5 s); settings load at the same time
-  const promos = await getPromotions(); const member = await memberOf(acct?.email, promos.membership).catch(() => ({ spendCents: 0, tier: null as Tier | null })); const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
+  const promos = await getPromotions(); const member = await memberOf(acct?.email, promos.membership).catch(() => noMember); const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
   const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds([...new Set([...ids, ...bonusIds])]))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   const catalog = catalogOf(products.filter((p) => ids.includes(p.id))); let usedCode: string | undefined;
   try {
     const t00 = computeTotals(lines, catalog, 0); const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
-    const memFree = memberBenefits(member.tier, { subtotalCents: t00.subtotalCents, leftCents: 0 }).freeShipping; // a member special can waive delivery too
+    const memShip = memberBenefits(member.tier, { subtotalCents: t00.subtotalCents, leftCents: 0 }, member.used); const memFree = memShip.freeShipping; // a member special can waive delivery too
     const ship = freeShip || memFree ? 0 : shippingFor(area, settings); // a live "Free Shipping" rule waives the delivery fee
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
     // automatic campaigns first (stack, never more than the subtotal), then the typed code takes its % off what is left
     const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    auto.push(...memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto) }).discounts); // the member's level specials stack after the shop's campaigns
+    const mb = memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto) }, member.used); auto.push(...mb.discounts); const memberPerks = [...mb.perks, ...(memFree && !freeShip ? memShip.shipPerks : [])]; // the member's level specials stack after the shop's campaigns
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
-      const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true);
+      const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true, acct?.email ?? undefined);
       if (!ev.ok) return res.status(400).json({ error: ev.error });
       usedCode = codeIn; discount += ev.discountCents;
     }
@@ -155,7 +161,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const orderNumber = `CT-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
     const order: StoredOrder = { orderNumber, createdAt: new Date().toISOString(), area, ...(area === "PROVINCE" ? { province: parsed.data.province } : {}), method, customer,
       items: t.items.map((i) => ({ productId: i.productId, sku: byId.get(i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents, ...itemDates(byId.get(i.productId)) })),
-      subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(auto.length ? { autoDiscounts: auto } : {}), ...(member.tier ? { memberTier: member.tier.name } : {}), ...(hasPre ? { preorder: preorderSplit(t.totalCents, promos.preorder, parsed.data.preorderPay === "full") } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
+      subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(auto.length ? { autoDiscounts: auto } : {}), ...(member.tier ? { memberTier: member.tier.name } : {}), ...(memberPerks.length ? { memberPerks } : {}), ...(hasPre ? { preorder: preorderSplit(t.totalCents, promos.preorder, parsed.data.preorderPay === "full") } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
     // Buy X Get Y: the free bonus items are added to the order at $0 and taken from stock (only as many as are in stock)
     const taken = new Map<string, number>(); for (const i of t.items) taken.set(i.productId, (taken.get(i.productId) ?? 0) + i.qty); const giftItems: typeof order.items = [];
@@ -197,8 +203,8 @@ api.post("/discount/validate", wrap(async (req, res) => {
   try {
     const [products, promos, who] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions(), userFromReq(req)]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => ({ spendCents: 0, tier: null as Tier | null })); auto.push(...memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto) }).discounts);
-    const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }]);
+    const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); auto.push(...memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto) }, mem.used).discounts);
+    const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }], false, who?.email ?? undefined);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }
 }));
@@ -353,7 +359,7 @@ api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = use
 /** The signed-in customer's membership: what they have paid so far, their level and the next one. Levels come from the admin's Membership page. */
 api.get("/membership/me", requireUser, wrap(async (req, res) => {
   const u = userOf(req); const promos = await getPromotions(); const m = await memberOf(u.email ?? undefined, promos.membership);
-  res.json({ spendCents: m.spendCents, tierId: m.tier?.id ?? null, nextId: nextTier(m.spendCents, promos.membership)?.id ?? null });
+  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: nextTier(m.spendCents, promos.membership)?.id ?? null });
 }));
 
 /** Which admin role (owner / admin / editor) this signed-in account has, or null. The browser uses it to show the admin area. */
@@ -363,7 +369,7 @@ api.get("/staff/me", requireUser, wrap(async (req, res) => { const u = userOf(re
 const admin = express.Router(); admin.use(requireAdmin); api.use("/admin", admin);
 admin.get("/me", (req, res) => { const u = adminOf(req); const m = (u.user_metadata ?? {}) as { full_name?: string; name?: string }; res.json({ email: u.email, role: roleOf(req), name: m.full_name || m.name || "" }); });
 // each area is limited by role (owner: all, admin: all but staff, editor: products + pages)
-admin.use(["/orders", "/transactions"], needs("orders")); admin.use("/pages", needs("pages")); admin.use(["/discounts", "/promotions"], needs("promotions")); admin.use(["/settings", "/bakong"], needs("settings")); admin.use("/staff", needs("staff"));
+admin.use(["/orders", "/transactions"], needs("orders")); admin.use("/pages", needs("pages")); admin.use(["/discounts", "/promotions", "/members"], needs("promotions")); admin.use(["/settings", "/bakong"], needs("settings")); admin.use("/staff", needs("staff"));
 admin.use(["/products", "/product-form-meta", "/categories"], needs("products"));
 admin.get("/dashboard", wrap(async (req, res) => { const [orders, products] = await Promise.all([can(roleOf(req), "orders") ? listAdminOrders() : Promise.resolve([] as Awaited<ReturnType<typeof listAllOrders>>), listAllProducts()]); res.json({ orders, products }); }));
 admin.get("/orders", wrap(async (req, res) => { const orders = await listAdminOrders(); res.json({ orders, proofs: req.query.proofs ? await proofUrls(orders.map((o) => o.paymentProof ?? "")) : {} }); }));
@@ -546,19 +552,41 @@ admin.post("/pages/:slug/restore", wrap(async (req, res) => { const d = PAGE_DEF
 
 // discounts: the admin creates codes worth 10-50% off the cart subtotal (customers type them at checkout)
 admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts() })));
+const limitOf = (v: unknown): number | null | "bad" => { if (v === undefined || v === null || v === "" || Number(v) === 0) return null; const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 1_000_000 ? n : "bad"; };
 admin.post("/discounts/create", wrap(async (req, res) => {
-  const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
+  const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent), maxUses = limitOf(req.body?.maxUses), perCustomer = limitOf(req.body?.perCustomer);
   if (!CODE_RE.test(code)) return res.json({ error: "Code: 3-30 letters, numbers, - or _ (e.g. SAVE10)" });
   if (!percentOk(pct)) return res.json({ error: "Discount % must be a whole number from 10 to 50" });
-  if (!(await createStoreDiscount(code, pct))) return res.json({ error: "That code already exists" });
+  if (maxUses === "bad" || perCustomer === "bad") return res.json({ error: "A use limit must be a whole number of 1 or more (leave it empty for no limit)" });
+  if (!(await createStoreDiscount(code, pct, maxUses, perCustomer))) return res.json({ error: "That code already exists" });
   res.json({ ok: true });
 }));
 admin.post("/discounts/update", wrap(async (req, res) => {
-  const code = normalizeCode(String(req.body?.code ?? "")), pct = Number(req.body?.percent);
+  const code = normalizeCode(String(req.body?.code ?? "")); const b = (req.body ?? {}) as Record<string, unknown>;
   if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" });
-  if (!percentOk(pct)) return res.json({ error: "Discount % must be a whole number from 10 to 50" });
-  if (!(await updateStoreDiscount(code, pct))) return res.json({ error: "Unknown code" });
+  const patch: { percent?: number; maxUses?: number | null; perCustomer?: number | null } = {};
+  if (b.percent !== undefined) { const pct = Number(b.percent); if (!percentOk(pct)) return res.json({ error: "Discount % must be a whole number from 10 to 50" }); patch.percent = pct; }
+  if ("maxUses" in b) { const v = limitOf(b.maxUses); if (v === "bad") return res.json({ error: "A use limit must be a whole number of 1 or more (leave it empty for no limit)" }); patch.maxUses = v; }
+  if ("perCustomer" in b) { const v = limitOf(b.perCustomer); if (v === "bad") return res.json({ error: "A use limit must be a whole number of 1 or more (leave it empty for no limit)" }); patch.perCustomer = v; }
+  if (!(await updateStoreDiscount(code, patch))) return res.json({ error: "Unknown code" });
   res.json({ ok: true });
+}));
+// members: every customer with an account or order, their level, spend and this month's use of each special. The admin can fix a member's level or switch their specials off.
+admin.get("/members", wrap(async (_req, res) => {
+  const [orders, promos, ov] = await Promise.all([listAllOrders(), getPromotions(), getOverrides()]); const by = new Map<string, typeof orders>();
+  for (const o of orders) { const e = (o.accountEmail || o.customer.email || "").toLowerCase(); if (!e) continue; (by.get(e) ?? by.set(e, []).get(e)!).push(o); }
+  const members = [...by.entries()].map(([email, os]) => {
+    const spendCents = memberSpendOf(os), auto = tierFor(spendCents, promos.membership), o = ov[email], forced = o?.tierId ? promos.membership.find((t) => t.id === o.tierId) ?? null : null;
+    const last = os.reduce((a, x) => ((x.createdAt ?? "") > (a.createdAt ?? "") ? x : a), os[0]);
+    return { email, name: last.customer.name, phone: last.customer.phone, spendCents, orders: os.length, lastOrderAt: last.createdAt ?? "", autoTierId: auto?.id ?? null, tierId: o?.blocked ? null : (forced ?? auto)?.id ?? null, forcedTierId: o?.tierId ?? null, blocked: !!o?.blocked, used: monthUsage(os) };
+  }).sort((a, b) => b.spendCents - a.spendCents).slice(0, 2000);
+  res.json({ members });
+}));
+admin.post("/members/set", wrap(async (req, res) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase(); const tierId = String(req.body?.tierId ?? ""); const promos = await getPromotions();
+  if (!email || email.length > 200) return res.json({ error: "Member not found" });
+  if (tierId && !promos.membership.some((t) => t.id === tierId)) return res.json({ error: "Level not found" });
+  await setOverride(email, { tierId: tierId || undefined, blocked: req.body?.blocked === true }); res.json({ ok: true });
 }));
 admin.post("/discounts/delete", wrap(async (req, res) => { const code = normalizeCode(String(req.body?.code ?? "")); if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" }); await deleteStoreDiscount(code); res.json({ ok: true }); }));
 
@@ -586,14 +614,15 @@ admin.post("/promotions/campaigns/toggle", wrap(async (req, res) => {
 admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const gone = cur.campaigns.find((x) => x.id === id); await savePromotions({ ...cur, campaigns: cur.campaigns.filter((x) => x.id !== id) }); await dropImage(gone?.image); res.json({ ok: true }); }));
 /** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
 // membership levels: add / edit (including their specials) / delete. A level starts at its own "spend" amount; two levels cannot start at the same amount.
-const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, minSpend: b?.minSpend, perks: b?.perks, active: b?.active });
+const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, perks: b?.perks, active: b?.active });
 admin.post("/promotions/membership/save", wrap(async (req, res) => {
   const c = tierFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const exists = cur.membership.some((t) => t.id === id);
   if (cur.membership.some((t) => t.id !== c.value.id && t.minSpendCents === c.value.minSpendCents)) return res.json({ error: "Another level already starts at that amount. Choose a different amount." });
   if (!exists && cur.membership.length >= MAX_TIERS) return res.json({ error: `At most ${MAX_TIERS} levels. Delete one first.` });
   const value = exists ? { ...c.value, id } : { ...c.value, id: crypto.randomUUID().slice(0, 8) };
-  await savePromotions({ ...cur, membership: [...cur.membership.filter((t) => t.id !== value.id), value].sort((a, b) => a.minSpendCents - b.minSpendCents) }); res.json({ ok: true });
+  const prev = cur.membership.find((t) => t.id === value.id);
+  await savePromotions({ ...cur, membership: [...cur.membership.filter((t) => t.id !== value.id), value].sort((a, b) => a.minSpendCents - b.minSpendCents) }); if (prev?.image && prev.image !== value.image) await dropImage(prev.image); res.json({ ok: true });
 }));
 admin.post("/promotions/membership/toggle", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.membership.some((t) => t.id === id)) return res.json({ error: "Level not found" });
@@ -601,7 +630,8 @@ admin.post("/promotions/membership/toggle", wrap(async (req, res) => {
 }));
 admin.post("/promotions/membership/delete", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.membership.some((t) => t.id === id)) return res.json({ error: "Level not found" });
-  await savePromotions({ ...cur, membership: cur.membership.filter((t) => t.id !== id) }); res.json({ ok: true });
+  const gone = cur.membership.find((t) => t.id === id);
+  await savePromotions({ ...cur, membership: cur.membership.filter((t) => t.id !== id) }); await dropImage(gone?.image); res.json({ ok: true });
 }));
 admin.post("/promotions/image", upload.any(), wrap(async (req, res) => {
   const f = files(req, "image")[0]; if (!f) return res.json({ error: "Choose a picture first" });

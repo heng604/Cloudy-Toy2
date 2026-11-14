@@ -43,7 +43,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     if (!code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
     const res = await fetch("/api/discount/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, lines: lines.map((l) => ({ productId: l.id, qty: l.qty })) }) });
     const d = await res.json().catch(() => ({})); setChecking(false);
-    if (!res.ok) { setCodeMsg(d.error ?? "Could not check the code."); return; }
+    if (!res.ok) { setCodeMsg(t(d.error ?? "Could not check the code.")); return; }
     setApplied({ code: d.code, cents: d.discountCents }); setCodeMsg("");
   }
   const discount = applied ? applied.cents / 100 : 0;
@@ -58,7 +58,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       customer: { name: v("name"), email: v("email"), phone: v("phone"), address: v("address"), notes: v("notes") || undefined, facebook: v("facebook") || undefined, telegram: v("telegram") || undefined }, area, ...(area === "PROVINCE" ? { province } : {}), method,
       lines: lines.map((l) => ({ productId: l.id, qty: l.qty })), code: code.trim() || undefined, ...(hasPre ? { preorderPay: payFull ? "full" : "deposit" } : {}) }) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setErr(data.error ?? "Something went wrong."); setBusy(false); return; }
+    if (!res.ok) { setErr(t(data.error ?? "Something went wrong.")); setBusy(false); return; }
     if (method === "QR_IMAGE" && file) { // send the payment screenshot to the admin, then show the notification popup
       const fd = new FormData(); fd.set("orderNumber", data.orderNumber); fd.set("proof", file);
       const up = await fetch("/api/payment/proof", { method: "POST", body: await compressFormData(fd) }).catch(() => null);

@@ -1,8 +1,9 @@
+import { KM_EXTRA } from "./km-extra";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 /** English / Khmer. The English text IS the key: t("Shop"). Missing Khmer text falls back to English. */
 export type Lang = "en" | "km";
 type Vars = Record<string, string | number>;
-const KM: Record<string, string> = {
+const KM_BASE: Record<string, string> = {
   // shop
   "Home": "ទំព័រដើម", "Shop": "ហាង", "Account": "គណនី", "Cart": "កន្ត្រក", "Search products": "ស្វែងរកផលិតផល", "Open search": "បើកការស្វែងរក", "Close search": "បិទការស្វែងរក", "Open menu": "បើកម៉ឺនុយ", "Close menu": "បិទម៉ឺនុយ",
   "All Product": "ផលិតផលទាំងអស់", "My account": "គណនីរបស់ខ្ញុំ", "Company": "ក្រុមហ៊ុន", "About": "អំពីយើង", "Contact": "ទំនាក់ទំនង", "Admin login": "ចូលជាអ្នកគ្រប់គ្រង", "All rights reserved.": "រក្សាសិទ្ធិគ្រប់យ៉ាង។",
@@ -41,6 +42,8 @@ const KM: Record<string, string> = {
   "Your codes ({n})": "កូដរបស់អ្នក ({n})", "No codes yet. Create one above.": "មិនទាន់មានកូដទេ។ បង្កើតមួយនៅខាងលើ។", "Saving…": "កំពុងរក្សាទុក…", "3 to 30 letters, numbers, - or _": "អក្សរ លេខ - ឬ _ ចំនួន ៣ ដល់ ៣០",
   "Make a code worth 10% to 50% off the cart subtotal and give it to your customers. They type it at checkout. Delivery is never discounted. There are no discounts on single items.": "បង្កើតកូដបញ្ចុះតម្លៃពី ១០% ដល់ ៥០% លើសរុបរងនៃកន្ត្រក ហើយផ្តល់ឱ្យអតិថិជន។ ពួកគេវាយកូដនៅពេលទូទាត់។ ថ្លៃដឹកជញ្ជូនមិនត្រូវបានបញ្ចុះទេ។ មិនមានការបញ្ចុះតម្លៃលើទំនិញនីមួយៗទេ។",
 };
+/** The Khmer extras win over the base list when both have the same key. */
+const KM: Record<string, string> = { ...KM_BASE, ...KM_EXTRA };
 const Ctx = createContext<{ lang: Lang; setLang: (l: Lang) => void }>({ lang: "en", setLang: () => {} });
 const initial = (): Lang => { try { const s = localStorage.getItem("lang"); if (s === "en" || s === "km") return s; } catch { /* storage blocked */ } return typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("km") ? "km" : "en"; };
 export function LangProvider({ children }: { children: ReactNode }) {

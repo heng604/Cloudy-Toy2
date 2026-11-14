@@ -85,3 +85,9 @@ export async function updatePendingOrder(n: string, fn: (o: StoredOrder) => void
   const o = await getOrder(n); if (!o || o.paymentStatus !== "PENDING") return null;
   fn(o); const r = await db().from("orders").update(toRow(o)).eq("order_number", n).eq("payment_status", "PENDING").select("order_number"); must(r); return o;
 }
+
+/** Orders that used a promo code (failed / expired / refunded orders do not count). Used for the code's use limits. */
+export async function listCodeUses(): Promise<{ code: string; email: string }[]> {
+  const rows = must(await db().from("orders").select("customer_email,payment_status,code:data->>discountCode,acct:data->>accountEmail").not("data->>discountCode", "is", null)) as { customer_email: string; payment_status: string; code: string | null; acct: string | null }[];
+  return rows.filter((r) => r.code && !["FAILED", "EXPIRED", "REFUNDED"].includes(r.payment_status)).map((r) => ({ code: r.code!, email: (r.acct || r.customer_email || "").toLowerCase() }));
+}

@@ -6,7 +6,7 @@ import { usePromotions } from "./store";
 import { tierFor, nextTier } from "@shared/membership";
 export function useMembership() {
   const { user } = useAuth(); const { promotions } = usePromotions();
-  const r = useResource<{ spendCents: number }>(user ? `membership:${user.id}` : null, () => apiJson("/membership/me"), { staleMs: 10_000 });
+  const r = useResource<{ spendCents: number; used?: Record<string, number> }>(user ? `membership:${user.id}` : null, () => apiJson("/membership/me"), { staleMs: 10_000 });
   const spendCents = user ? r.data?.spendCents ?? 0 : 0, tiers = promotions.membership;
-  return { signedIn: !!user, loading: !!user && r.loading, spendCents, tiers, tier: user ? tierFor(spendCents, tiers) : null, next: user ? nextTier(spendCents, tiers) : null };
+  return { signedIn: !!user, loading: !!user && r.loading, spendCents, used: (user ? r.data?.used : undefined) ?? {}, tiers, tier: user ? tierFor(spendCents, tiers) : null, next: user ? nextTier(spendCents, tiers) : null };
 }
