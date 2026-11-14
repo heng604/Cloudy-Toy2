@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useResource } from "@/lib/data";
 import { apiJson } from "@/lib/api";
 import { useTitle } from "@/lib/title";
+import { useI18n } from "@/lib/i18n";
 import type { StoredOrder } from "@shared/types";
 import MemberCard from "@/components/MemberCard";
 function OrdersCard({ email }: { email: string }) {

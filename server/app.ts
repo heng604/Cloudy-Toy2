@@ -105,7 +105,7 @@ const memberOf = async (email: string | undefined, tiers: Tier[]) => {
   if (!email || tiers.length === 0) return none;
   const orders = await listOrdersByEmail(email); const spendCents = memberSpendOf(orders); const ov = (await getOverrides())[email.toLowerCase()];
   const forced = ov?.tierId ? tiers.find((t) => t.id === ov.tierId && t.active) ?? null : null; // the admin can fix a member's level
-  const tier = ov?.blocked ? null : forced ?? tierFor(spendCents, tiers); // blocked = no level specials at all
+  const tier = ov?.blocked || ov?.removed ? null : forced ?? tierFor(spendCents, tiers); // blocked = no level specials at all
   return { spendCents, tier, used: monthUsage(orders) };
 };
 const noMember = { spendCents: 0, tier: null as Tier | null, used: {} as Record<string, number> };
@@ -578,7 +578,7 @@ admin.get("/members", wrap(async (_req, res) => {
   const members = [...by.entries()].map(([email, os]) => {
     const spendCents = memberSpendOf(os), auto = tierFor(spendCents, promos.membership), o = ov[email], forced = o?.tierId ? promos.membership.find((t) => t.id === o.tierId) ?? null : null;
     const last = os.reduce((a, x) => ((x.createdAt ?? "") > (a.createdAt ?? "") ? x : a), os[0]);
-    return { email, name: last.customer.name, phone: last.customer.phone, spendCents, orders: os.length, lastOrderAt: last.createdAt ?? "", autoTierId: auto?.id ?? null, tierId: o?.blocked ? null : (forced ?? auto)?.id ?? null, forcedTierId: o?.tierId ?? null, blocked: !!o?.blocked, used: monthUsage(os) };
+    return { email, name: last.customer.name, phone: last.customer.phone, spendCents, orders: os.length, lastOrderAt: last.createdAt ?? "", autoTierId: auto?.id ?? null, tierId: o?.blocked || o?.removed ? null : (forced ?? auto)?.id ?? null, forcedTierId: o?.tierId ?? null, blocked: !!o?.blocked, removed: !!o?.removed, used: monthUsage(os) };
   }).sort((a, b) => b.spendCents - a.spendCents).slice(0, 2000);
   res.json({ members });
 }));
@@ -586,7 +586,7 @@ admin.post("/members/set", wrap(async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase(); const tierId = String(req.body?.tierId ?? ""); const promos = await getPromotions();
   if (!email || email.length > 200) return res.json({ error: "Member not found" });
   if (tierId && !promos.membership.some((t) => t.id === tierId)) return res.json({ error: "Level not found" });
-  await setOverride(email, { tierId: tierId || undefined, blocked: req.body?.blocked === true }); res.json({ ok: true });
+  await setOverride(email, { tierId: tierId || undefined, blocked: req.body?.blocked === true, removed: req.body?.removed === true }); res.json({ ok: true });
 }));
 admin.post("/discounts/delete", wrap(async (req, res) => { const code = normalizeCode(String(req.body?.code ?? "")); if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" }); await deleteStoreDiscount(code); res.json({ ok: true }); }));
 

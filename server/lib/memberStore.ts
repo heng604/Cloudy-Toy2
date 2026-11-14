@@ -1,6 +1,6 @@
 // Admin controls per member (table public.site_settings, key = "member_overrides"): a fixed level and/or specials switched off.
 import { db, must } from "./db";
-export type MemberOverride = { tierId?: string; blocked?: boolean };
+export type MemberOverride = { tierId?: string; blocked?: boolean; removed?: boolean };
 let cache: { at: number; v: Record<string, MemberOverride> } | null = null;
 export async function getOverrides(): Promise<Record<string, MemberOverride>> {
   if (cache && Date.now() - cache.at < 10_000) return cache.v;
@@ -11,6 +11,6 @@ export async function getOverrides(): Promise<Record<string, MemberOverride>> {
 }
 export async function setOverride(email: string, o: MemberOverride) {
   const cur = { ...(await getOverrides()) }; const key = email.toLowerCase();
-  if (!o.tierId && !o.blocked) delete cur[key]; else cur[key] = { ...(o.tierId ? { tierId: o.tierId } : {}), ...(o.blocked ? { blocked: true } : {}) };
+  if (!o.tierId && !o.blocked && !o.removed) delete cur[key]; else cur[key] = { ...(o.tierId ? { tierId: o.tierId } : {}), ...(o.blocked ? { blocked: true } : {}), ...(o.removed ? { removed: true } : {}) };
   cache = null; must(await db().from("site_settings").upsert({ key: "member_overrides", value: cur, updated_at: new Date().toISOString() }).select("key").single()); cache = null;
 }

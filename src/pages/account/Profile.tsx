@@ -3,6 +3,7 @@ import RequireUser from "@/components/RequireUser";
 import { supabase } from "@/lib/supabase";
 import { ProfileInput } from "@shared/profile";
 import { useTitle } from "@/lib/title";
+import { useI18n } from "@/lib/i18n";
 import type { User } from "@supabase/supabase-js";
 const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3";
 function Form({ user }: { user: User }) {

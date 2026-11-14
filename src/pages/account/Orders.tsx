@@ -4,6 +4,7 @@ import RequireUser from "@/components/RequireUser";
 import { useResource } from "@/lib/data";
 import { apiJson } from "@/lib/api";
 import { useTitle } from "@/lib/title";
+import { useI18n } from "@/lib/i18n";
 import type { StoredOrder } from "@shared/types";
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 const when = (iso: string, locale?: string) => new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
