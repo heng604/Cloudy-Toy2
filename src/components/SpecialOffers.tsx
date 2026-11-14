@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import OfferCard, { buildOffers } from "@/components/OfferCard";
-import { HAND, Mascot, SkyBackdrop, CloudBadge, Countdown, endOf, HappyBanner } from "@/components/OfferDeco";
+import { HAND, Mascot, SkyBackdrop, CloudBadge, Countdown, endOf } from "@/components/OfferDeco";
 import OfferProductCard, { discountOf } from "@/components/OfferProductCard";
 import { usePromotions, useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
@@ -49,6 +49,5 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
         : <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">{shown.map((p) => <OfferProductCard key={p.id} p={p} />)}</div>}</section></div>}
     {list.length === 0 && total > 0 && <p className="rounded-xl2 bg-sky-pale p-6 text-center">{t("No products match.")} <Link to="/shop" className="underline">{t("Browse all products")}</Link></p>}
   </div>
-    <HappyBanner />
   </div>);
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import OfferProductCard from "@/components/OfferProductCard";
 import { buildOffers, TONES, type Offer } from "@/components/OfferCard";
-import { CloudBadge, Countdown, HAND, HappyBanner, Mascot, SkyBackdrop, endOf } from "@/components/OfferDeco";
+import { CloudBadge, Countdown, HAND, Mascot, SkyBackdrop, endOf } from "@/components/OfferDeco";
 import Skeleton from "@/components/Skeleton";
 import { useListedProducts, usePromotions, useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
@@ -79,6 +79,5 @@ export default function OfferDetail() {
           <div className="flex flex-wrap gap-3 pt-1"><button type="button" onClick={go} className={`min-h-11 rounded-full px-7 font-extrabold text-white shadow-soft transition hover:-translate-y-0.5 ${tone.btn}`}>{t("Shop offer products")} ↓</button><Link to="/shop?sale=1" className="inline-flex min-h-11 items-center rounded-full border border-sky-border bg-white px-6 font-bold hover:bg-sky-pale">{t("All special offers")}</Link></div></div></section>
       <section id="offer-products" className="scroll-mt-24"><div className="mb-4 flex items-end justify-between gap-3"><h2 className="text-2xl font-extrabold text-[#1F4E9C]">{t("Products in this offer")}</h2><Link to="/shop" className="text-sm font-bold text-[#4A86D8] hover:underline">{t("See all")} →</Link></div>
         {products.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center text-mute">{t("No products match.")}</p> : <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">{products.map((p) => <OfferProductCard key={p.id} p={p} />)}</div>}</section></div>
-    <HappyBanner />
   </div>);
 }

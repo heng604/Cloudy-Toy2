@@ -5,6 +5,7 @@ import { LangProvider } from "@/lib/i18n";
 import CartProvider from "@/components/CartProvider";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { HappyBanner } from "@/components/OfferDeco";
 import Skeleton from "@/components/Skeleton";
 import NotFound from "@/components/NotFound";
 import RealtimeRefresh from "@/lib/realtime";
@@ -55,6 +56,7 @@ function Shell() {
         </Routes>
       </Suspense>
     </main>
+    <HappyBanner />
     <Footer logoUrl={settings.logoUrl} hidden={hidden} />
   </>);
 }
