@@ -26,7 +26,7 @@ export const Spark = ({ className = "", color = "#fff" }: { className?: string; 
 export function SkyBackdrop() {
   return (<div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden bg-gradient-to-b from-[#B9DAFB] via-[#D4E8FF] to-[#EAF4FF]">
     <Cloud className="-left-24 -top-6 w-[22rem] opacity-80 sm:w-[28rem]" /><Cloud className="right-[16%] -top-10 hidden w-80 opacity-70 md:block" /><Cloud className="-right-24 top-2 w-[22rem] opacity-80 sm:w-[26rem]" />
-    <Cloud className="-bottom-10 -left-20 w-[30rem] sm:w-[40rem]" /><Cloud className="-bottom-14 left-[30%] hidden w-[40rem] md:block" /><Cloud className="-bottom-12 -right-16 w-[30rem] sm:w-[42rem]" />
+    <Cloud className="bottom-[2%] -left-20 w-[34rem] sm:w-[46rem]" /><Cloud className="bottom-0 left-[30%] hidden w-[44rem] md:block" /><Cloud className="bottom-[4%] -right-16 w-[34rem] sm:w-[48rem]" />
     <Star className="left-3 top-4 w-10 sm:w-14" /><Star className="left-[36%] top-[62%] w-9 sm:w-12" /><Star className="left-[12%] top-[58%] hidden w-7 sm:block" color="#8EC5FF" /><Star className="right-[6%] top-5 w-10 sm:w-14" /><Star className="left-[52%] top-3 hidden w-8 sm:block" color="#FFE58A" />
     <Heart className="left-[58%] top-6 hidden w-9 sm:block" /><Heart className="right-[30%] bottom-[28%] hidden w-6 md:block" color="#FFB3CF" />
     <Spark className="left-[28%] top-3 w-4" /><Spark className="left-[47%] top-[26%] hidden w-3 sm:block" /><Spark className="right-[24%] top-4 w-4" /><Spark className="right-[4%] top-[48%] hidden w-5 sm:block" /><Spark className="left-[5%] top-[40%] hidden w-4 sm:block" color="#FFE58A" />

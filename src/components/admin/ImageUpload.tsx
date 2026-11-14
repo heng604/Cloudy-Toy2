@@ -15,9 +15,9 @@ export default function ImageUpload({ value, path, fields = {}, removeFields, on
     } catch { setErr(t("Could not reach the server. Please try again.")); } finally { setBusy(false); if (ref.current) ref.current.value = ""; }
   }
   const box = `grid shrink-0 place-items-center overflow-hidden border border-sky-border bg-[#F3F9FE] text-2xl ${round ? "h-14 w-14 rounded-full" : "h-16 w-24 rounded-xl"}`;
-  return (<div className="flex flex-wrap items-center gap-3">
+  return (<div className="flex items-start gap-3">
     <span className={box}>{value ? <img src={value} alt="" className="h-full w-full object-cover" /> : <span aria-hidden="true">{fallback}</span>}</span>
-    <div className="min-w-0 space-y-1">{label && <p className="text-sm font-bold">{label}</p>}
+    <div className="min-w-0 flex-1 space-y-1">{label && <p className="text-sm font-bold">{label}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <label className={`cursor-pointer rounded-full border border-sky-border bg-white px-4 py-1.5 text-xs font-extrabold hover:bg-sky-pale ${busy ? "pointer-events-none opacity-50" : ""}`}>{busy ? t("Saving…") : value ? t("Change picture") : t("Upload picture")}
           <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) void send({}, f); }} /></label>

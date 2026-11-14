@@ -5,7 +5,6 @@ import Skeleton from "@/components/Skeleton";
 import { useListedProducts, useSettings, usePromotions } from "@/lib/store";
 import OfferCard, { buildOffers } from "@/components/OfferCard";
 import { categoriesOf } from "@shared/products";
-import { liveCampaigns, campaignDetail } from "@shared/promotions";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 /** Light-blue dripping edge along the top of the hero. */
@@ -23,7 +22,6 @@ export default function Home() {
   useTitle(); const { t, lang } = useI18n();
   const { data: products } = useListedProducts(); const { settings: { banners, categoryImages } } = useSettings(); const icons = categoryImages ?? {}; const { promotions } = usePromotions();
   const offers = buildOffers(promotions, products ?? [], lang, t); const cats = categoriesOf(products ?? []).slice(0, 6); const featured = (products ?? []).slice(0, 8);
-  const ship = liveCampaigns(promotions.campaigns).find((c) => c.kind === "free_shipping");
   const banner = Array.isArray(banners) ? banners : [];
   // The big banner under the header is the picture(s) the admin uploads in Settings (it fades from one to the next). The full-width text hero only shows while no banner has been uploaded; both carry the \"Shopping with Cloudy Toys now!\" button.
   return (<>
@@ -52,7 +50,7 @@ export default function Home() {
         {!products ? <Skeleton /> : (() => { const list = products.filter((p) => p.labels?.includes(sec.id as "best_seller")); return list.length === 0
           ? <p className="rounded-xl2 bg-sky-pale p-8 text-center text-mute">{sec.empty ? t("Our best sellers are coming soon.") : t("New arrivals are coming soon.")} <Link to="/shop" className="font-semibold underline">{t("Browse all products")}</Link></p>
           : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">{list.slice(0, 12).map((p) => <ProductCard key={p.id} p={p} />)}</div>; })()}</section>))}
-    <section aria-label="Shop promises" className="mt-12 grid grid-cols-2 gap-4 rounded-3xl border border-sky-border bg-white/80 p-4 text-sm shadow-soft lg:grid-cols-4">
-      {[["🛡️", t("100% Authentic"), t("Official Products")], ["🚚", t("Free Shipping"), ship ? campaignDetail(ship) : t("Delivery across Cambodia")], ["💳", t("Secure Payment"), t("Multiple Methods")], ["💬", t("Friendly Support"), t("We're here to help!")]].map(([i, a, b]) => <div key={a} className="flex items-center gap-3"><span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sky-pale text-lg">{i}</span><div><p className="font-extrabold text-[#1F4E9C]">{a}</p><p className="text-xs text-mute">{b}</p></div></div>)}</section>
+    <section aria-label="Shop promises" className="mt-12 grid grid-cols-2 gap-4 rounded-3xl border border-sky-border bg-white/80 p-4 text-sm shadow-soft lg:grid-cols-3">
+      {[["🛡️", t("100% Authentic"), t("Official Products")], ["💳", t("Secure Payment"), t("Multiple Methods")], ["💬", t("Friendly Support"), t("We're here to help!")]].map(([i, a, b]) => <div key={a} className="flex items-center gap-3"><span aria-hidden="true" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-sky-pale text-lg">{i}</span><div><p className="font-extrabold text-[#1F4E9C]">{a}</p><p className="text-xs text-mute">{b}</p></div></div>)}</section>
   </>);
 }
