@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import { dayShort, type Product } from "@shared/products";
-import { campaignDetail, campaignLabel, liveCampaigns, liveFestivals, festivalName, festivalText, festivalDetail, type Campaign, type Promotions } from "@shared/promotions";
+import { campaignDetail, campaignLabel, liveCampaigns, liveFestivals, festivalName, festivalText, festivalDetail, type Campaign, type Festival, type Promotions } from "@shared/promotions";
 
 /** One special offer, ready to draw as a big pastel card (pink BOGO, purple festival, blue spend, green shipping ...). */
-export type Offer = { id: string; tone: Tone; badge: string; title: string; text: string; validity: string; image?: string; more?: string; to: string };
-type Tone = "pink" | "purple" | "blue" | "green";
-const TONES: Record<Tone, { bg: string; badge: string; title: string; btn: string; deco: string; date: string }> = {
+export type Offer = { rule?: Campaign; festival?: Festival; id: string; tone: Tone; badge: string; title: string; text: string; validity: string; image?: string; more?: string; to: string };
+export type Tone = "pink" | "purple" | "blue" | "green";
+export const TONES: Record<Tone, { bg: string; badge: string; title: string; btn: string; deco: string; date: string }> = {
   pink: { bg: "from-[#FFE4EE] via-[#FFEFF5] to-[#FFF8FB] border-[#FFD3E3]", badge: "bg-[#FF6F9F] text-white", title: "text-[#C2305F]", btn: "bg-[#FF5C93] hover:bg-[#F0447F]", deco: "text-[#FF9DBD]", date: "text-[#D9467A]" },
   purple: { bg: "from-[#EBDDFF] via-[#F2EAFF] to-[#F9F5FF] border-[#DCC8FF]", badge: "bg-[#8B4FE0] text-white", title: "text-[#4B2A99]", btn: "bg-[#7A3FD8] hover:bg-[#6930C4]", deco: "text-[#B99AF0]", date: "text-[#7A3FD8]" },
   blue: { bg: "from-[#DCEBFF] via-[#EAF3FF] to-[#F5F9FF] border-[#C6DDFB]", badge: "bg-[#4B86E0] text-white", title: "text-[#1F4E9C]", btn: "bg-[#4A86D8] hover:bg-[#3A74C6]", deco: "text-[#9DC1F2]", date: "text-[#3A74C6]" },
@@ -39,12 +39,12 @@ export default function OfferCard({ o, t, label, onClick, open }: { o: Offer; t:
 export function buildOffers(promotions: Promotions, all: Product[], lang: string, t: (s: string) => string): Offer[] {
   const byId = new Map(all.map((p) => [p.id, p])); const img = (id?: string) => (id ? byId.get(id)?.images?.[0]?.src : undefined); const nameOf = (id: string) => byId.get(id)?.name ?? t("the free gift");
   const valid = (a?: string, b?: string) => (a && b ? `${dayShort(a)} – ${dayShort(b)}` : t("Always active"));
-  const fests = liveFestivals(promotions.festivals); const many = fests.length > 1;
+  const fests = liveFestivals(promotions.festivals);
   const rules = liveCampaigns(promotions.campaigns).map((c: Campaign): Offer => {
     const k = c.kind; const tone: Tone = k === "bogo" || k === "spend_gift" ? "pink" : k === "free_shipping" ? "green" : k.startsWith("spend") ? "blue" : "purple";
     const picture = k === "bogo" || k === "spend_gift" ? img(c.bonusProductId) : k.startsWith("product") ? img(c.productIds?.[0]) : k.startsWith("category") ? all.find((p) => p.category.trim().toLowerCase() === c.category.trim().toLowerCase())?.images?.[0]?.src : undefined;
-    return { id: c.id, tone, badge: t(campaignLabel(c)), title: c.name, text: campaignDetail(c, nameOf), validity: valid(c.startDate, c.endDate), image: c.image || picture, more: `${campaignDetail(c, nameOf)}.\n${t("Applied automatically at checkout.")}`, to: "/shop?sale=1" };
+    return { id: c.id, tone, badge: t(campaignLabel(c)), title: c.name, text: campaignDetail(c, nameOf), validity: valid(c.startDate, c.endDate), rule: c, image: c.image || picture, more: `${campaignDetail(c, nameOf)}.\n${t("Applied automatically at checkout.")}`, to: `/offer/${c.id}` };
   });
-  const festivals = fests.map((f): Offer => ({ id: `f-${f.id}`, tone: "purple", badge: f.percent > 0 ? `${f.percent}% OFF` : t("Festival"), title: festivalName(f, lang), text: festivalText(f, lang) || festivalDetail(f), validity: valid(f.startDate, f.endDate), image: f.image || img(f.productIds[0]), more: `${festivalDetail(f)}${f.code ? `\n${t("Code")}: ${f.code}` : ""}`, to: many ? `/shop?sale=1&festival=${f.id}` : "/shop?sale=1" }));
+  const festivals = fests.map((f): Offer => ({ id: `f-${f.id}`, tone: "purple", badge: f.percent > 0 ? `${f.percent}% OFF` : t("Festival"), title: festivalName(f, lang), text: festivalText(f, lang) || festivalDetail(f), validity: valid(f.startDate, f.endDate), festival: f, image: f.image || img(f.productIds[0]), more: `${festivalDetail(f)}${f.code ? `\n${t("Code")}: ${f.code}` : ""}`, to: `/offer/f-${f.id}` }));
   return [...rules, ...festivals];
 }

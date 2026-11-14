@@ -14,6 +14,7 @@ import Shop from "@/pages/Shop";
 import ProductPage from "@/pages/ProductPage";
 import Cart from "@/pages/Cart";
 // Less-visited pages are loaded on demand so the first visit downloads less code.
+const OfferDetail = lazy(() => import("@/pages/OfferDetail"));
 const Checkout = lazy(() => import("@/pages/Checkout"));
 const Payment = lazy(() => import("@/pages/Payment"));
 const Login = lazy(() => import("@/pages/Login"));
@@ -37,6 +38,7 @@ function Shell() {
           <Route path="/" element={<Home />} />
           <Route path="/shop" element={<Shop />} />
           <Route path="/product/:slug" element={<ProductPage />} />
+          <Route path="/offer/:id" element={<OfferDetail />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment/:orderNumber" element={<Payment />} />

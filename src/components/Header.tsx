@@ -46,9 +46,9 @@ export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string
   useEffect(() => { if (open) input.current?.focus(); }, [open]);
   const search = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); navigate(`/shop?q=${encodeURIComponent(input.current?.value ?? "")}`); };
   const cats = categoriesOf(products ?? []); const onShop = pathname.startsWith("/shop");
-  const isOn = (id: string) => id === "new" ? q.get("type") === "new_arrival" : id === "pre" ? q.get("type") === "preorder" : id === "sale" ? q.get("sale") === "1" : onShop && !!q.get("category");
+  const isOn = (id: string) => id === "new" ? q.get("type") === "new_arrival" : id === "pre" ? q.get("type") === "preorder" : id === "sale" ? q.get("sale") === "1" || pathname.startsWith("/offer") : onShop && !!q.get("category");
   const cartOn = CART_MATCH(pathname), icon = "relative grid h-10 w-10 place-items-center rounded-full transition hover:scale-110 hover:bg-white active:scale-95 sm:h-11 sm:w-11";
-  const home = pathname === "/"; // the purple "Special Offer" pill is only shown in the header of the home page
+  const home = pathname === "/" || pathname.startsWith("/offer"); // the purple "Special Offer" pill is only shown in the header of the home page
   const pills = (dropdown: boolean) => PILLS.filter((p) => p.id !== "sale" || home).map((p) => p.id === "cat" && dropdown
     ? <CategoryPill key={p.id} active={isOn(p.id)} cats={cats} label={t(p.label)} />
     : <Link key={p.id} to={p.to} aria-current={isOn(p.id) ? "page" : undefined} className={pillCls} style={{ background: p.bg }}><Pill p={p} active={isOn(p.id)}>{t(p.label)}</Pill></Link>);

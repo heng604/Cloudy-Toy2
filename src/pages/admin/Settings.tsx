@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import Skeleton from "@/components/Skeleton";
 import FilePicker from "@/components/admin/FilePicker";
+import ImageUpload from "@/components/admin/ImageUpload";
 import { useSettings } from "@/lib/store";
 import { modeOf, type PayMode } from "@shared/payOptions";
 import { api, post } from "@/lib/api";
@@ -56,6 +57,10 @@ export default function Settings() {
       {(s.banners ?? []).length > 0 && <div className="flex flex-wrap gap-3">{s.banners.map((b) => <div key={b} className="w-40 space-y-1 text-center"><img src={b} alt="Banner" className="h-20 w-40 rounded-lg border border-sky-border object-cover" /><input type="hidden" name="keep" value={b} /><button type="button" disabled={!!busy} onClick={() => del("banner", "", () => post("/admin/settings/banners/delete", { url: b }))} className={btnDel + " w-full"}>Delete</button></div>)}</div>}
       <FilePicker name="banners" multiple />
       <button disabled={!!busy} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === "banners" ? "Saving…" : "Save banners"}</button></form>
+    <section className="space-y-4 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Special Offer page banner</p>
+      <p className="text-sm text-mute">Pictures for the Special Offer page. Each one is saved as soon as you choose it. The &quot;UP TO %&quot; badge and the live countdown (days, hours, minutes, seconds) always stay on top of your banner, whatever picture you use.</p>
+      {([["hero", "Top banner background", "Wide picture, about 1920 × 600 (JPG, PNG or WebP, max 5 MB). Leave empty for the default sky.", s.offerHeroImage], ["mascot", "Mascot / main picture", "A transparent PNG works best. Leave empty for the default cloud mascot.", s.offerMascotImage], ["footer", "Bottom banner background", "Wide picture, about 1920 × 300. Leave empty for the default colours.", s.offerFooterImage]] as const).map(([slot, label, hint, value]) => <ImageUpload key={slot} label={label} hint={hint} value={value} path="/admin/settings/offer-page" fields={{ slot }} removeFields={{ slot, remove: "on" }} onChange={() => refreshAdmin()} />)}
+      <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 h-4 w-4" checked={s.offerHeroText !== false} onChange={async (e) => { const f = new FormData(); f.set("slot", "text"); f.set("value", e.target.checked ? "on" : "off"); await api("/admin/settings/offer-page", { method: "POST", body: f }); refreshAdmin(); }} /><span>Show the &quot;Special Offer&quot; title, ribbon and slogan on the top banner<br /><span className="text-xs text-mute">Turn off if your banner picture already has its own title.</span></span></label></section>
     <form onSubmit={run("qr", multi("/admin/settings/qr"))} className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Payment QR (ABA PAY)</p>
       <p className="text-sm text-mute">Shown to customers at checkout. JPG, PNG or WebP, max 5 MB.</p>
       {s.qrUrl === "none" ? <p className="rounded-xl border border-dashed border-sky-border bg-sky-pale px-4 py-6 text-center text-sm text-mute">No payment QR yet. Upload one below.</p> : <div className="relative inline-block"><button type="button" onClick={() => setZoom(true)} aria-label="View the payment QR bigger" className="block rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-hover"><img src={s.qrUrl || "/img/qr-pay.png"} alt="Current payment QR" className="w-48 rounded-xl border border-sky-border" /></button>
