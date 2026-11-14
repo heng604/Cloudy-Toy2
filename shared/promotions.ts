@@ -4,6 +4,7 @@
 export type PreorderRules = { depositPercent: number; dispatchText: string; capSlots: number };
 export const DEFAULT_PREORDER: PreorderRules = { depositPercent: 50, dispatchText: "10 - 14 Business Days", capSlots: 50 };
 import { shopToday } from "./products";
+import { DEFAULT_TIERS, normalizeTiers, type Tier } from "./membership";
 export type CampaignKind = "spend_amount" | "spend_percent" | "spend_gift" | "category_percent" | "category_amount" | "product_percent" | "product_amount" | "bogo" | "free_shipping";
 export const CAMPAIGN_KINDS: CampaignKind[] = ["spend_amount", "spend_percent", "spend_gift", "category_percent", "category_amount", "product_percent", "product_amount", "bogo", "free_shipping"];
 /** One automatic promotion rule. Dates are optional (both or none). product_percent = % off the products picked from the database; bogo = buy X of a category/product, get Y of a free bonus product; free_shipping = delivery fee waived (always, over a minimum spend, or over a minimum item count). */
@@ -11,8 +12,8 @@ export type Campaign = { id: string; name: string; kind: CampaignKind; minSpendC
   startDate?: string; endDate?: string; productIds?: string[]; buyQty?: number; buyType?: "category" | "product"; buyTarget?: string; getQty?: number; bonusProductId?: string; minQty?: number; area?: "all" | "PHNOM_PENH"; image?: string };
 /** A festival / event special offer (Khmer New Year, Pchum Ben, Christmas ...). The admin writes the promotion text, picks the products and optionally a % off; the shop's "Special Offer" button lists those products. */
 export type Festival = { id: string; name: string; nameKm: string; text: string; textKm: string; code?: string; startDate: string; endDate: string; percent: number; productIds: string[]; active: boolean; createdAt: string; image?: string };
-export type Promotions = { preorder: PreorderRules; campaigns: Campaign[]; festivals: Festival[] };
-export const DEFAULT_PROMOTIONS: Promotions = { preorder: DEFAULT_PREORDER, campaigns: [], festivals: [] };
+export type Promotions = { preorder: PreorderRules; campaigns: Campaign[]; festivals: Festival[]; membership: Tier[] };
+export const DEFAULT_PROMOTIONS: Promotions = { preorder: DEFAULT_PREORDER, campaigns: [], festivals: [], membership: DEFAULT_TIERS };
 export const MAX_CAMPAIGNS = 20;
 export const MAX_FESTIVALS = 20;
 export const MAX_FESTIVAL_PRODUCTS = 500;
@@ -89,7 +90,7 @@ export function checkCampaign(i: { name: unknown; kind: unknown; minSpend?: unkn
 }
 /** Reads whatever is stored (old, missing or hand-edited data) and always returns a valid Promotions. */
 export function normalizePromotions(v: unknown): Promotions {
-  const o = (v && typeof v === "object" ? v : {}) as { preorder?: Partial<PreorderRules>; campaigns?: unknown; festivals?: unknown };
+  const o = (v && typeof v === "object" ? v : {}) as { preorder?: Partial<PreorderRules>; campaigns?: unknown; festivals?: unknown; membership?: unknown };
   const pre = checkPreorder({ ...DEFAULT_PREORDER, ...(o.preorder ?? {}) });
   const campaigns = (Array.isArray(o.campaigns) ? o.campaigns : []).flatMap((c): Campaign[] => {
     const x = c as Partial<Campaign>; if (!x || typeof x.id !== "string" || !CAMPAIGN_KINDS.includes(x.kind as CampaignKind)) return [];
@@ -101,7 +102,7 @@ export function normalizePromotions(v: unknown): Promotions {
     const chk = checkFestival({ name: x.name, nameKm: x.nameKm, text: x.text, textKm: x.textKm, code: x.code, startDate: x.startDate, endDate: x.endDate, percent: x.percent, productIds: x.productIds, image: x.image });
     return chk.ok ? [{ ...chk.value, id: x.id, active: x.active !== false, createdAt: String(x.createdAt ?? "") }] : [];
   }).slice(0, MAX_FESTIVALS);
-  return { preorder: pre.ok ? pre.value : DEFAULT_PREORDER, campaigns, festivals };
+  return { preorder: pre.ok ? pre.value : DEFAULT_PREORDER, campaigns, festivals, membership: normalizeTiers(o.membership) };
 }
 /** Text shown under the campaign name in the admin list and in the shop. `nameOf` turns a product id into its name (used by Buy X Get Y). */
 export function campaignDetail(c: Campaign, nameOf: (id: string) => string = () => "the free gift"): string {

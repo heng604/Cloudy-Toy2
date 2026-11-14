@@ -37,6 +37,7 @@ import { validateImage, safeFileName } from "../shared/images";
 import { r2Enabled, r2Get } from "./lib/r2";
 import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
+import { tierFor, nextTier, memberBenefits, memberSpendOf, checkTier, MAX_TIERS, type Tier } from "../shared/membership";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
 import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
 import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } from "../shared/products";
@@ -97,6 +98,11 @@ const fld = (req: Request, k: string) => String((req.body as Record<string, unkn
 const all = (req: Request, k: string): string[] => { const v = (req.body as Record<string, unknown>)?.[k]; return v === undefined ? [] : Array.isArray(v) ? v.map(String) : [String(v)]; };
 const catalogOf = (products: Awaited<ReturnType<typeof listProducts>>) => new Map<string, PricedProduct>(products.map((p) => [p.id, { id: p.id, name: p.name, priceCents: Math.round(p.price * 100), saleCents: p.salePrice ? Math.round(p.salePrice * 100) : null, stock: p.stock, active: true }]));
 
+/** The customer's level, worked out from what they have paid so far (always read fresh from the orders, so it is automatic). */
+const memberOf = async (email: string | undefined, tiers: Tier[]) => {
+  if (!email || tiers.length === 0) return { spendCents: 0, tier: null as Tier | null };
+  const spendCents = memberSpendOf(await listOrdersByEmail(email)); return { spendCents, tier: tierFor(spendCents, tiers) };
+};
 /* ---------------- public: checkout ---------------- */
 const Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
@@ -120,16 +126,18 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const acct = userOf(req); const ids = lines.map((l) => l.productId); // only the products in this cart are read (a cart has a few items, the catalogue has hundreds)
   // abandoned Bakong orders give their stock back BEFORE the stock check (swept at most every 5 s); settings load at the same time
-  const promos = await getPromotions(); const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
+  const promos = await getPromotions(); const member = await memberOf(acct?.email, promos.membership).catch(() => ({ spendCents: 0, tier: null as Tier | null })); const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
   const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds([...new Set([...ids, ...bonusIds])]))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   const catalog = catalogOf(products.filter((p) => ids.includes(p.id))); let usedCode: string | undefined;
   try {
     const t00 = computeTotals(lines, catalog, 0); const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
-    const ship = freeShip ? 0 : shippingFor(area, settings); // a live "Free Shipping" rule waives the delivery fee
+    const memFree = memberBenefits(member.tier, { subtotalCents: t00.subtotalCents, leftCents: 0 }).freeShipping; // a member special can waive delivery too
+    const ship = freeShip || memFree ? 0 : shippingFor(area, settings); // a live "Free Shipping" rule waives the delivery fee
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
     // automatic campaigns first (stack, never more than the subtotal), then the typed code takes its % off what is left
     const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
+    auto.push(...memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto) }).discounts); // the member's level specials stack after the shop's campaigns
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
       const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true);
@@ -147,7 +155,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const orderNumber = `CT-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
     const order: StoredOrder = { orderNumber, createdAt: new Date().toISOString(), area, ...(area === "PROVINCE" ? { province: parsed.data.province } : {}), method, customer,
       items: t.items.map((i) => ({ productId: i.productId, sku: byId.get(i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents, ...itemDates(byId.get(i.productId)) })),
-      subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(auto.length ? { autoDiscounts: auto } : {}), ...(hasPre ? { preorder: preorderSplit(t.totalCents, promos.preorder, parsed.data.preorderPay === "full") } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
+      subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(auto.length ? { autoDiscounts: auto } : {}), ...(member.tier ? { memberTier: member.tier.name } : {}), ...(hasPre ? { preorder: preorderSplit(t.totalCents, promos.preorder, parsed.data.preorderPay === "full") } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
     // Buy X Get Y: the free bonus items are added to the order at $0 and taken from stock (only as many as are in stock)
     const taken = new Map<string, number>(); for (const i of t.items) taken.set(i.productId, (taken.get(i.productId) ?? 0) + i.qty); const giftItems: typeof order.items = [];
@@ -187,8 +195,9 @@ api.post("/discount/validate", wrap(async (req, res) => {
   const code = normalizeCode(b.data.code);
   if (!CODE_RE.test(code)) return res.status(400).json({ error: "That discount code is not valid." });
   try {
-    const [products, promos] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions()]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
+    const [products, promos, who] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions(), userFromReq(req)]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
+    const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => ({ spendCents: 0, tier: null as Tier | null })); auto.push(...memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto) }).discounts);
     const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }]);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }
@@ -340,6 +349,12 @@ api.post("/payment/proof", upload.any(), wrap(async (req, res) => {
 
 /* ---------------- signed-in customer ---------------- */
 api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = userOf(req); res.json({ orders: u.email ? (await listOrdersByEmail(u.email)).filter((o) => o.paymentStatus === "PAID" || o.method === "COD") : [] }); })); // order history shows only paid orders (Bakong or any method) and pay-with-delivery orders; unpaid ones are hidden
+
+/** The signed-in customer's membership: what they have paid so far, their level and the next one. Levels come from the admin's Membership page. */
+api.get("/membership/me", requireUser, wrap(async (req, res) => {
+  const u = userOf(req); const promos = await getPromotions(); const m = await memberOf(u.email ?? undefined, promos.membership);
+  res.json({ spendCents: m.spendCents, tierId: m.tier?.id ?? null, nextId: nextTier(m.spendCents, promos.membership)?.id ?? null });
+}));
 
 /** Which admin role (owner / admin / editor) this signed-in account has, or null. The browser uses it to show the admin area. */
 api.get("/staff/me", requireUser, wrap(async (req, res) => { const u = userOf(req); res.json({ role: await roleFor(u.email, !!u.email_confirmed_at) }); }));
@@ -570,6 +585,24 @@ admin.post("/promotions/campaigns/toggle", wrap(async (req, res) => {
 }));
 admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const gone = cur.campaigns.find((x) => x.id === id); await savePromotions({ ...cur, campaigns: cur.campaigns.filter((x) => x.id !== id) }); await dropImage(gone?.image); res.json({ ok: true }); }));
 /** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
+// membership levels: add / edit (including their specials) / delete. A level starts at its own "spend" amount; two levels cannot start at the same amount.
+const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, minSpend: b?.minSpend, perks: b?.perks, active: b?.active });
+admin.post("/promotions/membership/save", wrap(async (req, res) => {
+  const c = tierFields(req.body); if (!c.ok) return res.json({ error: c.error });
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const exists = cur.membership.some((t) => t.id === id);
+  if (cur.membership.some((t) => t.id !== c.value.id && t.minSpendCents === c.value.minSpendCents)) return res.json({ error: "Another level already starts at that amount. Choose a different amount." });
+  if (!exists && cur.membership.length >= MAX_TIERS) return res.json({ error: `At most ${MAX_TIERS} levels. Delete one first.` });
+  const value = exists ? { ...c.value, id } : { ...c.value, id: crypto.randomUUID().slice(0, 8) };
+  await savePromotions({ ...cur, membership: [...cur.membership.filter((t) => t.id !== value.id), value].sort((a, b) => a.minSpendCents - b.minSpendCents) }); res.json({ ok: true });
+}));
+admin.post("/promotions/membership/toggle", wrap(async (req, res) => {
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.membership.some((t) => t.id === id)) return res.json({ error: "Level not found" });
+  await savePromotions({ ...cur, membership: cur.membership.map((t) => (t.id === id ? { ...t, active: req.body?.active === true } : t)) }); res.json({ ok: true });
+}));
+admin.post("/promotions/membership/delete", wrap(async (req, res) => {
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.membership.some((t) => t.id === id)) return res.json({ error: "Level not found" });
+  await savePromotions({ ...cur, membership: cur.membership.filter((t) => t.id !== id) }); res.json({ ok: true });
+}));
 admin.post("/promotions/image", upload.any(), wrap(async (req, res) => {
   const f = files(req, "image")[0]; if (!f) return res.json({ error: "Choose a picture first" });
   const r = await savePicture(f, "offer", 900, 900, "inside"); if ("error" in r) return res.json({ error: r.error }); res.json({ ok: true, url: r.url });

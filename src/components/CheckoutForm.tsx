@@ -9,6 +9,8 @@ import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings, usePromotions } from "@/lib/store";
 import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule } from "@shared/promotions";
+import { memberBenefits } from "@shared/membership";
+import { useMembership } from "@/lib/membership";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -30,11 +32,12 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const firstOn = (["BAKONG", "QR_IMAGE", "COD"] as Method[]).find((m) => avail[m]);
   const method: Method = pick && avail[pick] ? pick : firstOn ?? "QR_IMAGE"; // the customer's own choice wins while it is available; otherwise the first option that is on
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
-  const autos = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals), autoOff = autoTotal(autos) / 100;
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
+  const autos0 = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
+  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), mem = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0) }), autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
   const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
-  const ship = freeShip ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
+  const ship = freeShip || mem.freeShipping ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
   if (!items.length) return <p className="rounded-xl2 bg-sky-pale p-8 text-center">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;
   async function applyCode() {
     if (!code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
@@ -108,7 +111,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       {autos.map((a) => <p key={a.id} className="flex justify-between text-sm text-green-700"><span>{a.name}</span><span>−{money(a.cents / 100)}</span></p>)}
       {gifts.map((g) => <p key={g.campaignId} className="flex justify-between text-sm text-green-700"><span>🎁 {g.name} × {g.qty}</span><span>{t("FREE")}</span></p>)}
       {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}
-      <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span className={freeShip ? "font-semibold text-green-700" : ""}>{freeShip ? t("FREE") : money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(totalC / 100)}</span></p>
+      <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span className={freeShip || mem.freeShipping ? "font-semibold text-green-700" : ""}>{freeShip || mem.freeShipping ? t("FREE") : money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(totalC / 100)}</span></p>
       {split && <><p className="flex justify-between text-sm font-bold text-[#A97A0B]"><span>{split.balanceCents > 0 ? `Deposit due now (${split.percent}%)` : "Full price due now"}</span><span>{money(split.depositCents / 100)}</span></p>{split.balanceCents > 0 && <p className="flex justify-between text-sm text-mute"><span>Balance at dispatch ({split.dispatch})</span><span>{money(split.balanceCents / 100)}</span></p>}</>}
       <p className="text-xs text-mute">The server sets the final total.</p></aside>
     <dialog ref={dlg} onClose={onClosePopup} className="max-w-sm rounded-xl2 p-6 backdrop:bg-black/40"><h2 className="text-lg font-extrabold">Please contact our admin</h2>

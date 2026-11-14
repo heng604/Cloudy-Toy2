@@ -3,7 +3,7 @@ import Icon, { type IconName } from "./Icons";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { can, type Perm } from "@shared/roles";
-const LINKS: [string, string, IconName, Perm | null][] = [["/admin", "Dashboard", "home", null], ["/admin/orders", "Orders", "orders", "orders"], ["/admin/transactions", "Transactions", "transactions", "orders"], ["/admin/products", "Products & Inventory", "products", "products"], ["/admin/promotions", "Promotions", "discounts", "promotions"], ["/admin/stock", "Stock", "stock", "products"], ["/admin/pages", "Pages", "pages", "pages"], ["/admin/staff", "Admin Permissions", "users", "staff"], ["/admin/settings", "Settings", "settings", "settings"]];
+const LINKS: [string, string, IconName, Perm | null][] = [["/admin", "Dashboard", "home", null], ["/admin/orders", "Orders", "orders", "orders"], ["/admin/transactions", "Transactions", "transactions", "orders"], ["/admin/products", "Products & Inventory", "products", "products"], ["/admin/promotions", "Promotions", "discounts", "promotions"], ["/admin/membership", "Membership", "users", "promotions"], ["/admin/stock", "Stock", "stock", "products"], ["/admin/pages", "Pages", "pages", "pages"], ["/admin/staff", "Admin Permissions", "users", "staff"], ["/admin/settings", "Settings", "settings", "settings"]];
 /** White sidebar with the shop logo and labelled links. On phones it becomes a scrollable bar across the top. */
 export default function AdminNav({ logoUrl, onSignOut }: { logoUrl: string; onSignOut: () => void }) {
   const path = useLocation().pathname; const { t } = useI18n(); const { role } = useAuth();

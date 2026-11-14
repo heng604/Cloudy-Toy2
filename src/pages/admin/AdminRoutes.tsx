@@ -20,6 +20,7 @@ import Stock from "./Stock";
 import Pages from "./Pages";
 import Settings from "./Settings";
 import Promotions from "./Discounts";
+import Membership from "./Membership";
 import Staff from "./Staff";
 import { can, ROLE_NAME, type Perm } from "@shared/roles";
 import type { ReactNode } from "react";
@@ -70,6 +71,7 @@ export default function AdminRoutes() {
       <Route path="pages" element={<Guard perm="pages"><Pages /></Guard>} />
       <Route path="settings" element={<Guard perm="settings"><Settings /></Guard>} />
       <Route path="promotions" element={<Guard perm="promotions"><Promotions /></Guard>} />
+      <Route path="membership" element={<Guard perm="promotions"><Membership /></Guard>} />
       <Route path="discounts" element={<Navigate to="/admin/promotions" replace />} />
       <Route path="staff" element={<Guard perm="staff"><Staff /></Guard>} />
       <Route path="*" element={<NotFound />} />
