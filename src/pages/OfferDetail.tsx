@@ -56,7 +56,7 @@ export default function OfferDetail() {
   const go = () => document.getElementById("offer-products")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const useCode = () => { try { sessionStorage.setItem("ct-event-code", code ?? ""); } catch { /* private mode */ } setSaved(true); };
   return (<div className="relative left-1/2 -mt-5 w-screen -translate-x-1/2 space-y-8 sm:-mt-8">
-    <section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16"><SkyBackdrop />
+    <section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16">{settings.offerDetailImage ? <img src={settings.offerDetailImage} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : <SkyBackdrop />}
       <div className="relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div className="text-center lg:text-left">
           <nav aria-label="Breadcrumb" className="mb-3 text-sm font-bold text-[#1F4E9C]"><Link to="/" className="hover:underline">{t("Home")}</Link> <span aria-hidden="true">/</span> <Link to="/shop?sale=1" className="hover:underline">{t("Special Offer")}</Link> <span aria-hidden="true">/</span> <span className="opacity-70">{offer.title}</span></nav>

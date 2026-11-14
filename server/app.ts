@@ -663,7 +663,7 @@ admin.post("/settings/banners/delete", wrap(async (req, res) => {
   await deleteProductImages([url]); res.json({ ok: true });
 }));
 /** Special Offer page pictures: top banner background, mascot, bottom banner background; plus whether the title text shows on the top banner. The countdown and "UP TO %" badge are drawn by the page on top of whatever is uploaded. */
-const OFFER_SLOTS = { hero: { key: "offerHeroImage", prefix: "offer-hero", w: 2400, h: 1200 }, mascot: { key: "offerMascotImage", prefix: "offer-mascot", w: 900, h: 900 }, footer: { key: "offerFooterImage", prefix: "offer-footer", w: 2400, h: 600 } } as const;
+const OFFER_SLOTS = { hero: { key: "offerHeroImage", prefix: "offer-hero", w: 2400, h: 1200 }, mascot: { key: "offerMascotImage", prefix: "offer-mascot", w: 900, h: 900 }, footer: { key: "offerFooterImage", prefix: "offer-footer", w: 2400, h: 600 }, detail: { key: "offerDetailImage", prefix: "offer-detail", w: 2400, h: 1000 } } as const;
 admin.post("/settings/offer-page", upload.any(), wrap(async (req, res) => {
   const slot = fld(req, "slot");
   if (slot === "text") { try { await saveSettings({ offerHeroText: fld(req, "value") === "on" }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true }); }

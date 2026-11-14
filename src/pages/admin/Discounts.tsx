@@ -3,6 +3,7 @@ import Icon from "@/components/admin/Icons";
 import Modal from "@/components/admin/Modal";
 import Skeleton from "@/components/Skeleton";
 import ImageUpload from "@/components/admin/ImageUpload";
+import { Link } from "react-router-dom";
 import { post } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useTitle } from "@/lib/title";
@@ -145,7 +146,8 @@ export default function Promotions() {
   const act = async (path: string, body: object, ok: string) => { setMsg(await send(path, body, ok)); };
   const createCode = async (e: FormEvent) => { e.preventDefault(); if (busy) return; setBusy(true); const r = await send("/admin/discounts/create", { code, percent }, `Code ${code.trim().toUpperCase()} created`); setMsg(r); if (r.ok) setCode(""); setBusy(false); };
   return (<div className="space-y-4">
-    <h1 className="text-2xl font-extrabold sm:text-3xl">{t("Promotions & Pre-Order Rules")}</h1>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Promotions & Pre-Order Rules")}</h1>
+      <Link to="/admin/settings#offer-banner" className="inline-flex items-center gap-2 rounded-full border border-sky-border bg-white px-4 py-2 text-sm font-bold hover:bg-sky-pale">🖼️ {t("Change Special Offer banners & pictures")}</Link></div>
     {msg && <p role={msg.ok ? "status" : "alert"} className={`rounded-xl p-3 font-semibold ${msg.ok ? "bg-green-100 text-green-900" : "bg-red-100 text-red-800"}`}>{msg.text}</p>}
     <div className="grid gap-4 lg:grid-cols-2">
       <section className={card}><div className="mb-4 flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#FFF1C9] text-[#C98F0B]"><Icon name="orders" size={22} /></span><div><h2 className="text-lg font-extrabold">{t("Pre-Order Global Rules")}</h2><p className="text-sm text-mute">{t("Configure down payment rates and dispatch estimates.")}</p></div></div>
