@@ -13,7 +13,7 @@ const FacebookIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" aria-
 /** Footer: a small row with the shop links on top, then one row with logo, tagline, policy links, social links and copyright. Policy pages are written by the admin in Admin > Pages. */
 export default function Footer({ logoUrl = "/img/logo.png", hidden = [] }: { logoUrl?: string; hidden?: string[] }) {
   const { t } = useI18n(); const { settings: s } = useSettings(); const tg = s.telegramUrl || TELEGRAM_FALLBACK;
-  return (<footer className="mt-10 border-t border-sky-border bg-gradient-to-b from-[#E8F3FF] to-[#F6FBFF] text-xs text-[#2F4D7A] sm:mt-16">
+  return (<footer className="border-t border-sky-border bg-gradient-to-b from-[#E8F3FF] to-[#F6FBFF] text-xs text-[#2F4D7A]">
     <div className="border-b border-[#D5E6F8]"><div className="page-wrap flex flex-wrap items-center justify-center gap-x-5 gap-y-1 py-2.5">
       <Link to="/shop" className={link}>{t("All Product")}</Link><Link to="/cart" className={link}>{t("Cart")}</Link><Link to="/account" className={link}>{t("My account")}</Link><Link to="/about" className={link}>{t("About")}</Link><Link to="/admin/login" className={link}>{t("Admin login")}</Link></div></div>
     <div className="page-wrap flex flex-wrap items-center justify-center gap-x-6 gap-y-3 py-4 lg:justify-between">

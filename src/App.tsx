@@ -56,7 +56,7 @@ function Shell() {
         </Routes>
       </Suspense>
     </main>
-    <HappyBanner />
+    <div className="mt-10 sm:mt-16"><HappyBanner /></div>
     <Footer logoUrl={settings.logoUrl} hidden={hidden} />
   </>);
 }
