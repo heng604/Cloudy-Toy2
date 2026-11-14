@@ -16,6 +16,7 @@ import { listProducts, listProductsByIds, firstImagesById, categoryCounts, listA
 import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDiscount, deleteStoreDiscount } from "./lib/discountStore";
 import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listAdminOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll, updatePendingOrder, listProofPaths } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS, beatWatcher, watcherSeenAt } from "./lib/settings";
+import type { Settings } from "../shared/types";
 import { getAllPages, savePage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
 import { methodOn } from "../shared/payOptions";
@@ -425,9 +426,9 @@ const categoryList = async () => {
 /** Pictures the admin uploads for category icons and offer cards: re-encoded small, stored like banners, never trusted from the browser. */
 const ownImage = (s?: string) => !!s && (s.startsWith("/api/img/") || s.includes(".supabase.co"));
 const dropImage = async (s?: string) => { if (ownImage(s)) await deleteProductImages([s!]); };
-async function savePicture(f: Express.Multer.File, prefix: string, size: number, fit: "cover" | "inside"): Promise<{ url: string } | { error: string }> {
+async function savePicture(f: Express.Multer.File, prefix: string, w: number, h: number, fit: "cover" | "inside"): Promise<{ url: string } | { error: string }> {
   const bytes = new Uint8Array(f.buffer); const v = validateImage(bytes, f.mimetype); if (!v.ok) return { error: `${f.originalname}: ${v.error}` };
-  const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: size, height: size, fit, withoutEnlargement: fit === "inside" }).webp({ quality: 85 }).toBuffer());
+  const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: w, height: h, fit, withoutEnlargement: fit === "inside" }).webp({ quality: 85 }).toBuffer());
   return { url: await uploadProductImage(`${prefix}-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}.webp`, small, "image/webp") };
 }
 const catName = (v: unknown) => String(v ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
@@ -458,7 +459,7 @@ admin.post("/categories/image", upload.any(), wrap(async (req, res) => {
   const raw = fld(req, "name").trim(); const special = raw === "__all" || raw === "__new"; const key = special ? raw : catName(raw);
   if (!special && !(await categoryList()).some((c) => c.name === key)) return res.json({ error: "Category not found" });
   const cur = (await getSettings()).categoryImages ?? {}; const old = cur[key]; const next = { ...cur }; let uploaded = ""; const f = files(req, "image")[0];
-  if (f) { const r = await savePicture(f, "cat", 320, "cover"); if ("error" in r) return res.json({ error: r.error }); uploaded = r.url; next[key] = uploaded; }
+  if (f) { const r = await savePicture(f, "cat", 320, 320, "cover"); if ("error" in r) return res.json({ error: r.error }); uploaded = r.url; next[key] = uploaded; }
   else if (fld(req, "remove") === "on") delete next[key]; else return res.json({ error: "Choose a picture first" });
   try { await saveSettings({ categoryImages: next }); } catch { await dropImage(uploaded); return res.json({ error: "Could not save the icon. Please try again." }); }
   if (old && old !== next[key]) await dropImage(old);
@@ -571,7 +572,7 @@ admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur 
 /** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
 admin.post("/promotions/image", upload.any(), wrap(async (req, res) => {
   const f = files(req, "image")[0]; if (!f) return res.json({ error: "Choose a picture first" });
-  const r = await savePicture(f, "offer", 900, "inside"); if ("error" in r) return res.json({ error: r.error }); res.json({ ok: true, url: r.url });
+  const r = await savePicture(f, "offer", 900, 900, "inside"); if ("error" in r) return res.json({ error: r.error }); res.json({ ok: true, url: r.url });
 }));
 // festival / event special offers: the admin writes the promotion text, picks the products (and an optional % off); the shop's "Special Offer" button shows them
 const festivalFields = (b: Record<string, unknown>) => checkFestival({ name: b?.name, code: b?.code, nameKm: b?.nameKm, text: b?.text, textKm: b?.textKm, startDate: b?.startDate, endDate: b?.endDate, percent: b?.percent, productIds: b?.productIds, image: b?.image });
@@ -660,6 +661,19 @@ admin.post("/settings/banners/delete", wrap(async (req, res) => {
   if (!old.includes(url)) return res.json({ error: "Banner not found" });
   try { await saveSettings({ banners: old.filter((b) => b !== url) }); } catch { return res.json({ error: "Could not delete the banner. Please try again." }); }
   await deleteProductImages([url]); res.json({ ok: true });
+}));
+/** Special Offer page pictures: top banner background, mascot, bottom banner background; plus whether the title text shows on the top banner. The countdown and "UP TO %" badge are drawn by the page on top of whatever is uploaded. */
+const OFFER_SLOTS = { hero: { key: "offerHeroImage", prefix: "offer-hero", w: 2400, h: 1200 }, mascot: { key: "offerMascotImage", prefix: "offer-mascot", w: 900, h: 900 }, footer: { key: "offerFooterImage", prefix: "offer-footer", w: 2400, h: 600 } } as const;
+admin.post("/settings/offer-page", upload.any(), wrap(async (req, res) => {
+  const slot = fld(req, "slot");
+  if (slot === "text") { try { await saveSettings({ offerHeroText: fld(req, "value") === "on" }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true }); }
+  if (!(slot in OFFER_SLOTS)) return res.json({ error: "Unknown picture" });
+  const sl = OFFER_SLOTS[slot as keyof typeof OFFER_SLOTS]; const old = (await getSettings())[sl.key]; let uploaded = ""; const f = files(req, "image")[0];
+  if (f) { const r = await savePicture(f, sl.prefix, sl.w, sl.h, "inside"); if ("error" in r) return res.json({ error: r.error }); uploaded = r.url; }
+  else if (fld(req, "remove") !== "on") return res.json({ error: "Choose a picture first" });
+  try { await saveSettings({ [sl.key]: uploaded } as Partial<Settings>); } catch { await dropImage(uploaded); return res.json({ error: "Could not save the picture. Please try again." }); }
+  if (old && old !== uploaded) await dropImage(old);
+  res.json({ ok: true, url: uploaded });
 }));
 /** Payment QR: upload a new image, or delete it (no QR is shown until a new one is uploaded). */
 admin.post("/settings/qr", upload.any(), wrap(async (req, res) => {
