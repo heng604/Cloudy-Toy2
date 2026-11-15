@@ -9,18 +9,19 @@ import { usePromotions, useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { categoriesOf, type Product } from "@shared/products";
 import { inSpecialOffer, liveCampaigns, liveFestivals, festivalName, festivalText, productPromo, orderCampaigns } from "@shared/promotions";
-/** The picture the admin uploads (Admin > Settings > Special Offer page banner > Top banner background) IS the banner, full width. Only the live "UP TO %" discount and the countdown are drawn on top, on the right; on a phone they sit under the picture. */
+/** The picture the admin uploads IS the banner, full width. The live "UP TO %" goes in the picture's cloud and the countdown in its white board; on a phone they sit under the picture. */
 function PictureBanner({ src, k, up, end, t }: { src: string; k: number; up: number; end: number; t: (s: string) => string }) {
   const ref = useRef<HTMLDivElement>(null); const [w, setW] = useState(1920);
   useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setW(el.clientWidth)); ro.observe(el); setW(el.clientWidth); return () => ro.disconnect(); }, []);
-  const wide = w >= 900, sc = Math.min(1.25, Math.max(0.5, w / 1920));
-  const live = <>{up > 0 && <CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} />}{end > 0 && <Countdown end={end} t={t} />}</>;
+  const wide = w >= 900, sc = Math.min(1.25, Math.max(0.4, w / 1920));
   return (<section aria-label={t("Special Offer")}>
     <div ref={ref} className="relative w-full overflow-hidden"><h1 className="sr-only">{t("Special Offer")}</h1>
       <ScaledBanner src={src} k={k} fetchPriority="high" />
-      {wide && (up > 0 || end > 0) && <div className="absolute inset-y-0 right-[4%] flex items-center"><div className="w-[18rem] space-y-2" style={{ transform: `scale(${sc})`, transformOrigin: "right center" }}>{live}</div></div>}
+      {/* the live discount sits inside the cloud on the right of the picture, the countdown inside the white board under it */}
+      {wide && up > 0 && <div className="absolute flex items-center justify-center" style={{ left: "78%", top: "13%", width: "19%", height: "40%" }}><div style={{ transform: `scale(${sc})` }}><CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} /></div></div>}
+      {wide && end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76%", top: "57%", width: "21.5%", height: "28%" }}><div className="w-[21rem]" style={{ transform: `scale(${sc})` }}><Countdown end={end} t={t} /></div></div>}
     </div>
-    {!wide && (up > 0 || end > 0) && <div className="mx-auto mt-3 w-full max-w-xs space-y-2 px-4">{live}</div>}
+    {!wide && (up > 0 || end > 0) && <div className="mx-auto mt-3 w-full max-w-xs space-y-2 px-4">{up > 0 && <CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} />}{end > 0 && <Countdown end={end} t={t} />}</div>}
   </section>);
 }
 /** The page behind the "Special Offer" button: sky banner with the biggest discount and a countdown, a category filter, the offer products and the promotion cards. */
