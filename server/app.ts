@@ -730,6 +730,7 @@ const OFFER_SLOTS = { hero: { key: "offerHeroImage", prefix: "offer-hero", w: 24
 admin.post("/settings/offer-page", upload.any(), wrap(async (req, res) => {
   const slot = fld(req, "slot");
   if (slot === "text") { try { await saveSettings({ offerHeroText: fld(req, "value") === "on" }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true }); }
+  if (slot === "footerbtn") { try { await saveSettings({ offerFooterButton: fld(req, "value") === "on" }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true }); }
   if (slot === "size") { // size slider of any banner / logo / mascot: stored as a percent per picture id
     const id = fld(req, "key"), n = Math.round(Number(fld(req, "value"))); if (!/^[a-z][a-z-]{0,30}$/.test(id) || !Number.isFinite(n)) return res.json({ error: "Invalid size" });
     const cur = (await getSettings()).imageSizes ?? {}; try { await saveSettings({ imageSizes: { ...cur, [id]: Math.min(250, Math.max(50, n)) } }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true });

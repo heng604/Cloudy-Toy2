@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ScaledBanner from "@/components/ScaledBanner";
 import { sizeOf } from "@/lib/imageSize";
 import { Link } from "react-router-dom";
 import { useSettings } from "@/lib/store";
@@ -43,8 +44,12 @@ export function Countdown({ end, t }: { end: number; t: (s: string) => string })
 /** The pink-and-lilac "Shop now and enjoy special savings!" banner (picture and mascot can be changed in admin). */
 export function HappyBanner() {
   const { t } = useI18n(); const { settings } = useSettings(); const footerImg = settings.offerFooterImage || "", mascotImg = settings.offerMascotImage || ""; const kb = sizeOf(settings, "offer-footer");
+  const btn = "font-['Caveat'] rounded-full bg-[#FF7BA9] font-bold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-[#F2679A]";
+  // the admin's own picture (Admin > Settings > Bottom banner) IS the banner; only the Happy Shopping button stays on top (can be switched off)
+  if (footerImg) return (<section aria-label={t("Happy Shopping")} className="relative w-full overflow-hidden"><ScaledBanner src={footerImg} k={kb} />
+    {settings.offerFooterButton !== false && <div className="absolute inset-y-0 right-[3%] flex items-center"><Link to="/shop" className={`${btn} px-4 py-1.5 text-lg sm:px-8 sm:py-2.5 sm:text-2xl`}>{t("Happy Shopping")} ♡</Link></div>}</section>);
   return (<section style={{ paddingBlock: `${1.25 * kb}rem` }} className="relative flex flex-wrap items-center justify-center gap-4 overflow-hidden px-5 sm:justify-between sm:px-10 lg:px-16">
-    {footerImg ? <img src={footerImg} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden bg-gradient-to-r from-[#D9E8FF] via-[#E6E2FF] to-[#FFDDEA]"><Cloud className="-bottom-10 -left-10 w-[22rem] opacity-90" /><Cloud className="-bottom-12 -right-10 w-[26rem] opacity-90" /><Star className="left-[30%] top-2 w-7" /><Star className="right-[26%] top-3 w-6" color="#FFE58A" /><Heart className="bottom-3 left-[58%] w-5" color="#B7A6F5" /></div>}
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden bg-gradient-to-r from-[#D9E8FF] via-[#E6E2FF] to-[#FFDDEA]"><Cloud className="-bottom-10 -left-10 w-[22rem] opacity-90" /><Cloud className="-bottom-12 -right-10 w-[26rem] opacity-90" /><Star className="left-[30%] top-2 w-7" /><Star className="right-[26%] top-3 w-6" color="#FFE58A" /><Heart className="bottom-3 left-[58%] w-5" color="#B7A6F5" /></div>
     <Mascot src={mascotImg} className="relative hidden h-16 w-auto sm:block" /><p className={`${HAND} relative text-center text-2xl font-bold text-[#1F4E9C] sm:text-3xl`}>{t("Shop now and enjoy special savings!")} <span aria-hidden="true" className="text-[#8E7CF0]">♡</span></p>
-    <Link to="/shop" className={`${HAND} relative rounded-full bg-[#FF7BA9] px-8 py-2.5 text-2xl font-bold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-[#F2679A]`}>{t("Happy Shopping")} ♡</Link></section>);
+    <Link to="/shop" className={`${btn} relative px-8 py-2.5 text-2xl`}>{t("Happy Shopping")} ♡</Link></section>);
 }
