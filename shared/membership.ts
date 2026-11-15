@@ -6,14 +6,27 @@ export const PERK_KINDS: PerkKind[] = ["percent", "amount", "free_shipping", "cu
 /** One special for a level. percent = % off the order, amount = $ off the order, free_shipping = delivery fee waived,
  *  custom = any other benefit the admin writes in words (birthday gift, priority support ...; the shop gives it by hand). */
 export type Perk = { id: string; kind: PerkKind; title: string; percent: number; amountCents: number; minSpendCents: number; active: boolean; /** most times a member may use this special per calendar month (0 = no limit) */ monthlyLimit: number };
-export type Tier = { id: string; name: string; emoji: string; image: string; minSpendCents: number; perks: Perk[]; active: boolean };
-export const MAX_TIERS = 10, MAX_PERKS = 12, MAX_MONTHLY_LIMIT = 999;
+/** A level. The FIRST level (lowest) is reached by paying `minSpendCents` in total. After that the customer earns points (1 point per `memberPointCents` paid, default $10).
+ *  Every later level needs `pointsMore` MORE points than the level before it; its `minSpendCents` is worked out from that (see layoutTiers), so the rest of the shop keeps using plain spend. */
+export type Tier = { id: string; name: string; emoji: string; image: string; minSpendCents: number; pointsMore: number; perks: Perk[]; active: boolean };
+export const MAX_TIERS = 10, MAX_PERKS = 12, MAX_MONTHLY_LIMIT = 999, MAX_POINTS_MORE = 100_000;
+/** Dollars paid for 1 point (default $10, in cents). The admin can change it on Admin > Membership. */
+export const DEFAULT_POINT_CENTS = 1000;
+export const isPointCents = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 100 && n <= 10_000_000;
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
-export const DEFAULT_TIERS: Tier[] = [
-  { id: "bronze", name: "Bronze", emoji: "🥉", image: "", minSpendCents: 7000, perks: [], active: true },
-  { id: "platinum", name: "Platinum", emoji: "💎", image: "", minSpendCents: 12000, perks: [], active: true },
-  { id: "gold", name: "Gold", emoji: "🥇", image: "", minSpendCents: 30000, perks: [], active: true },
-];
+/** Gives every level after the first its spend: previous level's spend + pointsMore x point price. The first level keeps its own spend and has pointsMore 0. */
+export function layoutTiers(tiers: Tier[], pointCents: number = DEFAULT_POINT_CENTS): Tier[] {
+  const out: Tier[] = [];
+  tiers.forEach((t, i) => { const prev = out[i - 1]; out.push(i === 0 || !prev ? { ...t, pointsMore: 0 } : { ...t, pointsMore: Math.max(1, Math.round(t.pointsMore || 1)), minSpendCents: prev.minSpendCents + Math.max(1, Math.round(t.pointsMore || 1)) * pointCents }); });
+  return out;
+}
+/** Bronze at $30 paid, then Silver +10 points, Gold +20 more, Platinum +30 more (1 point = $10 paid after Bronze). */
+export const DEFAULT_TIERS: Tier[] = layoutTiers([
+  { id: "bronze", name: "Bronze", emoji: "🥉", image: "", minSpendCents: 3000, pointsMore: 0, perks: [], active: true },
+  { id: "silver", name: "Silver", emoji: "🥈", image: "", minSpendCents: 0, pointsMore: 10, perks: [], active: true },
+  { id: "gold", name: "Gold", emoji: "🥇", image: "", minSpendCents: 0, pointsMore: 20, perks: [], active: true },
+  { id: "platinum", name: "Platinum", emoji: "💎", image: "", minSpendCents: 0, pointsMore: 30, perks: [], active: true },
+]);
 type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : NaN; };
 const idOk = (v: unknown) => typeof v === "string" && /^[a-z0-9-]{1,24}$/.test(v);
@@ -33,28 +46,42 @@ export function checkPerk(i: { id?: unknown; kind?: unknown; title?: unknown; pe
   return { ok: true, value: base };
 }
 /** Validates one level (dollars in, cents out). */
-export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; image?: unknown; minSpend?: unknown; perks?: unknown; active?: unknown }): Checked<Tier> {
-  const name = String(i.name ?? "").trim(), emoji = String(i.emoji ?? "").trim(), minSpendCents = Math.round(num(i.minSpend) * 100);
+export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; image?: unknown; minSpend?: unknown; pointsMore?: unknown; perks?: unknown; active?: unknown }): Checked<Tier> {
+  const name = String(i.name ?? "").trim(), emoji = String(i.emoji ?? "").trim();
+  const noSpend = i.minSpend === undefined || i.minSpend === null || i.minSpend === "", minSpendCents = noSpend ? 0 : Math.round(num(i.minSpend) * 100);
+  const noPoints = i.pointsMore === undefined || i.pointsMore === null || i.pointsMore === "", pointsMore = noPoints ? 0 : num(i.pointsMore);
   if (name.length < 2 || name.length > 30) return { ok: false, error: "Level name needs 2 to 30 characters" };
   if (emoji.length > 8) return { ok: false, error: "Icon can be one emoji" };
   const image = String(i.image ?? "").trim(); if (image.length > 600 || (image && !/^(\/|https?:\/\/)/.test(image))) return { ok: false, error: "Level picture is not valid" };
-  if (!Number.isFinite(minSpendCents) || minSpendCents < 1 || minSpendCents > 100_000_000) return { ok: false, error: "Spend to reach this level must be more than $0" };
+  if (!noSpend && (!Number.isFinite(minSpendCents) || minSpendCents < 1 || minSpendCents > 100_000_000)) return { ok: false, error: "Spend to reach this level must be more than $0" };
+  if (!noPoints && (!Number.isInteger(pointsMore) || pointsMore < 0 || pointsMore > MAX_POINTS_MORE)) return { ok: false, error: "Points needed must be a whole number (1 or more)" };
   const raw = Array.isArray(i.perks) ? i.perks : []; if (raw.length > MAX_PERKS) return { ok: false, error: `At most ${MAX_PERKS} specials per level` };
   const perks: Perk[] = [];
   for (const p of raw) { const c = checkPerk((p ?? {}) as Record<string, unknown>); if (!c.ok) return c; perks.push(c.value); }
-  return { ok: true, value: { id: idOk(i.id) ? String(i.id) : newId(), name, emoji, image, minSpendCents, perks, active: i.active !== false } };
+  return { ok: true, value: { id: idOk(i.id) ? String(i.id) : newId(), name, emoji, image, minSpendCents, pointsMore, perks, active: i.active !== false } };
 }
-/** Reads whatever is stored (missing, old or hand-edited) and always returns valid levels. Never saved = the three default levels; saved empty = no levels. */
-export function normalizeTiers(v: unknown): Tier[] {
-  if (!Array.isArray(v)) return DEFAULT_TIERS.map((t) => ({ ...t, perks: [] }));
-  const out: Tier[] = [];
+/** Reads whatever is stored (missing, old or hand-edited) and always returns valid levels in ladder order. Never saved = the four default levels (Bronze, Silver, Gold, Platinum); saved empty = no levels.
+ *  Levels saved before points existed have no pointsMore: it is worked out from their old spend amounts, so nobody's level jumps. */
+export function normalizeTiers(v: unknown, pointCents: number = DEFAULT_POINT_CENTS): Tier[] {
+  if (!Array.isArray(v)) return layoutTiers(DEFAULT_TIERS.map((t) => ({ ...t, perks: [] })), pointCents);
+  const out: Tier[] = []; let legacy = false;
   for (const x of v) {
     const t = (x ?? {}) as Partial<Tier>;
-    const c = checkTier({ id: t.id, name: t.name, emoji: t.emoji, image: t.image, minSpend: (t.minSpendCents ?? 0) / 100, active: t.active, perks: (Array.isArray(t.perks) ? t.perks : []).map((p) => { const q = (p ?? {}) as Partial<Perk>; return { id: q.id, kind: q.kind, title: q.title, percent: q.percent, amount: (q.amountCents ?? 0) / 100, minSpend: (q.minSpendCents ?? 0) / 100, active: q.active, monthlyLimit: q.monthlyLimit }; }) });
+    if (typeof t.pointsMore !== "number") legacy = true;
+    const c = checkTier({ id: t.id, name: t.name, emoji: t.emoji, image: t.image, minSpend: (t.minSpendCents ?? 0) / 100 || undefined, pointsMore: typeof t.pointsMore === "number" ? t.pointsMore : undefined, active: t.active, perks: (Array.isArray(t.perks) ? t.perks : []).map((p) => { const q = (p ?? {}) as Partial<Perk>; return { id: q.id, kind: q.kind, title: q.title, percent: q.percent, amount: (q.amountCents ?? 0) / 100, minSpend: (q.minSpendCents ?? 0) / 100, active: q.active, monthlyLimit: q.monthlyLimit }; }) });
     if (c.ok && !out.some((o) => o.id === c.value.id)) out.push(c.value);
   }
-  return out.slice(0, MAX_TIERS).sort((a, b) => a.minSpendCents - b.minSpendCents);
+  if (legacy) { out.sort((a, b) => a.minSpendCents - b.minSpendCents); out.forEach((t, i) => { t.pointsMore = i === 0 ? 0 : Math.max(1, Math.round((t.minSpendCents - out[i - 1].minSpendCents) / pointCents)); }); }
+  const kept = out.slice(0, MAX_TIERS); if (kept[0] && kept[0].minSpendCents < 1) kept[0].minSpendCents = DEFAULT_TIERS[0].minSpendCents; // the first level always needs a spend
+  return layoutTiers(kept, pointCents);
 }
+/** Points earned so far: 1 point per `pointCents` paid AFTER the first level's spend (what was paid to join does not count). Not a member yet = 0. */
+export function pointsOf(spendCents: number, tiers: Tier[] | undefined, pointCents: number = DEFAULT_POINT_CENTS): number {
+  const first = tiers?.[0]; if (!first || spendCents < first.minSpendCents) return 0;
+  return Math.floor((spendCents - first.minSpendCents) / pointCents);
+}
+/** Total points a customer needs to reach this level (first level = 0). */
+export const pointsFor = (t: Tier, tiers: Tier[] | undefined, pointCents: number = DEFAULT_POINT_CENTS): number => { const first = tiers?.[0]; return first ? Math.max(0, Math.round((t.minSpendCents - first.minSpendCents) / pointCents)) : 0; };
 /** Total a customer has paid for goods: PAID orders, delivery not counted. */
 export const memberSpendOf = (orders: { paymentStatus: string; totalCents: number; shippingCents: number }[]) => orders.reduce((s, o) => (o.paymentStatus === "PAID" ? s + Math.max(0, o.totalCents - o.shippingCents) : s), 0);
 const live = (tiers: Tier[] | undefined) => (tiers ?? []).filter((t) => t.active).sort((a, b) => a.minSpendCents - b.minSpendCents);

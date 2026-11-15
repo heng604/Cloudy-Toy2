@@ -37,7 +37,7 @@ import { validateImage, safeFileName } from "../shared/images";
 import { r2Enabled, r2Get } from "./lib/r2";
 import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
-import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier, MAX_TIERS, type Tier } from "../shared/membership";
+import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier, layoutTiers, isPointCents, pointsOf, MAX_TIERS, type Tier } from "../shared/membership";
 import { getOverrides, setOverride } from "./lib/memberStore";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
 import { isSlug, isBuiltin, MAX_CONTENT, MAX_TITLE, MAX_CUSTOM_PAGES, SLUG_RE, RESERVED_SLUGS, PAGE_DEFS, allDefs } from "../shared/pages";
@@ -363,7 +363,7 @@ api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = use
 /** The signed-in customer's membership: what they have paid so far, their level and the next one. Levels come from the admin's Membership page. */
 api.get("/membership/me", requireUser, wrap(async (req, res) => {
   const u = userOf(req); const promos = await getPromotions(); const m = await memberOf(u.email ?? undefined, promos.membership);
-  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: nextTier(m.spendCents, promos.membership)?.id ?? null });
+  res.json({ spendCents: m.spendCents, points: pointsOf(m.spendCents, promos.membership, promos.memberPointCents), used: m.used, tierId: m.tier?.id ?? null, nextId: nextTier(m.spendCents, promos.membership)?.id ?? null });
 }));
 
 /** Which admin role (owner / admin / editor) this signed-in account has, or null. The browser uses it to show the admin area. */
@@ -635,16 +635,32 @@ admin.post("/promotions/campaigns/toggle", wrap(async (req, res) => {
 }));
 admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const gone = cur.campaigns.find((x) => x.id === id); await savePromotions({ ...cur, campaigns: cur.campaigns.filter((x) => x.id !== id) }); await dropImage(gone?.image); res.json({ ok: true }); }));
 /** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
-// membership levels: add / edit (including their specials) / delete. A level starts at its own "spend" amount; two levels cannot start at the same amount.
-const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, perks: b?.perks, active: b?.active });
+// membership levels: add / edit (including their specials) / delete / reorder. The FIRST level starts at its own "spend" amount (e.g. $30). Every later level needs
+// "pointsMore" more points than the level before it (1 point = memberPointCents paid, default $10); its spend is worked out by layoutTiers.
+const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, pointsMore: b?.pointsMore, perks: b?.perks, active: b?.active });
 admin.post("/promotions/membership/save", wrap(async (req, res) => {
   const c = tierFields(req.body); if (!c.ok) return res.json({ error: c.error });
-  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const exists = cur.membership.some((t) => t.id === id);
-  if (cur.membership.some((t) => t.id !== c.value.id && t.minSpendCents === c.value.minSpendCents)) return res.json({ error: "Another level already starts at that amount. Choose a different amount." });
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const at = cur.membership.findIndex((t) => t.id === id); const exists = at >= 0;
   if (!exists && cur.membership.length >= MAX_TIERS) return res.json({ error: `At most ${MAX_TIERS} levels. Delete one first.` });
-  const value = exists ? { ...c.value, id } : { ...c.value, id: crypto.randomUUID().slice(0, 8) };
-  const prev = cur.membership.find((t) => t.id === value.id);
-  await savePromotions({ ...cur, membership: [...cur.membership.filter((t) => t.id !== value.id), value].sort((a, b) => a.minSpendCents - b.minSpendCents) }); if (prev?.image && prev.image !== value.image) await dropImage(prev.image); res.json({ ok: true });
+  const index = exists ? at : cur.membership.length; // a new level goes on top of the ladder (use Move down / up to change)
+  if (index === 0 && c.value.minSpendCents < 1) return res.json({ error: "Enter how much a customer pays to join this first level (more than $0)" });
+  if (index > 0 && c.value.pointsMore < 1) return res.json({ error: "Points needed must be 1 or more" });
+  const prev = exists ? cur.membership[at] : undefined;
+  const value: Tier = exists ? { ...c.value, id, minSpendCents: index === 0 ? c.value.minSpendCents : prev!.minSpendCents } : { ...c.value, id: crypto.randomUUID().slice(0, 8) };
+  const list = exists ? cur.membership.map((t, i) => (i === at ? value : t)) : [...cur.membership, value];
+  await savePromotions({ ...cur, membership: layoutTiers(list, cur.memberPointCents) }); if (prev?.image && prev.image !== value.image) await dropImage(prev.image); res.json({ ok: true });
+}));
+/** Dollars paid for 1 point (default $10). Every level's spend is worked out again from its points. */
+admin.post("/promotions/membership/points", wrap(async (req, res) => {
+  const pointCents = Math.round(Number(req.body?.pointDollars) * 100); if (!isPointCents(pointCents)) return res.json({ error: "Dollars per point must be between $1 and $100,000" });
+  const cur = await getPromotions(); await savePromotions({ ...cur, memberPointCents: pointCents, membership: layoutTiers(cur.membership, pointCents) }); res.json({ ok: true });
+}));
+/** Move a level one step down (toward the first) or up the ladder. The level that ends up first keeps the first level's join spend. */
+admin.post("/promotions/membership/move", wrap(async (req, res) => {
+  const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const i = cur.membership.findIndex((t) => t.id === id); if (i < 0) return res.json({ error: "Level not found" });
+  const j = req.body?.dir === "down" ? i - 1 : i + 1; if (j < 0 || j >= cur.membership.length) return res.json({ ok: true });
+  const list = cur.membership.map((t) => ({ ...t })); const base = list[0].minSpendCents; [list[i], list[j]] = [list[j], list[i]]; list[0].minSpendCents = base;
+  await savePromotions({ ...cur, membership: layoutTiers(list, cur.memberPointCents) }); res.json({ ok: true });
 }));
 admin.post("/promotions/membership/toggle", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.membership.some((t) => t.id === id)) return res.json({ error: "Level not found" });
@@ -653,7 +669,7 @@ admin.post("/promotions/membership/toggle", wrap(async (req, res) => {
 admin.post("/promotions/membership/delete", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.membership.some((t) => t.id === id)) return res.json({ error: "Level not found" });
   const gone = cur.membership.find((t) => t.id === id);
-  await savePromotions({ ...cur, membership: cur.membership.filter((t) => t.id !== id) }); await dropImage(gone?.image); res.json({ ok: true });
+  await savePromotions({ ...cur, membership: layoutTiers(cur.membership.filter((t) => t.id !== id), cur.memberPointCents) }); await dropImage(gone?.image); res.json({ ok: true });
 }));
 admin.post("/promotions/image", upload.any(), wrap(async (req, res) => {
   const f = files(req, "image")[0]; if (!f) return res.json({ error: "Choose a picture first" });
