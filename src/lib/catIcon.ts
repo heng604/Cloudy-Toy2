@@ -1,0 +1,3 @@
+/** Small emoji picked from a category name (admins can name categories anything, so unknown names get a cloud). */
+const ICONS: [RegExp, string][] = [[/doll|figure|lads/i, "🪆"], [/plush|plusie|teddy|bear/i, "🧸"], [/acrylic|card/i, "🃏"], [/accessor|outfit|key|charm|jewel/i, "🎀"], [/mystery|blind|box|surprise/i, "🎁"], [/sticker/i, "💟"], [/stationery|notebook|pen/i, "✏️"], [/promo|sale|offer|deal/i, "🏷️"], [/official|authentic/i, "✅"], [/pre-?order/i, "⏳"], [/baby|rattle/i, "🍼"], [/puzzle/i, "🧩"], [/block|build/i, "🧱"], [/train|car|vehicle/i, "🚂"]];
+export const catIcon = (c: string) => ICONS.find(([r]) => r.test(c))?.[1] ?? "☁️";

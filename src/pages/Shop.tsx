@@ -1,42 +1,50 @@
-import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
+import SectionHead from "@/components/SectionHead";
+import CloudMascot from "@/components/CloudMascot";
 import SpecialOffers from "@/components/SpecialOffers";
 import { useListedProducts, usePromotions } from "@/lib/store";
 import { productPromo } from "@shared/promotions";
 import { LABELS, categoriesOf } from "@shared/products";
+import { catIcon } from "@/lib/catIcon";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
-/** The "All" button. Click it to open the categories (Doll, Perfume, ...): they are hidden inside this button. */
-function CategoryMenu({ cats, category, active, chip, on, allLabel }: { cats: string[]; category: string | null; active: boolean; chip: string; on: string; allLabel: string }) {
-  const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); }, key = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", down); document.addEventListener("keydown", key);
-    return () => { document.removeEventListener("mousedown", down); document.removeEventListener("keydown", key); };
-  }, [open]);
-  const items = [{ label: allLabel, to: "/shop", sel: !category }, ...cats.map((c) => ({ label: c, to: `/shop?category=${encodeURIComponent(c)}`, sel: category === c }))];
-  return (<div ref={ref} className="relative"><button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`${chip} inline-flex items-center gap-2 ${active ? on : ""}`}>{category ?? allLabel}
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={open ? "rotate-180" : ""}><path d="m6 9 6 6 6-6" /></svg></button>
-    {open && <ul role="menu" className="absolute left-0 z-20 mt-2 min-w-44 overflow-hidden rounded-2xl border border-sky-border bg-white p-1 shadow-lift">{items.map((i) => <li key={i.to} role="none"><Link role="menuitem" to={i.to} onClick={() => setOpen(false)} className={`block rounded-xl px-4 py-2 hover:bg-sky-pale ${i.sel ? "bg-sky-pale font-bold" : ""}`}>{i.label}</Link></li>)}</ul>}</div>);
+/** "Our Products" banner: sky card with soft clouds, the title, a handwritten line, a speech cloud and the mascot. */
+function ProductsBanner() {
+  const { t } = useI18n();
+  return (<section aria-label={t("Our Products")} className="relative mb-7 overflow-hidden rounded-[2rem] bg-gradient-to-b from-[#BFDFFF] via-[#D6EAFF] to-[#EAF5FF] px-6 py-8 shadow-soft sm:px-10 sm:py-10 lg:py-12">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 20% 22% at 8% 100%,#fff,transparent 72%),radial-gradient(ellipse 24% 24% at 40% 108%,#fff,transparent 72%),radial-gradient(ellipse 22% 22% at 70% 104%,#fff,transparent 72%),radial-gradient(ellipse 18% 20% at 98% 96%,#fff,transparent 72%)" }} />
+    <span aria-hidden="true" className="absolute left-5 top-4 text-xl text-[#FFC93C]">✦</span><span aria-hidden="true" className="absolute left-[44%] top-5 text-2xl text-[#FFC93C]">★</span><span aria-hidden="true" className="absolute right-[34%] top-6 text-xl text-[#FF8FB1]">♥</span><span aria-hidden="true" className="absolute bottom-8 left-[40%] text-lg text-white">✦</span>
+    <div className="relative max-w-[62%] sm:max-w-[55%]">
+      <h1 className="font-display text-3xl font-bold leading-none text-[#1F3F8F] sm:text-5xl lg:text-6xl">{t("Our Products")}</h1>
+      <p className="mt-3 font-['Caveat'] text-xl font-semibold text-[#2F6FD0] sm:text-3xl">{t("Every little cloud, all in one place!")}</p>
+      <span aria-hidden="true" className="mt-1 block h-1 w-40 rounded-full bg-[#FF8FB1]/80 sm:w-64" /></div>
+    <div aria-hidden="true" className="absolute bottom-2 right-3 flex items-end gap-3 sm:right-8"><span className="mb-16 hidden rounded-[1.6rem] border-2 border-white bg-white/90 px-4 py-2 font-['Caveat'] text-2xl font-bold text-[#2F6FD0] shadow-soft sm:block">{t("Shop the sky!")} ♡</span><CloudMascot className="h-24 w-28 sm:h-36 sm:w-44 lg:h-44 lg:w-52" /></div>
+  </section>);
 }
 export default function Shop() {
   const { t, lang } = useI18n(); useTitle(t("Product"));
   const [sp] = useSearchParams(); const { data: all } = useListedProducts(); const { promotions } = usePromotions();
   if (!all) return <Skeleton />;
   const q = (sp.get("q") ?? "").toLowerCase(), category = sp.get("category"), sort = sp.get("sort"), type = LABELS.find((l) => l.id === sp.get("type")), sale = sp.get("sale") === "1", fid = sp.get("festival");
-  const chip = "rounded-full border border-sky-border bg-white px-4 py-2", on = "!border-sky !bg-sky font-bold";
   if (sale) return <SpecialOffers all={all} festivalId={fid} />; // the Special Offer button: event hero, promotion cards, offer products
   let list = all.filter((p) => p.name.toLowerCase().includes(q) && (!category || p.category === category) && (!type || !!p.labels?.includes(type.id)));
   const now = (p: (typeof list)[number]) => productPromo(p, promotions.campaigns, promotions.festivals).finalCents; // price after any category / festival discount
   if (sort === "price-asc") list = [...list].sort((a, b) => now(a) - now(b));
   if (sort === "price-desc") list = [...list].sort((a, b) => now(b) - now(a));
-  return (<div><h1 className="mb-4 text-2xl font-extrabold sm:text-3xl">{t("Product")}</h1>
-    <nav className="mb-6 flex flex-wrap gap-2 text-sm sm:text-base" aria-label="Categories"><CategoryMenu cats={categoriesOf(all)} category={category} active={!type} chip={chip} on={on} allLabel={t("All")} />
-      {LABELS.map((l) => <Link key={l.id} to={`/shop?type=${l.id}`} aria-current={type?.id === l.id ? "page" : undefined} className={`${chip} ${type?.id === l.id ? on : ""}`}>{lang === "km" ? l.km : l.en}</Link>)}
-      <Link to="?sort=price-asc" className="ml-auto text-sm text-mute">{t("Price ↑")}</Link><Link to="?sort=price-desc" className="text-sm text-mute">{t("Price ↓")}</Link></nav>
-    {list.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center">{t("No products match.")} <Link to="/shop" className="underline">{t("Clear filters")}</Link></p>
+  const title = category ?? (type ? (lang === "km" ? type.km : type.en) : t("All Products"));
+  const cats = categoriesOf(all); const small = "text-sm text-[#4A6FA5] hover:text-[#1F4E9C] hover:underline";
+  return (<div>
+    <ProductsBanner />
+    <SectionHead as="h2" title={title} sub={`${list.length} ${t("cute finds waiting for you")}`} right={
+      <nav className="-mx-1 flex max-w-full gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:none]" aria-label="Categories">
+        <Link to="/shop" aria-current={!category && !type ? "page" : undefined} className={`chip ${!category && !type ? "chip-on" : ""}`}><span aria-hidden="true">✦</span>{t("All")}</Link>
+        {cats.map((c) => <Link key={c} to={`/shop?category=${encodeURIComponent(c)}`} aria-current={category === c ? "page" : undefined} className={`chip ${category === c ? "chip-on" : ""}`}><span aria-hidden="true">{catIcon(c)}</span>{c}</Link>)}
+      </nav>} />
+    <nav className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2" aria-label={t("Product")}>
+      {LABELS.map((l) => <Link key={l.id} to={`/shop?type=${l.id}`} aria-current={type?.id === l.id ? "page" : undefined} className={`rounded-full px-3 py-1 text-xs font-bold transition sm:text-sm ${type?.id === l.id ? "bg-[#1F4E9C] text-white" : "bg-white/80 text-[#1F4E9C] hover:bg-white"}`}>{lang === "km" ? l.km : l.en}</Link>)}
+      <span className="ml-auto flex gap-3"><Link to="?sort=price-asc" className={small}>{t("Price ↑")}</Link><Link to="?sort=price-desc" className={small}>{t("Price ↓")}</Link></span></nav>
+    {list.length === 0 ? <p className="rounded-[1.6rem] bg-white/80 p-8 text-center shadow-soft">{t("No products match.")} <Link to="/shop" className="underline">{t("Clear filters")}</Link></p>
       : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">{list.map((p) => <ProductCard key={p.id} p={p} />)}</div>}</div>);
 }

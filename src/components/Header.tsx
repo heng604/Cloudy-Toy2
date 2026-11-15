@@ -30,8 +30,8 @@ const ITEMS: { id: ItemId; label: string; to: string }[] = [
   { id: "cat", label: "Category", to: "/shop" },
   { id: "sale", label: "Special Offer", to: "/shop?sale=1" },
 ];
-const ON = "bg-[#4A86D8] text-white shadow-soft"; // the Home button colour, used by every header button
-const itemCls = (active: boolean) => `relative inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-extrabold transition duration-200 hover:-translate-y-0.5 active:scale-95 xl:text-sm ${active ? ON : "text-[#1F4E9C] hover:bg-[#4A86D8] hover:text-white hover:shadow-soft"}`;
+const ON = "bg-gradient-to-b from-[#5BAEF5] to-[#3D86E0] text-white shadow-[0_5px_12px_rgba(61,134,224,.35)]"; // the Home button colour, used by every header button
+const itemCls = (active: boolean) => `relative inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-extrabold transition duration-200 hover:-translate-y-0.5 active:scale-95 xl:text-sm ${active ? ON : "text-[#1F4E9C] hover:bg-[#E3F0FF]"}`;
 const Inner = ({ id, label }: { id: ItemId; label: string }) => <>{id !== "home" && ICONS[id]}{label}</>;
 /** "Category" on a computer: opens the list of categories. */
 function CategoryItem({ active, cats, label }: { active: boolean; cats: string[]; label: string }) {
@@ -56,29 +56,29 @@ export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string
   const search = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); navigate(`/shop?q=${encodeURIComponent(String(new FormData(e.currentTarget).get("q") ?? ""))}`); setOpen(false); };
   const cats = categoriesOf(products ?? []); const onShop = pathname.startsWith("/shop"); const plain = !q.get("type") && q.get("sale") !== "1" && !q.get("category");
   const isOn = (id: ItemId) => id === "home" ? pathname === "/" : id === "product" ? (onShop && plain) || pathname.startsWith("/product") : id === "new" ? q.get("type") === "new_arrival" : id === "pre" ? q.get("type") === "preorder" : id === "sale" ? q.get("sale") === "1" || pathname.startsWith("/offer") : onShop && !!q.get("category");
-  const cartOn = CART_MATCH(pathname), acctOn = pathname.startsWith("/account") || pathname.startsWith("/login"), icon = "relative grid h-10 w-10 place-items-center rounded-full text-[#1F4E9C] transition hover:scale-110 hover:bg-[#4A86D8] hover:text-white active:scale-95 sm:h-11 sm:w-11";
+  const cartOn = CART_MATCH(pathname), acctOn = pathname.startsWith("/account") || pathname.startsWith("/login"), icon = "relative grid h-10 w-10 place-items-center rounded-full text-[#1F4E9C] transition hover:scale-110 hover:bg-[#E3F0FF] active:scale-95 sm:h-11 sm:w-11";
   const links = (dropdown: boolean) => ITEMS.map((it) => it.id === "cat" && dropdown
     ? <CategoryItem key={it.id} active={isOn(it.id)} cats={cats} label={t(it.label)} />
     : <Link key={it.id} to={it.to} aria-current={isOn(it.id) ? "page" : undefined} className={itemCls(isOn(it.id))}><Inner id={it.id} label={t(it.label)} /></Link>);
   return (
-    <header className="sticky top-0 z-50 border-b border-white/80 bg-gradient-to-b from-[#E6F2FF]/95 to-[#F4FAFF]/95 shadow-[0_2px_14px_rgba(110,160,225,.18)] backdrop-blur" onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setMenu(false); } }}>
+    <header className="sticky top-0 z-50 border-b border-[#DCEBFB] bg-white/85 shadow-[0_4px_20px_rgba(74,134,216,.14)] backdrop-blur-md" onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setMenu(false); } }}>
       <div className="page-wrap flex items-center justify-between gap-3 py-2 xl:py-3">
         <Link to="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
           <img src={logoUrl} alt="" width={56} height={56} className="h-11 w-11 shrink-0 rounded-full object-cover sm:h-14 sm:w-14" />
-          <span className="min-w-0 leading-tight"><span className="block truncate font-['Caveat'] text-3xl font-bold text-[#1F4E9C] sm:text-4xl">Cloudy Toys</span><span className="hidden truncate text-xs text-[#1F4E9C]/80 min-[400px]:block sm:text-sm">♡ {t("Collect a little happiness")} ♡</span></span></Link>
+          <span className="min-w-0 leading-tight"><span className="block truncate font-display text-2xl font-bold text-[#1F3F8F] sm:text-[1.7rem]">Cloudy Toys</span><span className="hidden truncate text-[11px] font-semibold text-[#1F4E9C]/80 min-[400px]:block sm:text-xs">♡ {t("Collect a little happiness")} ♡</span></span></Link>
         <nav aria-label={t("Main menu")} className="hidden items-center gap-0.5 xl:flex">{links(true)}</nav>
         <div className="flex items-center gap-0.5 sm:gap-1.5">
           <form onSubmit={search} role="search" className="relative mr-1 hidden 2xl:block"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1F4E9C" strokeWidth="2.200" strokeLinecap="round" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.500-3.500" /></svg>
-            <input type="search" name="q" key={loc.search} defaultValue={onShop ? q.get("q") ?? "" : ""} placeholder={`${t("Search products")}...`} aria-label={t("Search products")} className="h-10 w-56 rounded-full border border-sky-border bg-white/90 pl-10 pr-4 text-sm shadow-soft placeholder:text-[#1F4E9C]/50 focus:outline-none focus:ring-2 focus:ring-[#4A86D8]/40" /></form>
+            <input type="search" name="q" key={loc.search} defaultValue={onShop ? q.get("q") ?? "" : ""} placeholder={`${t("Search products")}...`} aria-label={t("Search products")} className="h-10 w-56 rounded-full border-[1.5px] border-[#CFE3F8] bg-white pl-10 pr-4 text-sm shadow-soft placeholder:text-[#1F4E9C]/50 focus:outline-none focus:ring-2 focus:ring-[#4A86D8]/40" /></form>
           <button type="button" aria-label={open ? t("Close search") : t("Open search")} aria-expanded={open} onClick={() => { setOpen(!open); setMenu(false); }} className={`${icon} 2xl:hidden`}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{open ? <path d="M6 6l12 12M18 6L6 18" /> : <><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.500-3.500" /></>}</svg></button>
           <LangSwitch className="mx-0.5 sm:mx-1" />
           <Link to="/account" aria-label={t("Account")} title={t("Account")} aria-current={acctOn ? "page" : undefined} className={`${icon} hidden lg:grid ${acctOn ? ON : ""}`}><UserIcon /></Link>
           <Link to="/cart" aria-label={t("Cart")} title={t("Cart")} aria-current={cartOn ? "page" : undefined} className={`${icon} hidden lg:grid ${cartOn ? ON : ""}`}><CartIcon />
-            {count > 0 && <span key={count} className="badge-pop absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#FF8FAE] px-1 text-[11px] font-extrabold text-white" aria-label={`${count} items`}>{count}</span>}</Link>
+            {count > 0 && <span key={count} className="badge-pop absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#FF5C8A] px-1 text-[11px] font-extrabold text-white" aria-label={`${count} items`}>{count}</span>}</Link>
           <button type="button" aria-label={menu ? t("Close menu") : t("Open menu")} aria-expanded={menu} aria-controls="mobile-menu" onClick={() => { setMenu(!menu); setOpen(false); }} className={`${icon} lg:hidden`}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className={`transition-transform duration-300 ${menu ? "rotate-90" : ""}`}>{menu ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
-            {!menu && count > 0 && <span key={count} className="badge-pop absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#FF8FAE] px-1 text-[11px] font-extrabold text-white" aria-label={`${count} items`}>{count}</span>}</button>
+            {!menu && count > 0 && <span key={count} className="badge-pop absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#FF5C8A] px-1 text-[11px] font-extrabold text-white" aria-label={`${count} items`}>{count}</span>}</button>
         </div>
       </div>
       {/* phone / tablet / small laptop: the same six buttons scroll sideways under the logo; on a wide screen they sit in the top row */}

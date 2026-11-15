@@ -64,4 +64,8 @@ export const KM_EXTRA: Record<string, string> = {
   "Sign in to Cloudy-Toy": "ចូលទៅ Cloudy-Toy", "Please sign in or create an account to place your order. Your cart is kept.": "សូមចូល ឬបង្កើតគណនីដើម្បីបញ្ជាទិញ។ កន្ត្រករបស់អ្នកត្រូវបានរក្សាទុក។", "Your cart is kept while you sign in.": "កន្ត្រករបស់អ្នកត្រូវបានរក្សាទុកពេលអ្នកចូល។", "Sign-in was cancelled or failed. Please try again.": "ការចូលត្រូវបានបោះបង់ ឬបរាជ័យ។ សូមសាកល្បងម្តងទៀត។", "or": "ឬ",
   "Profile": "ប្រវត្តិរូប",
   "Show removed": "បង្ហាញដែលបានដកចេញ", "REMOVED": "បានដកចេញ", "Restore member": "ស្តារសមាជិកវិញ", "Delete member": "លុបសមាជិក",
+  // shop restyle
+  "Thank you": "សូមអរគុណ", "for being here": "ដែលនៅទីនេះ", "Delivery Across Cambodia": "ដឹកជញ្ជូនទូទាំងកម្ពុជា", "Careful and on time": "ប្រុងប្រយ័ត្ន និងទាន់ពេល", "Cute Toys & Accessories": "ប្រដាប់ក្មេងលេង និងគ្រឿងអលង្ការគួរឱ្យស្រលាញ់",
+  "Our Products": "ផលិតផលរបស់យើង", "Every little cloud, all in one place!": "ពពកតូចៗទាំងអស់ នៅកន្លែងតែមួយ!", "Shop the sky!": "ទិញទំនិញលើមេឃ!", "cute finds waiting for you": "ផលិតផលគួរឱ្យស្រលាញ់កំពុងរង់ចាំអ្នក",
+  "New Arrivals": "មកថ្មី", "Be the first to get our newest arrivals!": "ក្លាយជាអ្នកដំបូងដែលទទួលបានទំនិញថ្មីរបស់យើង!", "Add to favourites": "បន្ថែមក្នុងបញ្ជីចូលចិត្ត", "Remove from favourites": "ដកចេញពីបញ្ជីចូលចិត្ត",
 };
