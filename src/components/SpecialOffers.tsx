@@ -7,6 +7,15 @@ import { usePromotions, useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { categoriesOf, type Product } from "@shared/products";
 import { inSpecialOffer, liveCampaigns, liveFestivals, festivalName, festivalText, productPromo, orderCampaigns } from "@shared/promotions";
+/** The uploaded Mascot / main picture, shown BIG. A cut-out mascot (about square) fills the full height of the banner, sitting on the bottom edge and a little cropped at the top; a wide picture with lots of empty cloud around the mascot is sized by width instead so the mascot still comes out large. The admin size slider multiplies both. */
+function BigMascot({ src, k }: { src: string; k: number }) {
+  const [wide, setWide] = useState(false);
+  return (<div className="pointer-events-none relative z-0 -my-6 hidden min-w-0 self-stretch sm:-my-8 lg:block">
+    <img src={src} alt="" onLoad={(e) => setWide(e.currentTarget.naturalWidth / e.currentTarget.naturalHeight > 1.7)}
+      className={wide ? "relative left-1/2 block h-auto max-w-none -translate-x-1/2 drop-shadow-xl" : "absolute bottom-0 left-1/2 w-auto max-w-none -translate-x-1/2 object-contain drop-shadow-xl"}
+      style={wide ? { width: `min(${80 * k}vw, ${90 * k}rem)` } : { height: `${112 * k}%` }} />
+  </div>);
+}
 /** Admin's ONE finished banner picture (title, mascot and clouds are inside it). The "UP TO %" badge and the countdown are placed on top, in the cloud and the box on the right of the picture, and scale with it; on a phone they sit under the picture instead. */
 function FullBanner({ src, up, end, t }: { src: string; up: number; end: number; t: (s: string) => string }) {
   const ref = useRef<HTMLDivElement>(null); const [w, setW] = useState(1920);
@@ -36,14 +45,14 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
   return (<div className="relative left-1/2 -mt-5 w-screen -translate-x-1/2 space-y-6 sm:-mt-8">
     {fullImg ? <FullBanner src={fullImg} up={up} end={end} t={t} /> : <section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16">
       {heroImg ? <img src={heroImg} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : <SkyBackdrop />}
-      <div className={`relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.1fr_1.25fr_1fr] ${heroImg ? "min-h-[12rem] sm:min-h-[16rem]" : ""}`}>
+      <div className={`relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.1fr_1.25fr_1fr] ${heroImg ? "min-h-[12rem] sm:min-h-[16rem]" : ""} ${mascotImg ? "lg:min-h-[15rem] xl:min-h-[17rem]" : ""}`}>
         {showText ? <div className="relative z-10 text-center lg:text-left">
           {hero && <span className="mb-2 inline-block rounded-full bg-white/85 px-3 py-1 text-xs font-extrabold text-[#C2305F]">✨ {festivalName(hero, lang)}</span>}
           <h1 className="font-['Nunito'] text-5xl font-black leading-none tracking-tight text-[#1F4E9C] drop-shadow-[0_3px_0_rgba(255,255,255,.9)] [-webkit-text-stroke:7px_#fff] [paint-order:stroke_fill] sm:text-7xl">{t("Special Offer")}</h1>
           <p className={`${HAND} mt-4 inline-block -rotate-3 bg-[#FFB6CD] px-9 py-2 text-xl font-bold text-[#1F4E9C] shadow-soft [clip-path:polygon(0_0,100%_0,95%_50%,100%_100%,0_100%,5%_50%)] sm:text-2xl`}>{t("Don't miss out on these amazing deals!")}</p>
           <p className={`${HAND} mt-3 text-xl font-bold text-[#1F4E9C] sm:text-2xl`}>{hero && festivalText(hero, lang) ? festivalText(hero, lang) : `${t("Collect more happiness, for less!")} ♡`}</p></div>
           : <><h1 className="sr-only">{t("Special Offer")}</h1><div className="hidden lg:block" /></>}
-        {mascotImg ? <div className="pointer-events-none relative z-0 -mb-6 hidden min-w-0 items-end justify-center self-end lg:flex xl:-mb-8"><div className="shrink-0" style={{ width: `min(${0.8 * k * 100}vw, ${90 * k}rem)` }}><Mascot src={mascotImg} className="block h-auto w-full drop-shadow-xl" /></div></div>
+        {mascotImg ? <BigMascot src={mascotImg} k={k} />
           : <div className="hidden items-end justify-center lg:flex">{!heroImg && <Mascot className="-my-6 h-[20rem] w-auto max-w-full object-contain drop-shadow-xl xl:-my-10 xl:h-[26rem] 2xl:h-[30rem]" />}</div>}
         <div className="relative z-10 mx-auto w-full max-w-xs space-y-2 lg:ml-auto">
           {up > 0 && <CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} />}
