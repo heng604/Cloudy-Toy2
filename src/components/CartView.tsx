@@ -6,7 +6,7 @@ import type { Line } from "@/components/CartProvider";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { usePromotions } from "@/lib/store";
-import { autoDiscounts, autoTotal, bogoGifts, freeShippingRule } from "@shared/promotions";
+import { autoDiscounts, autoTotal, bogoGifts, freeShippingRule, fullPriceCents } from "@shared/promotions";
 import { memberBenefits } from "@shared/membership";
 import { useMembership } from "@/lib/membership";
 
@@ -33,7 +33,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
   const saved = items.reduce((s, x) => s + (x.p.salePrice ? (x.p.price - x.p.salePrice) * x.l.qty : 0), 0);
   const count = items.reduce((s, x) => s + x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
-  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), mem = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0) }), autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
+  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), mem = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p.id, category: x.p.category ?? "", qty: x.l.qty, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - totalQty(bp.id))) }] : []; }).filter((g) => g.qty > 0);
   const cartInfo = { subtotalCents: Math.round(subtotal * 100), qty: count }, freeAll = freeShippingRule({ ...cartInfo, area: "PROVINCE" }, promotions.campaigns), freePP = freeAll ?? freeShippingRule({ ...cartInfo, area: "PHNOM_PENH" }, promotions.campaigns);
   const hasPre = items.some((x) => x.p.preorder);

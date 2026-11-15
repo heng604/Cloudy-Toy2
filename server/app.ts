@@ -39,7 +39,7 @@ import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
 import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier, layoutTiers, isPointCents, pointsOf, MAX_TIERS, type Tier } from "../shared/membership";
 import { getOverrides, setOverride } from "./lib/memberStore";
-import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
+import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule, fullPriceCents } from "../shared/promotions";
 import { isSlug, isBuiltin, MAX_CONTENT, MAX_TITLE, MAX_CUSTOM_PAGES, SLUG_RE, RESERVED_SLUGS, PAGE_DEFS, allDefs } from "../shared/pages";
 import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort, OPTION_LIMITS, isValidOption, parseOptions, serializeOptions, pruneOptionImages } from "../shared/products";
 
@@ -147,7 +147,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
     // automatic campaigns first (stack, never more than the subtotal), then the typed code takes its % off what is left
     const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    const mb = memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto) }, member.used); auto.push(...mb.discounts); const memberPerks = [...mb.perks, ...(memFree && !freeShip ? memShip.shipPerks : [])]; // the member's level specials stack after the shop's campaigns
+    const mb = memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, member.used); auto.push(...mb.discounts); const memberPerks = [...mb.perks, ...(memFree && !freeShip ? memShip.shipPerks : [])]; // the member's level specials stack after the shop's campaigns
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
       const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true, acct?.email ?? undefined);
@@ -207,7 +207,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
   try {
     const [products, promos, who] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions(), userFromReq(req)]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); auto.push(...memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto) }, mem.used).discounts);
+    const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); auto.push(...memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t.items.flatMap((i) => { const p = products.find((x) => x.id === i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, mem.used).discounts);
     const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }], false, who?.email ?? undefined);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }

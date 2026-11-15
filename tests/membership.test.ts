@@ -61,6 +61,34 @@ describe("membership levels", () => {
   });
 });
 
+describe("one name per level", () => {
+  it("money and delivery specials take the level's name; a custom special keeps its own words", () => {
+    const t = checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "percent", title: "ignored", percent: 10 }, { kind: "free_shipping" }, { kind: "custom", title: "Birthday gift" }] });
+    expect(t.ok).toBe(true); if (!t.ok) return;
+    expect(t.value.perks.map((p) => p.title)).toEqual(["Gold", "Gold", "Birthday gift"]);
+    expect(memberBenefits(t.value, { subtotalCents: 10000, leftCents: 10000 }).discounts.map((d) => d.name)).toEqual(["Gold member"]);
+    expect(checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "custom" }] }).ok).toBe(false);
+  });
+  it("renaming the level renames its specials", () => {
+    const t = checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "percent", percent: 5 }] }); if (!t.ok) throw new Error(t.error);
+    const re = normalizeTiers([{ ...t.value, name: "Royal" }]); expect(re[0].perks[0].title).toBe("Royal");
+  });
+});
+
+describe("specials on discounted products", () => {
+  const mk = (onPromo: boolean) => { const t = checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "percent", title: "10% off", percent: 10, onPromo }, { kind: "amount", title: "$5 off", amount: 5, onPromo }] }); if (!t.ok) throw new Error(t.error); return t.value; };
+  it("defaults to ON and survives normalize", () => { expect(mk(true).perks.every((p) => p.onPromo)).toBe(true); const d = checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "percent", title: "10% off", percent: 10 }] }); expect(d.ok && d.value.perks[0].onPromo).toBe(true); expect(normalizeTiers([mk(false)])[0].perks.map((p) => p.onPromo)).toEqual([false, false]); });
+  it("ON: stacks on top of the shop's own discounts (capped by what is left)", () => {
+    const a = memberBenefits(mk(true), { subtotalCents: 10000, leftCents: 6000, fullPriceCents: 0 });
+    expect(a.discounts.map((d) => d.cents)).toEqual([1000, 500]);
+  });
+  it("OFF: only the full-price part of the cart counts", () => {
+    expect(memberBenefits(mk(false), { subtotalCents: 10000, leftCents: 6000, fullPriceCents: 0 }).discounts).toEqual([]);
+    expect(memberBenefits(mk(false), { subtotalCents: 10000, leftCents: 6000, fullPriceCents: 4000 }).discounts.map((d) => d.cents)).toEqual([400, 500]);
+    expect(memberBenefits(mk(false), { subtotalCents: 10000, leftCents: 10000 }).discounts.map((d) => d.cents)).toEqual([1000, 500]);
+  });
+});
+
 describe("monthly limits", () => {
   const tier = checkTier({ id: "g", name: "Gold", minSpend: 300, image: "/api/img/x.webp", perks: [{ id: "p1", kind: "percent", title: "10% off", percent: 10, monthlyLimit: 2 }, { id: "p2", kind: "free_shipping", title: "Free delivery", monthlyLimit: 1 }] });
   if (!tier.ok) throw new Error(tier.error);

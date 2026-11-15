@@ -8,7 +8,7 @@ import type { Area, Method } from "@shared/delivery";
 import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings, usePromotions } from "@/lib/store";
-import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule } from "@shared/promotions";
+import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule, fullPriceCents } from "@shared/promotions";
 import { memberBenefits } from "@shared/membership";
 import { useMembership } from "@/lib/membership";
 import { useAuth } from "@/lib/auth";
@@ -34,7 +34,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
-  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), mem = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0) }), autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
+  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), mem = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p!, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
   const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
   const ship = freeShip || mem.freeShipping ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
