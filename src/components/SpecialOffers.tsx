@@ -19,8 +19,8 @@ function PictureBanner({ src, k, up, end, t }: { src: string; k: number; up: num
     <div ref={ref} className="relative w-full overflow-hidden"><h1 className="sr-only">{t("Special Offer")}</h1>
       <ScaledBanner src={src} k={k} fetchPriority="high" />
       {/* the live discount sits inside the cloud on the right of the picture, the countdown inside the white board under it */}
-      {up > 0 && <div className="absolute flex items-center justify-center" style={{ left: "78%", top: "13%", width: "19%", height: "40%" }}><div className="w-[14rem] shrink-0" style={{ transform: `scale(${sc})` }}><CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} /></div></div>}
-      {end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76%", top: "61%", width: "21.5%", height: "28%" }}><div className="w-[16rem] shrink-0" style={{ transform: `scale(${sc})` }}><Countdown end={end} t={t} /></div></div>}
+      {up > 0 && <div className="absolute flex items-center justify-center" style={{ left: "78%", top: "13%", width: "19%", height: "40%" }}><div className="w-[20rem] shrink-0" style={{ transform: `scale(${sc})` }}><CloudBadge lg top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} /></div></div>}
+      {end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76%", top: "61%", width: "21.5%", height: "28%" }}><div className="w-[24rem] shrink-0" style={{ transform: `scale(${sc})` }}><Countdown lg end={end} t={t} /></div></div>}
     </div>
   </section>);
 }

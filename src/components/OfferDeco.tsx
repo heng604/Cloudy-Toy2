@@ -29,17 +29,20 @@ export function BannerBg({ src }: { src?: string }) {
   return src ? <img src={src} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : null;
 }
 /** The live discount: "UP TO 29% OFF", "BUY 2 GET 1 FREE", "FREE GIFT" ... Text only, no card or cloud behind it (white outline keeps it readable on any picture). */
-export function CloudBadge({ top, big, bottom }: { top?: string; big: string; bottom?: string }) {
-  const line = "[paint-order:stroke_fill] [-webkit-text-stroke:5px_#fff]";
-  return (<div className="mx-auto flex w-full max-w-[14rem] flex-col items-center justify-center text-center" role="img" aria-label={[top, big, bottom].filter(Boolean).join(" ")}>
-    {top && <p className={`text-base font-black text-[#1F4E9C] ${line}`}>{top}</p>}<p className={`font-black leading-none text-[#FF3D83] [paint-order:stroke_fill] [-webkit-text-stroke:8px_#fff] ${big.length > 6 ? "text-4xl sm:text-5xl" : "text-6xl sm:text-7xl"}`}>{big}</p>{bottom && <p className={`text-base font-black text-[#1F4E9C] ${line}`}>{bottom}</p>}</div>);
+export function CloudBadge({ top, big, bottom, lg = false }: { top?: string; big: string; bottom?: string; lg?: boolean }) {
+  // lg = the large version used on top of the banner picture (fills the picture's cloud); the small one is for the no-picture layout
+  const line = lg ? "[paint-order:stroke_fill] [-webkit-text-stroke:7px_#fff]" : "[paint-order:stroke_fill] [-webkit-text-stroke:5px_#fff]";
+  const small = big.length > 6;
+  const bigCls = lg ? (small ? "text-[3.25rem]" : "text-[7rem]") : (small ? "text-4xl sm:text-5xl" : "text-6xl sm:text-7xl");
+  return (<div className={`mx-auto flex w-full flex-col items-center justify-center text-center ${lg ? "max-w-[20rem]" : "max-w-[14rem]"}`} role="img" aria-label={[top, big, bottom].filter(Boolean).join(" ")}>
+    {top && <p className={`font-black text-[#1F4E9C] ${lg ? "text-[1.9rem] leading-none" : "text-base"} ${line}`}>{top}</p>}<p className={`font-black leading-none text-[#FF3D83] [paint-order:stroke_fill] ${lg ? "[-webkit-text-stroke:12px_#fff] my-1" : "[-webkit-text-stroke:8px_#fff]"} ${bigCls}`}>{big}</p>{bottom && <p className={`font-black text-[#1F4E9C] ${lg ? "text-[1.9rem] leading-none" : "text-base"} ${line}`}>{bottom}</p>}</div>);
 }
 export const endOf = (d?: string) => (d ? new Date(`${d}T23:59:59+07:00`).getTime() : 0); // offers end at the end of their last day, shop time (Cambodia)
-export function Countdown({ end, t }: { end: number; t: (s: string) => string }) {
+export function Countdown({ end, t, lg = false }: { end: number; t: (s: string) => string; lg?: boolean }) {
   const [now, setNow] = useState(Date.now()); useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
   const ms = Math.max(0, end - now), s = Math.floor(ms / 1000); const parts: [number, string][] = [[Math.floor(s / 86400), "Days"], [Math.floor((s % 86400) / 3600), "Hours"], [Math.floor((s % 3600) / 60), "Min"], [s % 60, "Sec"]];
-  return (<div><p className="mx-auto flex w-fit items-center justify-center gap-2 px-3 py-1 text-xl font-extrabold text-[#1F4E9C] [paint-order:stroke_fill] [-webkit-text-stroke:5px_#fff]"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF5C93" strokeWidth="2.400" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.500 2M9 2h6" /></svg>{t("Limited Time Only!")}</p>
-    <div className="mt-2 grid grid-cols-[repeat(4,minmax(0,1fr))] gap-2" role="timer" aria-label={t("Limited Time Only!")}>{parts.map(([n, l]) => <div key={l} className="rounded-xl border-2 border-[#FFD3E3] bg-white px-1 py-2 text-center shadow-soft"><p className="text-3xl font-extrabold leading-none text-[#1F4E9C]">{String(n).padStart(2, "0")}</p><p className="mt-1 text-sm font-bold text-[#4A6FA5]">{t(l)}</p></div>)}</div></div>);
+  return (<div><p className={`mx-auto flex w-fit items-center justify-center font-extrabold text-[#1F4E9C] [paint-order:stroke_fill] ${lg ? "gap-3 px-3 py-1 text-[1.9rem] leading-none [-webkit-text-stroke:7px_#fff]" : "gap-2 px-3 py-1 text-xl [-webkit-text-stroke:5px_#fff]"}`}><svg width={lg ? 30 : 22} height={lg ? 30 : 22} viewBox="0 0 24 24" fill="none" stroke="#FF5C93" strokeWidth="2.400" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.500 2M9 2h6" /></svg>{t("Limited Time Only!")}</p>
+    <div className={`grid grid-cols-[repeat(4,minmax(0,1fr))] ${lg ? "mt-3 gap-3" : "mt-2 gap-2"}`} role="timer" aria-label={t("Limited Time Only!")}>{parts.map(([n, l]) => <div key={l} className={`border-[#FFD3E3] bg-white text-center shadow-soft ${lg ? "rounded-2xl border-[3px] px-1 py-3" : "rounded-xl border-2 px-1 py-2"}`}><p className={`font-extrabold leading-none text-[#1F4E9C] ${lg ? "text-[3.25rem]" : "text-3xl"}`}>{String(n).padStart(2, "0")}</p><p className={`font-bold text-[#4A6FA5] ${lg ? "mt-1.5 text-xl" : "mt-1 text-sm"}`}>{t(l)}</p></div>)}</div></div>);
 }
 /** The pink-and-lilac "Shop now and enjoy special savings!" banner (picture and mascot can be changed in admin). */
 export function HappyBanner() {
