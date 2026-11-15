@@ -13,11 +13,16 @@ import { catIcon } from "@/lib/catIcon";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 /** "Our Products" banner, full width of the screen (edge to edge). Shows the picture the admin uploads in Admin > Settings > Products page banner; until one is uploaded it shows the default sky banner. */
-function ProductsBanner() {
-  const { t } = useI18n(); const { settings } = useSettings(); const img = settings.productsBannerImage || "";
+function ProductsBanner({ type }: { type?: string }) {
+  const { t, lang } = useI18n(); const { settings } = useSettings();
+  // New Arrival and Pre-Order each have their own banner (Admin > Settings); everything else uses the main Products banner
+  const own = type === "new_arrival" ? { img: settings.newArrivalBannerImage, size: "newarrival-banner", bg: "bg-[#FFE3EC]", tag: "Fresh toys just landed!" } : type === "preorder" ? { img: settings.preorderBannerImage, size: "preorder-banner", bg: "bg-[#FFF1C9]", tag: "Reserve yours before it sells out!" } : null;
+  const img = (own ? own.img : settings.productsBannerImage) || "";
+  const label = LABELS.find((l) => l.id === type); const heading = label ? (lang === "km" ? label.km : label.en) : t("Our Products");
   // edge to edge: break out of the page column and cancel the gap under the header (same as the Home banner)
   const wrap = "relative left-1/2 -mt-5 mb-7 w-screen -translate-x-1/2 overflow-hidden sm:-mt-8";
-  if (img) return (<section aria-label={t("Our Products")} className={wrap}><h1 className="sr-only">{t("Our Products")}</h1><ScaledBanner src={img} k={sizeOf(settings, "products-banner")} fetchPriority="high" /></section>);
+  if (img) return (<section aria-label={heading} className={wrap}><h1 className="sr-only">{heading}</h1><ScaledBanner src={img} k={sizeOf(settings, own ? own.size : "products-banner")} fetchPriority="high" /></section>);
+  if (own) return (<section aria-label={heading} className={`${wrap} ${own.bg} py-8 sm:py-10 lg:py-12`}><div className="page-wrap"><h1 className="font-display text-3xl font-bold leading-none text-[#1F3F8F] sm:text-5xl lg:text-6xl">{heading}</h1><p className="mt-3 font-['Caveat'] text-xl font-semibold text-[#2F6FD0] sm:text-3xl">{t(own.tag)}</p></div></section>);
   return (<section aria-label={t("Our Products")} className={`${wrap} bg-gradient-to-b from-[#BFDFFF] via-[#D6EAFF] to-[#EAF5FF] py-8 sm:py-10 lg:py-12`}>
     <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 14% 22% at 6% 100%,#fff,transparent 72%),radial-gradient(ellipse 18% 24% at 34% 108%,#fff,transparent 72%),radial-gradient(ellipse 16% 22% at 66% 104%,#fff,transparent 72%),radial-gradient(ellipse 14% 20% at 96% 100%,#fff,transparent 72%)" }} />
     <div className="page-wrap relative">
@@ -43,7 +48,7 @@ export default function Shop() {
   const title = category ?? (type ? (lang === "km" ? type.km : type.en) : t("All Products"));
   const cats = categoriesOf(all); const small = "text-sm text-[#4A6FA5] hover:text-[#1F4E9C] hover:underline";
   return (<div>
-    <ProductsBanner />
+    <ProductsBanner type={type?.id} />
     <SectionHead as="h2" title={title} sub={`${list.length} ${t("cute finds waiting for you")}`} right={
       <nav className="-mx-1 flex max-w-full gap-2 overflow-x-auto px-1 pb-2 [scrollbar-width:none]" aria-label="Categories">
         <Link to="/shop" aria-current={!category && !type ? "page" : undefined} className={`chip ${!category && !type ? "chip-on" : ""}`}><span aria-hidden="true">✦</span>{t("All")}</Link>

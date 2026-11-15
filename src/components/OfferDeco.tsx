@@ -23,21 +23,14 @@ export const Cloud = ({ className = "" }: { className?: string }) => (<svg viewB
 export const Star = ({ className = "", color = "#FFD84D" }: { className?: string; color?: string }) => (<svg viewBox="0 0 48 48" className={`pointer-events-none absolute drop-shadow ${className}`} aria-hidden="true"><path d="M24 5l5.200 12.400 13.300 1.100-10.100 8.700 3.100 13-11.500-7-11.500 7 3.100-13L5.500 18.500l13.300-1.100z" fill={color} stroke={color} strokeWidth="5" strokeLinejoin="round" /></svg>);
 export const Heart = ({ className = "", color = "#FF8FB8" }: { className?: string; color?: string }) => (<svg viewBox="0 0 24 24" className={`pointer-events-none absolute drop-shadow ${className}`} aria-hidden="true"><path d="M20.800 5.600a5.200 5.200 0 0 0-7.400 0L12 7l-1.400-1.400a5.200 5.200 0 0 0-7.400 7.400L12 21.800l8.800-8.800a5.200 5.200 0 0 0 0-7.400z" fill={color} /></svg>);
 export const Spark = ({ className = "", color = "#fff" }: { className?: string; color?: string }) => (<svg viewBox="0 0 24 24" className={`pointer-events-none absolute ${className}`} aria-hidden="true"><path d="M12 1l2.600 8.400L23 12l-8.400 2.600L12 23l-2.600-8.400L1 12l8.400-2.600z" fill={color} opacity=".9" /></svg>);
-/** The dreamy sky behind the default banner: soft gradient, cloud banks, puffy stars, hearts and sparkles. */
+/** Simple, clean background behind the offer banner: a flat soft blue, no clouds or decorations. */
 export function SkyBackdrop() {
-  return (<div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden bg-gradient-to-b from-[#B9DAFB] via-[#D4E8FF] to-[#EAF4FF]">
-    <Cloud className="-left-24 -top-6 w-[22rem] opacity-80 sm:w-[28rem]" /><Cloud className="right-[16%] -top-10 hidden w-80 opacity-70 md:block" /><Cloud className="-right-24 top-2 w-[22rem] opacity-80 sm:w-[26rem]" />
-    <Cloud className="bottom-[2%] -left-20 w-[34rem] sm:w-[46rem]" /><Cloud className="bottom-0 left-[30%] hidden w-[44rem] md:block" /><Cloud className="bottom-[4%] -right-16 w-[34rem] sm:w-[48rem]" />
-    <Star className="left-3 top-4 w-10 sm:w-14" /><Star className="left-[36%] top-[62%] w-9 sm:w-12" /><Star className="left-[12%] top-[58%] hidden w-7 sm:block" color="#8EC5FF" /><Star className="right-[6%] top-5 w-10 sm:w-14" /><Star className="left-[52%] top-3 hidden w-8 sm:block" color="#FFE58A" />
-    <Heart className="left-[58%] top-6 hidden w-9 sm:block" /><Heart className="right-[30%] bottom-[28%] hidden w-6 md:block" color="#FFB3CF" />
-    <Spark className="left-[28%] top-3 w-4" /><Spark className="left-[47%] top-[26%] hidden w-3 sm:block" /><Spark className="right-[24%] top-4 w-4" /><Spark className="right-[4%] top-[48%] hidden w-5 sm:block" /><Spark className="left-[5%] top-[40%] hidden w-4 sm:block" color="#FFE58A" />
-    <i className="absolute left-[41%] top-6 hidden h-1 w-6 -rotate-[30deg] rounded-full bg-[#FFC93C] sm:block" /><i className="absolute left-[41.500%] top-10 hidden h-1 w-6 rounded-full bg-[#FFC93C] sm:block" /><i className="absolute left-[41%] top-14 hidden h-1 w-6 rotate-[30deg] rounded-full bg-[#FFC93C] sm:block" /></div>);
+  return <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#EAF2FF]" />;
 }
-/** The white cloud badge: "UP TO 29% OFF", "BUY 2 GET 1 FREE", "FREE GIFT" ... */
+/** The discount badge: "UP TO 29% OFF", "BUY 2 GET 1 FREE", "FREE GIFT" ... (plain rounded card, no cloud shape) */
 export function CloudBadge({ top, big, bottom }: { top?: string; big: string; bottom?: string }) {
-  return (<div className="relative mx-auto h-36 w-52 sm:h-40 sm:w-56" role="img" aria-label={[top, big, bottom].filter(Boolean).join(" ")}>
-    <svg viewBox="0 0 220 170" className="absolute inset-0 h-full w-full drop-shadow-lg" aria-hidden="true"><g fill="#DCEBFA" stroke="#DCEBFA" strokeWidth="8" strokeLinejoin="round"><circle cx="58" cy="104" r="42" /><circle cx="108" cy="72" r="54" /><circle cx="162" cy="100" r="46" /><rect x="22" y="98" width="176" height="56" rx="28" /></g><g fill="#fff"><circle cx="58" cy="104" r="42" /><circle cx="108" cy="72" r="54" /><circle cx="162" cy="100" r="46" /><rect x="22" y="98" width="176" height="56" rx="28" /></g></svg>
-    <div className="absolute inset-0 flex flex-col items-center justify-center px-6 pb-2 text-center">{top && <p className="text-sm font-black text-[#1F4E9C]">{top}</p>}<p className={`font-black leading-none text-[#FF3D83] ${big.length > 6 ? "text-3xl sm:text-4xl" : "text-5xl sm:text-6xl"}`}>{big}</p>{bottom && <p className="text-sm font-black text-[#1F4E9C]">{bottom}</p>}</div></div>);
+  return (<div className="mx-auto flex w-full max-w-[14rem] flex-col items-center justify-center rounded-3xl border-2 border-[#DCEBFA] bg-white px-6 py-4 text-center shadow-soft" role="img" aria-label={[top, big, bottom].filter(Boolean).join(" ")}>
+    {top && <p className="text-sm font-black text-[#1F4E9C]">{top}</p>}<p className={`font-black leading-none text-[#FF3D83] ${big.length > 6 ? "text-3xl sm:text-4xl" : "text-5xl sm:text-6xl"}`}>{big}</p>{bottom && <p className="text-sm font-black text-[#1F4E9C]">{bottom}</p>}</div>);
 }
 export const endOf = (d?: string) => (d ? new Date(`${d}T23:59:59+07:00`).getTime() : 0); // offers end at the end of their last day, shop time (Cambodia)
 export function Countdown({ end, t }: { end: number; t: (s: string) => string }) {
