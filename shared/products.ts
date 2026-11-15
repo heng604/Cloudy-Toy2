@@ -58,8 +58,9 @@ export const toProduct = (r: ProductRow): Product => ({ id: r.id, slug: r.slug, 
  * The admin adds option GROUPS to a product (e.g. "Character" with the choices Xavier, Zayne, Rafayel, Sylus).
  * They are saved in the existing products.variants text column, as JSON, so no database change is needed.
  * Old products that still have plain text such as "Character: Xavier, Zayne" or "Size: 11cm, Color: Pink" are read too. */
-export type OptionGroup = { name: string; values: string[] };
-export const OPTION_LIMITS = { groups: 6, values: 30, name: 30, value: 40, stored: 8000, selected: 300 } as const;
+/** `images` (optional) links a choice to one of the product's photos: { "Xavier": "<image src>" }. The shop shows that photo when the customer clicks the choice. */
+export type OptionGroup = { name: string; values: string[]; images?: Record<string, string> };
+export const OPTION_LIMITS = { groups: 6, values: 30, name: 30, value: 40, stored: 40000, selected: 300, src: 500 } as const;
 /** What sits between two chosen options on an order line: "Character: Xavier · Size: 11cm". */
 export const OPTION_SEP = " · ";
 const cleanTxt = (s: unknown, max: number) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -69,10 +70,16 @@ export function cleanOptionGroups(input: unknown): OptionGroup[] {
   for (const g of input) {
     const name = cleanTxt((g as OptionGroup)?.name, OPTION_LIMITS.name); const raw = Array.isArray((g as OptionGroup)?.values) ? (g as OptionGroup).values : [];
     const values = [...new Set(raw.map((v) => cleanTxt(v, OPTION_LIMITS.value)).filter(Boolean))].slice(0, OPTION_LIMITS.values);
-    if (name && values.length) { const same = out.find((o) => o.name.toLowerCase() === name.toLowerCase()); if (same) same.values = [...new Set([...same.values, ...values])].slice(0, OPTION_LIMITS.values); else out.push({ name, values }); }
+    const im = (g as OptionGroup)?.images; const images: Record<string, string> = {};
+    if (im && typeof im === "object") for (const v of values) { const src = typeof im[v] === "string" ? im[v].trim() : ""; if (src && src.length <= OPTION_LIMITS.src) images[v] = src; }
+    if (name && values.length) { const same = out.find((o) => o.name.toLowerCase() === name.toLowerCase());
+      if (same) { same.values = [...new Set([...same.values, ...values])].slice(0, OPTION_LIMITS.values); same.images = { ...same.images, ...images }; if (!Object.keys(same.images).length) delete same.images; }
+      else out.push({ name, values, ...(Object.keys(images).length ? { images } : {}) }); }
   }
   return out.slice(0, OPTION_LIMITS.groups);
 }
+/** Keep an option's photo link only when that photo still belongs to the product (the admin may have removed the photo). */
+export const pruneOptionImages = (groups: OptionGroup[], srcs: readonly string[]): OptionGroup[] => groups.map((g) => { const images = Object.fromEntries(Object.entries(g.images ?? {}).filter(([, src]) => srcs.includes(src))); const { images: _drop, ...rest } = g; return Object.keys(images).length ? { ...rest, images } : rest; });
 /** Read a product's options. JSON (saved by the admin form) or the old plain text: pieces split by commas, a piece with ":" starts a new group. */
 export function parseOptions(v?: string | null): OptionGroup[] {
   const s = String(v ?? "").trim(); if (!s) return [];
@@ -98,4 +105,10 @@ export function isValidOption(groups: OptionGroup[], opt?: string | null): boole
     return false;
   };
   return walk(0, s);
+}
+/** The photo linked to the choice(s) in an order/cart option text ("Character: Xavier · Size: M"); the first group that has a linked photo wins. */
+export function optionImageOf(groups: OptionGroup[], opt?: string | null): string | undefined {
+  const wrapped = OPTION_SEP + String(opt ?? "") + OPTION_SEP;
+  for (const g of groups) for (const v of g.values) { const src = g.images?.[v]; if (src && wrapped.includes(`${OPTION_SEP}${g.name}: ${v}${OPTION_SEP}`)) return src; }
+  return undefined;
 }

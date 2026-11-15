@@ -1,12 +1,14 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FALLBACK_IMG } from "@shared/products";
 import SafeImg from "./SafeImg";
 type Img = { src: string; alt: string };
 /** Product photo viewer: big image, previous/next buttons, thumbnails, keyboard arrows and swipe. */
-export default function ProductGallery({ images, name }: { images: Img[]; name: string }) {
+/** `focus` = show this photo now (set when the customer clicks an option that has a photo linked by the admin; `n` changes on every click so the same photo can be shown again). */
+export default function ProductGallery({ images, name, focus }: { images: Img[]; name: string; focus?: { src: string; n: number } }) {
   const list = images.length ? images : [{ src: FALLBACK_IMG, alt: name }];
   const [i, setI] = useState(0); const touchX = useRef<number | null>(null); const many = list.length > 1;
   const go = (n: number) => setI((n + list.length) % list.length);
+  useEffect(() => { if (!focus) return; const k = list.findIndex((x) => x.src === focus.src); if (k >= 0) setI(k); }, [focus?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const btn = "absolute top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-ink shadow-soft backdrop-blur transition hover:bg-white hover:shadow-lift focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100";
   return (<div className="space-y-3" aria-roledescription="carousel" aria-label={`${name} photos`}>
     <div tabIndex={0} onKeyDown={(e) => { if (!many) return; if (e.key === "ArrowLeft") go(i - 1); if (e.key === "ArrowRight") go(i + 1); }}

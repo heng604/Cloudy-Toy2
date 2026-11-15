@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useCart } from "@/components/CartProvider";
-import { FALLBACK_IMG, isValidOption, money, preorderPhase, windowText, dayShort } from "@shared/products";
+import { FALLBACK_IMG, isValidOption, optionImageOf, money, preorderPhase, windowText, dayShort } from "@shared/products";
 import type { CartProduct } from "@shared/cartTypes";
 import type { Line } from "@/components/CartProvider";
 import { useI18n } from "@/lib/i18n";
@@ -74,7 +74,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
             return (
               <li key={`${l.id}|${l.opt ?? ""}`} className="flex gap-4 rounded-xl2 border border-sky-border bg-white p-3 shadow-soft sm:p-4">
                 <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="shrink-0 overflow-hidden rounded-xl bg-sky-pale">
-                  <img src={p.image ?? FALLBACK_IMG} alt={p.name} width={112} height={112} loading="lazy" className="h-24 w-24 object-cover sm:h-28 sm:w-28" />
+                  <img src={optionImageOf(p.options ?? [], l.opt) ?? p.image ?? FALLBACK_IMG} alt={p.name} width={112} height={112} loading="lazy" className="h-24 w-24 object-cover sm:h-28 sm:w-28" />
                 </Link>
                 <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
                   <div className="flex items-start justify-between gap-3">

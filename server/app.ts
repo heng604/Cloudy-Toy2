@@ -41,7 +41,7 @@ import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier
 import { getOverrides, setOverride } from "./lib/memberStore";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
 import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
-import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort, OPTION_LIMITS, isValidOption, parseOptions, serializeOptions } from "../shared/products";
+import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort, OPTION_LIMITS, isValidOption, parseOptions, serializeOptions, pruneOptionImages } from "../shared/products";
 
 import type { StoredOrder } from "../shared/types";
 import { publicOrder } from "./lib/publicOrder";
@@ -519,7 +519,7 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
     const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer());
     const src = await uploadProductImage(safeFileName(d.sku, "webp"), small, "image/webp"); uploaded.push(src); images.push({ src, alt: d.name });
   }
-  let savedId = id; try { savedId = await upsertProduct({ id: id || undefined, name: d.name, nameKm: d.nameKm, brand: d.brand, uom: d.uom, variants: serializeOptions(parseOptions(d.variants)), labels, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, ...(dates.start ? { preorderStart: dates.start, preorderEnd: dates.end } : {}), active: fld(req, "active") === "on" }); }
+  let savedId = id; try { savedId = await upsertProduct({ id: id || undefined, name: d.name, nameKm: d.nameKm, brand: d.brand, uom: d.uom, variants: serializeOptions(pruneOptionImages(parseOptions(d.variants), images.map((i) => i.src))), labels, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, ...(dates.start ? { preorderStart: dates.start, preorderEnd: dates.end } : {}), active: fld(req, "active") === "on" }); }
   catch (e) { await deleteProductImages(uploaded); return fail(hint(e instanceof Error ? e.message : "") || "Could not save to the database. Nothing was lost; please try again."); }
   await deleteProductImages(removed); // only after the product row is safely saved
   if (fld(req, "festivalsSent") === "1" && savedId) { // the "Special offer / festival" ticks in the product window (only when the form sent them)

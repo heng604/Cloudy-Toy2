@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseOptions, serializeOptions, cleanOptionGroups, isValidOption, optionText, OPTION_LIMITS } from "../shared/products";
+import { parseOptions, serializeOptions, cleanOptionGroups, isValidOption, optionText, optionImageOf, pruneOptionImages, OPTION_LIMITS } from "../shared/products";
 
 const chars = [{ name: "Character", values: ["Xavier", "Zayne", "Rafayel", "Sylus"] }];
 const two = [...chars, { name: "Size", values: ["S", "M"] }];
@@ -36,5 +36,20 @@ describe("product options", () => {
     });
     it("a product without options must not receive one", () => { expect(isValidOption([], "")).toBe(true); expect(isValidOption([], "Character: Xavier")).toBe(false); });
     it("handles choices that share a start", () => { const g = [{ name: "Pack", values: ["A", "A · B"] }, { name: "Size", values: ["S"] }]; expect(isValidOption(g, "Pack: A · B · Size: S")).toBe(true); expect(isValidOption(g, "Pack: A · Size: S")).toBe(true); expect(isValidOption(g, "Pack: A · B")).toBe(false); });
+  });
+
+  describe("option photos", () => {
+    const g = [{ name: "Character", values: ["Xavier", "Zayne"], images: { Xavier: "/a.webp", Zayne: "/b.webp" } }, { name: "Size", values: ["S"] }];
+    it("keeps the photo links through save / load", () => { expect(parseOptions(serializeOptions(g))).toEqual(g); });
+    it("drops links to choices that no longer exist or have empty / huge values", () => {
+      expect(cleanOptionGroups([{ name: "C", values: ["A"], images: { A: "/a", Gone: "/x" } }])).toEqual([{ name: "C", values: ["A"], images: { A: "/a" } }]);
+      expect(cleanOptionGroups([{ name: "C", values: ["A"], images: { A: "x".repeat(OPTION_LIMITS.src + 1) } }])).toEqual([{ name: "C", values: ["A"] }]);
+    });
+    it("prunes links to photos the product no longer has", () => { expect(pruneOptionImages(g, ["/b.webp"])[0].images).toEqual({ Zayne: "/b.webp" }); expect(pruneOptionImages(g, [])[0].images).toBeUndefined(); });
+    it("finds the photo of the option in a cart / order line", () => {
+      expect(optionImageOf(g, "Character: Zayne · Size: S")).toBe("/b.webp");
+      expect(optionImageOf(g, "Size: S")).toBeUndefined(); expect(optionImageOf(g, "")).toBeUndefined();
+    });
+    it("old products without photos still work", () => { expect(optionImageOf(parseOptions("Character: Xavier, Zayne"), "Character: Xavier")).toBeUndefined(); });
   });
 });
