@@ -37,6 +37,16 @@ export function CloudBadge({ top, big, bottom, lg = false }: { top?: string; big
   return (<div className={`mx-auto flex w-full flex-col items-center justify-center text-center ${lg ? "max-w-[20rem]" : "max-w-[14rem]"}`} role="img" aria-label={[top, big, bottom].filter(Boolean).join(" ")}>
     {top && <p className={`font-black text-[#1F4E9C] ${lg ? "text-[1.9rem] leading-none" : "text-base"} ${line}`}>{top}</p>}<p className={`font-black leading-none text-[#FF3D83] [paint-order:stroke_fill] ${lg ? "[-webkit-text-stroke:12px_#fff] my-1" : "[-webkit-text-stroke:8px_#fff]"} ${bigCls}`}>{big}</p>{bottom && <p className={`font-black text-[#1F4E9C] ${lg ? "text-[1.9rem] leading-none" : "text-base"} ${line}`}>{bottom}</p>}</div>);
 }
+/** Live white back cards in the same style as the banner picture (white, soft sky-blue ring, soft shadow). They are drawn by the page, not baked into the picture, so any text size or language fits inside. */
+export function CloudCard({ children }: { children: React.ReactNode }) {
+  const shapes = (<><circle cx="92" cy="172" r="68" /><circle cx="152" cy="112" r="84" /><circle cx="252" cy="108" r="88" /><circle cx="322" cy="176" r="62" /><rect x="40" y="150" width="320" height="100" rx="50" /></>);
+  return (<div className="relative mx-auto aspect-[4/3] w-full max-w-[24rem]">
+    <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full drop-shadow-[0_12px_18px_rgba(74,134,216,.28)]" aria-hidden="true"><g fill="#CFE3F7" stroke="#CFE3F7" strokeWidth="14" strokeLinejoin="round">{shapes}</g><g fill="#fff">{shapes}</g></svg>
+    <div className="absolute inset-0 flex items-center justify-center px-[15%] pb-[8%] pt-[10%]">{children}</div></div>);
+}
+export function BoardCard({ children }: { children: React.ReactNode }) {
+  return <div className="mx-auto w-full max-w-[24rem] rounded-[2rem] border-[3px] border-white bg-white p-4 shadow-[0_12px_24px_rgba(74,134,216,.28)] ring-4 ring-[#CFE3F7] sm:p-5">{children}</div>;
+}
 export const endOf = (d?: string) => (d ? new Date(`${d}T23:59:59+07:00`).getTime() : 0); // offers end at the end of their last day, shop time (Cambodia)
 export function Countdown({ end, t, lg = false }: { end: number; t: (s: string) => string; lg?: boolean }) {
   const [now, setNow] = useState(Date.now()); useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ScaledBanner from "@/components/ScaledBanner";
 import { sizeOf } from "@/lib/imageSize";
 import { Link, useParams } from "react-router-dom";
 import OfferProductCard from "@/components/OfferProductCard";
-import { buildOffers, TONES, type Offer } from "@/components/OfferCard";
-import { CloudBadge, Countdown, HAND, Mascot, BannerBg, endOf } from "@/components/OfferDeco";
+import { buildOffers, TONES, type Offer, type Tone } from "@/components/OfferCard";
+import { CloudBadge, CloudCard, BoardCard, Countdown, HAND, Mascot, endOf } from "@/components/OfferDeco";
 import Skeleton from "@/components/Skeleton";
 import { useListedProducts, usePromotions, useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
@@ -46,6 +47,29 @@ function terms(o: Offer, t: (s: string) => string, promotions: Promotions): stri
   }
   void promotions; return out;
 }
+/** The offer details banner: your picture IS the banner. On tablet and desktop the live discount goes in the picture's white cloud, the live countdown in its white board and the live offer name on the empty left side (all scaled with the picture). On a phone the picture is a short strip and the same live parts sit under it on white cards. */
+function DetailBanner({ src, k, offer, tone, badge, end, t }: { src: string; k: number; offer: Offer; tone: (typeof TONES)[Tone]; badge: { top?: string; big: string; bottom?: string } | null; end: number; t: (s: string) => string }) {
+  const ref = useRef<HTMLDivElement>(null); const [w, setW] = useState(1920);
+  useEffect(() => { const el = ref.current; if (!el) return; const upd = () => setW(el.clientWidth); const ro = new ResizeObserver(upd); ro.observe(el); upd(); return () => ro.disconnect(); }, []);
+  const root = typeof document === "undefined" ? 16 : parseFloat(getComputedStyle(document.documentElement).fontSize) || 16; const sc = (w / 1920) * (16 / root);
+  const head = (big: boolean) => (<>
+    <nav aria-label="Breadcrumb" className={`font-bold text-[#1F4E9C] ${big ? "mb-4 text-[1.15rem]" : "mb-3 text-sm"}`}><Link to="/" className="hover:underline">{t("Home")}</Link> <span aria-hidden="true">/</span> <Link to="/shop?sale=1" className="hover:underline">{t("Special Offer")}</Link> <span aria-hidden="true">/</span> <span className="opacity-70">{offer.title}</span></nav>
+    <span className={`inline-flex items-center rounded-full font-extrabold shadow-soft ${tone.badge} ${big ? "px-6 py-1.5 text-[1.25rem]" : "px-4 py-1 text-sm"}`}>{offer.badge}</span>
+    <h1 className={`break-words font-['Nunito'] font-black tracking-tight text-[#1F4E9C] [paint-order:stroke_fill] ${big ? `mt-4 leading-[1.05] [-webkit-text-stroke:10px_#fff] ${offer.title.length > 26 ? "text-[4.25rem]" : "text-[5.5rem]"}` : "mt-3 text-4xl leading-tight [-webkit-text-stroke:6px_#fff]"}`}>{offer.title}</h1>
+    <p className={`${HAND} inline-block -rotate-2 bg-[#FFB6CD] font-bold text-[#1F4E9C] shadow-soft [clip-path:polygon(0_0,100%_0,95%_50%,100%_100%,0_100%,5%_50%)] ${big ? "mt-5 px-12 py-2 text-[2rem]" : "mt-3 px-8 py-1.5 text-xl"}`}>{t("Don't miss out on these amazing deals!")}</p></>);
+  return (<section aria-label={offer.title}>
+    <div ref={ref} className="relative hidden w-full overflow-hidden md:block">
+      <ScaledBanner src={src} k={k} fetchPriority="high" />
+      <div className="absolute flex items-center justify-start" style={{ left: "4%", top: "5%", width: "47%", height: "90%" }}><div className="w-[56rem] shrink-0 origin-left text-left" style={{ transform: `scale(${sc})` }}>{head(true)}</div></div>
+      {badge && <div className="absolute flex items-center justify-center" style={{ left: "79.9%", top: "16%", width: "17.7%", height: "34.7%" }}><div className="w-[20rem] shrink-0" style={{ transform: `scale(${sc * 0.78})` }}><CloudBadge lg {...badge} /></div></div>}
+      {end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76.9%", top: "56.6%", width: "22.4%", height: "26.2%" }}><div className="w-[24rem] shrink-0" style={{ transform: `scale(${sc * 0.83})` }}><Countdown lg end={end} t={t} /></div></div>}
+    </div>
+    <div className="md:hidden">
+      <img src={src} alt="" decoding="async" className="h-40 w-full object-cover object-[38%_50%]" />
+      <div className="space-y-4 bg-gradient-to-b from-[#CFE3FB] to-[#EAF3FF] px-4 pb-6 pt-4 text-center"><div>{head(false)}</div>
+        <div className="mx-auto w-full max-w-[24rem] space-y-3">{badge && <CloudCard><CloudBadge {...badge} /></CloudCard>}{end > 0 && <BoardCard><Countdown end={end} t={t} /></BoardCard>}</div></div></div>
+  </section>);
+}
 /** Page opened by "View Details" on an offer card: sky banner with the countdown, then the product-page style details, then the products in the offer. */
 export default function OfferDetail() {
   const { id } = useParams(); const { t, lang } = useI18n(); const { data: all } = useListedProducts(); const { promotions } = usePromotions(); const { settings } = useSettings(); const [saved, setSaved] = useState(false);
@@ -57,14 +81,7 @@ export default function OfferDetail() {
   const go = () => document.getElementById("offer-products")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const useCode = () => { try { sessionStorage.setItem("ct-event-code", code ?? ""); } catch { /* private mode */ } setSaved(true); };
   return (<div className="relative left-1/2 -mt-5 w-screen -translate-x-1/2 space-y-8 sm:-mt-8">
-    <section style={{ paddingBlock: `${2 * sizeOf(settings, "offer-detail")}rem` }} className="relative overflow-hidden px-4 sm:px-10 lg:px-16"><BannerBg src={settings.offerDetailImage} />
-      <div className="relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <div className="text-center lg:text-left">
-          <nav aria-label="Breadcrumb" className="mb-3 text-sm font-bold text-[#1F4E9C]"><Link to="/" className="hover:underline">{t("Home")}</Link> <span aria-hidden="true">/</span> <Link to="/shop?sale=1" className="hover:underline">{t("Special Offer")}</Link> <span aria-hidden="true">/</span> <span className="opacity-70">{offer.title}</span></nav>
-          <span className={`inline-flex items-center rounded-full px-4 py-1 text-sm font-extrabold shadow-soft ${tone.badge}`}>{offer.badge}</span>
-          <h1 className="mt-3 break-words font-['Nunito'] text-4xl font-black leading-tight tracking-tight text-[#1F4E9C] [-webkit-text-stroke:6px_#fff] [paint-order:stroke_fill] sm:text-6xl">{offer.title}</h1>
-          <p className={`${HAND} mt-3 inline-block -rotate-2 bg-[#FFB6CD] px-8 py-1.5 text-xl font-bold text-[#1F4E9C] shadow-soft [clip-path:polygon(0_0,100%_0,95%_50%,100%_100%,0_100%,5%_50%)] sm:text-2xl`}>{t("Don't miss out on these amazing deals!")}</p></div>
-        <div className="mx-auto w-full max-w-xs space-y-2 lg:ml-auto">{badge && <CloudBadge {...badge} />}{end > 0 && <Countdown end={end} t={t} />}</div></div></section>
+    <DetailBanner src={settings.offerDetailImage || "/img/offer-detail-banner.jpg"} k={sizeOf(settings, "offer-detail")} offer={offer} tone={tone} badge={badge} end={end} t={t} />
     <div className="mx-auto max-w-[1700px] space-y-10 px-3 sm:px-6 lg:px-10">
       <section className="grid items-start gap-6 rounded-3xl border border-white bg-white/90 p-4 shadow-soft md:grid-cols-2 lg:gap-10 lg:p-8">
         <div className={`relative grid aspect-[4/3] place-items-center overflow-hidden rounded-2xl border bg-gradient-to-br ${tone.bg}`}>
