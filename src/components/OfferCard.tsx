@@ -20,9 +20,9 @@ const TRUCK = "M1 3h15v13H1zM16 8h4l3 3v5h-7zM5.500 21a2 2 0 1 0 0-4 2 2 0 0 0 0
 export default function OfferCard({ o, t, label, onClick, open }: { o: Offer; t: (s: string) => string; label?: string; onClick?: () => void; open?: boolean }) {
   const c = TONES[o.tone]; const icon = o.tone === "pink" ? GIFT : o.tone === "green" ? TRUCK : TAG;
   const btn = `mt-4 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-extrabold text-white shadow-soft transition hover:-translate-y-0.5 ${c.btn}`; const text = `${label ?? t("View Details")} →`;
-  return (<article className={`relative flex min-h-[13rem] overflow-hidden rounded-3xl border bg-gradient-to-r p-5 shadow-soft sm:p-6 ${c.bg}`}>
-    <span aria-hidden="true" className={`pointer-events-none absolute left-[46%] top-4 text-xl ${c.deco}`}>♥</span><span aria-hidden="true" className={`pointer-events-none absolute bottom-5 left-[40%] text-sm ${c.deco}`}>♥</span><span aria-hidden="true" className={`pointer-events-none absolute right-5 top-4 text-lg ${c.deco}`}>✦</span>
-    <div className="relative z-10 flex min-w-0 flex-1 flex-col items-start">
+  return (<article className={`relative flex min-h-[13rem] overflow-hidden rounded-3xl border bg-gradient-to-r p-5 shadow-soft sm:min-h-[15rem] sm:p-6 ${c.bg}`}>
+    <span aria-hidden="true" className={`pointer-events-none absolute left-[44%] top-4 text-xl ${c.deco}`}>♥</span><span aria-hidden="true" className={`pointer-events-none absolute bottom-5 left-[40%] text-sm ${c.deco}`}>♥</span><span aria-hidden="true" className={`pointer-events-none absolute right-5 top-4 text-lg ${c.deco}`}>✦</span>
+    <div className="relative z-10 flex min-w-0 flex-1 flex-col items-start sm:w-1/2 sm:flex-none">
       <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-extrabold ${c.badge}`}><Icon d={icon} />{o.badge}</span>
       <h3 className={`mt-3 text-2xl font-extrabold leading-tight sm:text-3xl ${c.title}`}>{o.title}</h3>
       <p className="mt-1.5 max-w-sm text-sm text-ink/80">{o.text}</p>
@@ -30,8 +30,8 @@ export default function OfferCard({ o, t, label, onClick, open }: { o: Offer; t:
       {open && o.more && <p className="mt-2 whitespace-pre-line rounded-xl bg-white/70 p-3 text-xs">{o.more}</p>}
       <div className="flex-1" />
       {onClick ? <button type="button" aria-expanded={open} onClick={onClick} className={btn}>{text}</button> : <Link to={o.to} className={btn}>{text}</Link>}</div>
-    <div className="relative z-0 -mr-2 flex w-28 shrink-0 items-center justify-center sm:w-44 md:w-52">
-      {o.image ? <img src={o.image} alt="" loading="lazy" decoding="async" className="max-h-44 w-full rotate-3 rounded-2xl object-cover shadow-lift ring-4 ring-white/80 sm:max-h-48" /> : <img src="/img/sidebar-mascot.png" alt="" loading="lazy" decoding="async" className="max-h-44 w-full object-contain" />}</div>
+    <div className="relative z-0 -mr-1 ml-1 flex w-[46%] shrink-0 items-center justify-center sm:ml-0 sm:w-1/2">
+      {o.image ? <img src={o.image} alt="" loading="lazy" decoding="async" className="h-full max-h-64 min-h-[9rem] w-full rotate-2 rounded-2xl object-cover shadow-lift ring-4 ring-white/80" /> : <img src="/img/sidebar-mascot.png" alt="" loading="lazy" decoding="async" className="max-h-64 w-full object-contain" />}</div>
   </article>);
 }
 
