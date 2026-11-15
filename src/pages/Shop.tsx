@@ -4,23 +4,28 @@ import Skeleton from "@/components/Skeleton";
 import SectionHead from "@/components/SectionHead";
 import CloudMascot from "@/components/CloudMascot";
 import SpecialOffers from "@/components/SpecialOffers";
-import { useListedProducts, usePromotions } from "@/lib/store";
+import { useListedProducts, usePromotions, useSettings } from "@/lib/store";
 import { productPromo } from "@shared/promotions";
 import { LABELS, categoriesOf } from "@shared/products";
 import { catIcon } from "@/lib/catIcon";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
-/** "Our Products" banner: sky card with soft clouds, the title, a handwritten line, a speech cloud and the mascot. */
+/** "Our Products" banner, full width of the screen (edge to edge). Shows the picture the admin uploads in Admin > Settings > Products page banner; until one is uploaded it shows the default sky banner. */
 function ProductsBanner() {
-  const { t } = useI18n();
-  return (<section aria-label={t("Our Products")} className="relative mb-7 overflow-hidden rounded-[2rem] bg-gradient-to-b from-[#BFDFFF] via-[#D6EAFF] to-[#EAF5FF] px-6 py-8 shadow-soft sm:px-10 sm:py-10 lg:py-12">
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 20% 22% at 8% 100%,#fff,transparent 72%),radial-gradient(ellipse 24% 24% at 40% 108%,#fff,transparent 72%),radial-gradient(ellipse 22% 22% at 70% 104%,#fff,transparent 72%),radial-gradient(ellipse 18% 20% at 98% 96%,#fff,transparent 72%)" }} />
-    <span aria-hidden="true" className="absolute left-5 top-4 text-xl text-[#FFC93C]">✦</span><span aria-hidden="true" className="absolute left-[44%] top-5 text-2xl text-[#FFC93C]">★</span><span aria-hidden="true" className="absolute right-[34%] top-6 text-xl text-[#FF8FB1]">♥</span><span aria-hidden="true" className="absolute bottom-8 left-[40%] text-lg text-white">✦</span>
-    <div className="relative max-w-[62%] sm:max-w-[55%]">
-      <h1 className="font-display text-3xl font-bold leading-none text-[#1F3F8F] sm:text-5xl lg:text-6xl">{t("Our Products")}</h1>
-      <p className="mt-3 font-['Caveat'] text-xl font-semibold text-[#2F6FD0] sm:text-3xl">{t("Every little cloud, all in one place!")}</p>
-      <span aria-hidden="true" className="mt-1 block h-1 w-40 rounded-full bg-[#FF8FB1]/80 sm:w-64" /></div>
-    <div aria-hidden="true" className="absolute bottom-2 right-3 flex items-end gap-3 sm:right-8"><span className="mb-16 hidden rounded-[1.6rem] border-2 border-white bg-white/90 px-4 py-2 font-['Caveat'] text-2xl font-bold text-[#2F6FD0] shadow-soft sm:block">{t("Shop the sky!")} ♡</span><CloudMascot className="h-24 w-28 sm:h-36 sm:w-44 lg:h-44 lg:w-52" /></div>
+  const { t } = useI18n(); const { settings } = useSettings(); const img = settings.productsBannerImage || "";
+  // edge to edge: break out of the page column and cancel the gap under the header (same as the Home banner)
+  const wrap = "relative left-1/2 -mt-5 mb-7 w-screen -translate-x-1/2 overflow-hidden sm:-mt-8";
+  if (img) return (<section aria-label={t("Our Products")} className={wrap}><h1 className="sr-only">{t("Our Products")}</h1><img src={img} alt="" fetchPriority="high" className="block h-auto w-full" /></section>);
+  return (<section aria-label={t("Our Products")} className={`${wrap} bg-gradient-to-b from-[#BFDFFF] via-[#D6EAFF] to-[#EAF5FF] py-8 sm:py-10 lg:py-12`}>
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 14% 22% at 6% 100%,#fff,transparent 72%),radial-gradient(ellipse 18% 24% at 34% 108%,#fff,transparent 72%),radial-gradient(ellipse 16% 22% at 66% 104%,#fff,transparent 72%),radial-gradient(ellipse 14% 20% at 96% 100%,#fff,transparent 72%)" }} />
+    <div className="page-wrap relative">
+      <span aria-hidden="true" className="absolute left-4 -top-4 text-xl text-[#FFC93C]">✦</span><span aria-hidden="true" className="absolute left-[44%] -top-3 text-2xl text-[#FFC93C]">★</span><span aria-hidden="true" className="absolute right-[34%] -top-2 text-xl text-[#FF8FB1]">♥</span><span aria-hidden="true" className="absolute bottom-0 left-[40%] text-lg text-white">✦</span>
+      <div className="relative max-w-[62%] sm:max-w-[55%]">
+        <h1 className="font-display text-3xl font-bold leading-none text-[#1F3F8F] sm:text-5xl lg:text-6xl">{t("Our Products")}</h1>
+        <p className="mt-3 font-['Caveat'] text-xl font-semibold text-[#2F6FD0] sm:text-3xl">{t("Every little cloud, all in one place!")}</p>
+        <span aria-hidden="true" className="mt-1 block h-1 w-40 rounded-full bg-[#FF8FB1]/80 sm:w-64" /></div>
+      <div aria-hidden="true" className="absolute -bottom-4 right-3 flex items-end gap-3 sm:right-8"><span className="mb-16 hidden rounded-[1.6rem] border-2 border-white bg-white/90 px-4 py-2 font-['Caveat'] text-2xl font-bold text-[#2F6FD0] shadow-soft sm:block">{t("Shop the sky!")} ♡</span><CloudMascot className="h-24 w-28 sm:h-36 sm:w-44 lg:h-44 lg:w-52" /></div>
+    </div>
   </section>);
 }
 export default function Shop() {

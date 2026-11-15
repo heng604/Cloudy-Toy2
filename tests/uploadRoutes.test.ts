@@ -16,7 +16,7 @@ const png = async () => new Blob([new Uint8Array(await sharp({ create: { width: 
 const send = async (path: string, fields: Record<string, string>, withFile = true) => { const fd = new FormData(); for (const [k, v] of Object.entries(fields)) fd.set(k, v); if (withFile) fd.set("image", await png(), "pic.png"); const r = await fetch(base + path, { method: "POST", body: fd }); return { status: r.status, body: await r.json().catch(() => null) as Record<string, unknown> | null }; };
 describe("admin picture uploads", () => {
   it("Special Offer page banner: hero, mascot, footer save and can be removed", async () => {
-    for (const [slot, key] of [["hero", "offerHeroImage"], ["mascot", "offerMascotImage"], ["footer", "offerFooterImage"], ["detail", "offerDetailImage"]] as const) {
+    for (const [slot, key] of [["hero", "offerHeroImage"], ["mascot", "offerMascotImage"], ["footer", "offerFooterImage"], ["detail", "offerDetailImage"], ["products", "productsBannerImage"]] as const) {
       const r = await send("/admin/settings/offer-page", { slot }); expect(r.status, JSON.stringify(r.body)).toBe(200); expect(r.body?.ok, JSON.stringify(r.body)).toBe(true); expect(String(r.body?.url)).toMatch(/^\/api\/img\/offer-[a-z]+-[0-9a-f]{8}\.webp$/); expect(mem.settings[key]).toBe(r.body?.url);
       const d = await send("/admin/settings/offer-page", { slot, remove: "on" }, false); expect(d.body?.ok, JSON.stringify(d.body)).toBe(true); expect(mem.settings[key]).toBe("");
     }

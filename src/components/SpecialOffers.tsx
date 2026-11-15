@@ -22,14 +22,14 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
   return (<div className="relative left-1/2 -mt-5 w-screen -translate-x-1/2 space-y-6 sm:-mt-8">
     <section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16">
       {heroImg ? <img src={heroImg} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : <SkyBackdrop />}
-      <div className={`relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.25fr_1fr_1fr] ${heroImg ? "min-h-[12rem] sm:min-h-[16rem]" : ""}`}>
+      <div className={`relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.1fr_1.25fr_1fr] ${heroImg ? "min-h-[12rem] sm:min-h-[16rem]" : ""}`}>
         {showText ? <div className="text-center lg:text-left">
           {hero && <span className="mb-2 inline-block rounded-full bg-white/85 px-3 py-1 text-xs font-extrabold text-[#C2305F]">✨ {festivalName(hero, lang)}</span>}
           <h1 className="font-['Nunito'] text-5xl font-black leading-none tracking-tight text-[#1F4E9C] drop-shadow-[0_3px_0_rgba(255,255,255,.9)] [-webkit-text-stroke:7px_#fff] [paint-order:stroke_fill] sm:text-7xl">{t("Special Offer")}</h1>
           <p className={`${HAND} mt-4 inline-block -rotate-3 bg-[#FFB6CD] px-9 py-2 text-xl font-bold text-[#1F4E9C] shadow-soft [clip-path:polygon(0_0,100%_0,95%_50%,100%_100%,0_100%,5%_50%)] sm:text-2xl`}>{t("Don't miss out on these amazing deals!")}</p>
           <p className={`${HAND} mt-3 text-xl font-bold text-[#1F4E9C] sm:text-2xl`}>{hero && festivalText(hero, lang) ? festivalText(hero, lang) : `${t("Collect more happiness, for less!")} ♡`}</p></div>
           : <><h1 className="sr-only">{t("Special Offer")}</h1><div className="hidden lg:block" /></>}
-        <div className="hidden justify-center lg:flex">{(!heroImg || mascotImg) && <Mascot src={mascotImg} className="h-52 w-auto max-w-full object-contain drop-shadow-xl" />}</div>
+        <div className="hidden items-end justify-center lg:flex">{(!heroImg || mascotImg) && <Mascot src={mascotImg} className="-my-6 h-[20rem] w-auto max-w-full object-contain drop-shadow-xl xl:-my-10 xl:h-[26rem] 2xl:h-[30rem]" />}</div>
         <div className="mx-auto w-full max-w-xs space-y-2 lg:ml-auto">
           {up > 0 && <CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} />}
           {end > 0 && <Countdown end={end} t={t} />}</div></div></section>
