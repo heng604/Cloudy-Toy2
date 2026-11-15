@@ -19,3 +19,6 @@ Customer: choices with a photo show a small round thumbnail; clicking the choice
 Note: photos uploaded in the same editing session must be saved first, then edit the product again to link them (the link uses the saved photo).
 
 Files: `shared/products.ts`, `OptionsEditor.tsx`, `ProductModal.tsx`, `ProductGallery.tsx`, `AddButton.tsx`, `ProductPage.tsx`, `CartView.tsx`, `server/app.ts`, `tests/options.test.ts`.
+
+## Contact page (v49)
+The Email card on the Contact page is now an Instagram card. It uses the Instagram link from Admin > Settings (and hides if that link is empty, like the Facebook card). `src/components/ContentPage.tsx`

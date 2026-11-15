@@ -1,7 +1,6 @@
 import { usePages, useSettings, usePromotions } from "@/lib/store";
 import { PAGE_DEFS, type PageSlug } from "@shared/pages";
-import { ADMIN_EMAIL } from "@shared/admin";
-import { ADMIN_INBOX, TELEGRAM_FALLBACK } from "@/lib/supabase";
+import { TELEGRAM_FALLBACK } from "@/lib/supabase";
 import { useTitle } from "@/lib/title";
 import NotFound from "./NotFound";
 
@@ -16,9 +15,11 @@ export default function ContentPage({ slug, title }: { slug: PageSlug; title: st
   const page = getPage(def.slug);
   if (!page) return loading ? <div className="max-w-2xl animate-pulse space-y-4"><div className="h-9 w-48 rounded-full bg-sky-pale" /><div className="h-4 w-full rounded-full bg-sky-pale" /><div className="h-4 w-3/4 rounded-full bg-sky-pale" /></div> : null;
   if (page.deleted) return <NotFound />;
-  const isContact = slug === "contact"; const mail = ADMIN_INBOX || ADMIN_EMAIL;
+  const isContact = slug === "contact";
   // Admin sets the link in Admin > Settings. VITE_TELEGRAM_URL is an optional fallback (e.g. https://t.me/your_username).
   const telegram = isContact ? s.telegramUrl || TELEGRAM_FALLBACK : "";
+  /** "@name" from an Instagram link such as https://www.instagram.com/toyscloudy/ (empty when it cannot be read). */
+  const igHandle = (() => { try { const seg = new URL(s.instagramUrl).pathname.split("/").filter(Boolean)[0]; return seg ? `@${seg.replace(/^@/, "")}` : ""; } catch { return ""; } })();
   const blocks = page.content.trim().split(/\n\s*\n/).filter(Boolean);
   return (<div className="max-w-2xl space-y-4"><h1 className="text-3xl font-extrabold">{def.title}</h1>
     {blocks.length === 0 ? <p className="text-mute">This page has not been written yet.</p> : blocks.map((b, i) => b.startsWith("## ")
@@ -46,10 +47,12 @@ export default function ContentPage({ slug, title }: { slug: PageSlug; title: st
               <span><span className="block font-extrabold">Facebook page</span><span className="block text-sm text-mute">Message us or follow</span></span>
             </a>
           )}
-          <a href={`mailto:${mail}`} className={card}>
-            <span className={`${icon} bg-sky-pale`}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></svg></span>
-            <span className="min-w-0"><span className="block font-extrabold">Email</span><span className="block truncate text-sm text-mute">{mail}</span></span>
-          </a>
+          {s.instagramUrl && (
+            <a href={s.instagramUrl} target="_blank" rel="noopener noreferrer" className={card}>
+              <span className={`${icon} bg-sky-pale`}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" /></svg></span>
+              <span className="min-w-0"><span className="block font-extrabold">Instagram</span><span className="block truncate text-sm text-mute">{igHandle || "Follow us or send a message"}</span></span>
+            </a>
+          )}
         </div>
       </div>
     )}</div>);
