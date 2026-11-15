@@ -3,6 +3,8 @@ import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
 import SectionHead from "@/components/SectionHead";
 import CloudMascot from "@/components/CloudMascot";
+import ScaledBanner from "@/components/ScaledBanner";
+import { sizeOf } from "@/lib/imageSize";
 import SpecialOffers from "@/components/SpecialOffers";
 import { useListedProducts, usePromotions, useSettings } from "@/lib/store";
 import { productPromo } from "@shared/promotions";
@@ -15,7 +17,7 @@ function ProductsBanner() {
   const { t } = useI18n(); const { settings } = useSettings(); const img = settings.productsBannerImage || "";
   // edge to edge: break out of the page column and cancel the gap under the header (same as the Home banner)
   const wrap = "relative left-1/2 -mt-5 mb-7 w-screen -translate-x-1/2 overflow-hidden sm:-mt-8";
-  if (img) return (<section aria-label={t("Our Products")} className={wrap}><h1 className="sr-only">{t("Our Products")}</h1><img src={img} alt="" fetchPriority="high" className="block h-auto w-full" /></section>);
+  if (img) return (<section aria-label={t("Our Products")} className={wrap}><h1 className="sr-only">{t("Our Products")}</h1><ScaledBanner src={img} k={sizeOf(settings, "products-banner")} fetchPriority="high" /></section>);
   return (<section aria-label={t("Our Products")} className={`${wrap} bg-gradient-to-b from-[#BFDFFF] via-[#D6EAFF] to-[#EAF5FF] py-8 sm:py-10 lg:py-12`}>
     <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 14% 22% at 6% 100%,#fff,transparent 72%),radial-gradient(ellipse 18% 24% at 34% 108%,#fff,transparent 72%),radial-gradient(ellipse 16% 22% at 66% 104%,#fff,transparent 72%),radial-gradient(ellipse 14% 20% at 96% 100%,#fff,transparent 72%)" }} />
     <div className="page-wrap relative">

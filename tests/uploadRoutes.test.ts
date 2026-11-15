@@ -21,6 +21,8 @@ describe("admin picture uploads", () => {
       const d = await send("/admin/settings/offer-page", { slot, remove: "on" }, false); expect(d.body?.ok, JSON.stringify(d.body)).toBe(true); expect(mem.settings[key]).toBe("");
     }
     expect((await send("/admin/settings/offer-page", { slot: "mascotsize", value: "180" }, false)).body?.ok).toBe(true); expect(mem.settings.offerMascotScale).toBe(180);
+    expect((await send("/admin/settings/offer-page", { slot: "size", key: "logo", value: "130" }, false)).body?.ok).toBe(true); expect((mem.settings.imageSizes as Record<string, number>).logo).toBe(130);
+    expect((await send("/admin/settings/offer-page", { slot: "size", key: "bad key!", value: "130" }, false)).body?.error).toBeTruthy();
     expect((await send("/admin/settings/offer-page", { slot: "text", value: "off" }, false)).body?.ok).toBe(true); expect(mem.settings.offerHeroText).toBe(false);
   });
   it("category icon saves and is kept per category", async () => {

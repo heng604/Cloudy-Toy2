@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { sizeOf } from "@/lib/imageSize";
 import { Link } from "react-router-dom";
 import { useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
@@ -47,8 +48,8 @@ export function Countdown({ end, t }: { end: number; t: (s: string) => string })
 }
 /** The pink-and-lilac "Shop now and enjoy special savings!" banner (picture and mascot can be changed in admin). */
 export function HappyBanner() {
-  const { t } = useI18n(); const { settings } = useSettings(); const footerImg = settings.offerFooterImage || "", mascotImg = settings.offerMascotImage || "";
-  return (<section className="relative flex flex-wrap items-center justify-center gap-4 overflow-hidden px-5 py-5 sm:justify-between sm:px-10 lg:px-16">
+  const { t } = useI18n(); const { settings } = useSettings(); const footerImg = settings.offerFooterImage || "", mascotImg = settings.offerMascotImage || ""; const kb = sizeOf(settings, "offer-footer");
+  return (<section style={{ paddingBlock: `${1.25 * kb}rem` }} className="relative flex flex-wrap items-center justify-center gap-4 overflow-hidden px-5 sm:justify-between sm:px-10 lg:px-16">
     {footerImg ? <img src={footerImg} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden bg-gradient-to-r from-[#D9E8FF] via-[#E6E2FF] to-[#FFDDEA]"><Cloud className="-bottom-10 -left-10 w-[22rem] opacity-90" /><Cloud className="-bottom-12 -right-10 w-[26rem] opacity-90" /><Star className="left-[30%] top-2 w-7" /><Star className="right-[26%] top-3 w-6" color="#FFE58A" /><Heart className="bottom-3 left-[58%] w-5" color="#B7A6F5" /></div>}
     <Mascot src={mascotImg} className="relative hidden h-16 w-auto sm:block" /><p className={`${HAND} relative text-center text-2xl font-bold text-[#1F4E9C] sm:text-3xl`}>{t("Shop now and enjoy special savings!")} <span aria-hidden="true" className="text-[#8E7CF0]">♡</span></p>
     <Link to="/shop" className={`${HAND} relative rounded-full bg-[#FF7BA9] px-8 py-2.5 text-2xl font-bold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-[#F2679A]`}>{t("Happy Shopping")} ♡</Link></section>);

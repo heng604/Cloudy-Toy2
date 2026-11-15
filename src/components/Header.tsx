@@ -2,7 +2,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useCart } from "./CartProvider";
 import { useI18n, LangSwitch } from "@/lib/i18n";
-import { useListedProducts } from "@/lib/store";
+import { useListedProducts, useSettings } from "@/lib/store";
+import { sizeOf } from "@/lib/imageSize";
 import { categoriesOf } from "@shared/products";
 const NAV = [
   { href: "/", label: "Home", match: (p: string) => p === "/" },
@@ -47,7 +48,7 @@ function CategoryItem({ active, cats, label }: { active: boolean; cats: string[]
       {[{ label: t("All"), to: "/shop" }, ...cats.map((c) => ({ label: c, to: `/shop?category=${encodeURIComponent(c)}` }))].map((i) => <li key={i.to} role="none"><Link role="menuitem" to={i.to} onClick={() => setOpen(false)} className="block rounded-xl px-4 py-2 font-semibold hover:bg-sky-pale">{i.label}</Link></li>)}</ul>}</div>);
 }
 export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string }) {
-  const { count } = useCart(); const { t } = useI18n(); const { data: products } = useListedProducts();
+  const { count } = useCart(); const { t } = useI18n(); const { settings: sz } = useSettings(); const logoK = sizeOf(sz, "logo"); const { data: products } = useListedProducts();
   const loc = useLocation(); const pathname = loc.pathname; const navigate = useNavigate(); const q = new URLSearchParams(loc.search);
   const [open, setOpen] = useState(false); const [menu, setMenu] = useState(false);
   useEffect(() => { setMenu(false); }, [pathname]);
@@ -64,7 +65,7 @@ export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string
     <header className="sticky top-0 z-50 border-b border-[#DCEBFB] bg-white/85 shadow-[0_4px_20px_rgba(74,134,216,.14)] backdrop-blur-md" onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setMenu(false); } }}>
       <div className="page-wrap flex items-center justify-between gap-3 py-2 xl:py-3">
         <Link to="/" className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-          <img src={logoUrl} alt="" width={56} height={56} className="h-11 w-11 shrink-0 rounded-full object-cover sm:h-14 sm:w-14" />
+          <img src={logoUrl} alt="" width={56} height={56} style={{ ["--k" as string]: logoK }} className="h-[calc(2.75rem*var(--k))] w-[calc(2.75rem*var(--k))] shrink-0 rounded-full object-cover sm:h-[calc(3.5rem*var(--k))] sm:w-[calc(3.5rem*var(--k))]" />
           <span className="min-w-0 leading-tight"><span className="block truncate font-display text-2xl font-bold text-[#1F3F8F] sm:text-[1.7rem]">Cloudy Toys</span><span className="hidden truncate text-[11px] font-semibold text-[#1F4E9C]/80 min-[400px]:block sm:text-xs">♡ {t("Collect a little happiness")} ♡</span></span></Link>
         <nav aria-label={t("Main menu")} className="hidden items-center gap-0.5 xl:flex">{links(true)}</nav>
         <div className="flex items-center gap-0.5 sm:gap-1.5">
