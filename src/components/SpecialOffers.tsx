@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import OfferCard, { buildOffers } from "@/components/OfferCard";
 import { HAND, Mascot, SkyBackdrop, CloudBadge, Countdown, endOf } from "@/components/OfferDeco";
@@ -7,9 +7,23 @@ import { usePromotions, useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { categoriesOf, type Product } from "@shared/products";
 import { inSpecialOffer, liveCampaigns, liveFestivals, festivalName, festivalText, productPromo, orderCampaigns } from "@shared/promotions";
+/** Admin's ONE finished banner picture (title, mascot and clouds are inside it). The "UP TO %" badge and the countdown are placed on top, in the cloud and the box on the right of the picture, and scale with it; on a phone they sit under the picture instead. */
+function FullBanner({ src, up, end, t }: { src: string; up: number; end: number; t: (s: string) => string }) {
+  const ref = useRef<HTMLDivElement>(null); const [w, setW] = useState(1920);
+  useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setW(el.clientWidth)); ro.observe(el); setW(el.clientWidth); return () => ro.disconnect(); }, []);
+  const wide = w >= 900, s = Math.min(1.25, Math.max(0.4, w / 1920));
+  return (<section aria-label={t("Special Offer")}>
+    <div ref={ref} className="relative w-full overflow-hidden"><h1 className="sr-only">{t("Special Offer")}</h1>
+      <img src={src} alt="" fetchPriority="high" className="block h-auto w-full" />
+      {wide && up > 0 && <div className="absolute flex items-center justify-center" style={{ left: "78%", top: "14%", width: "19%", height: "40%" }}><div style={{ transform: `scale(${s})` }}><CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} /></div></div>}
+      {wide && end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76.5%", top: "58%", width: "21.5%", height: "26%" }}><div className="w-[18rem]" style={{ transform: `scale(${s})` }}><Countdown end={end} t={t} /></div></div>}
+    </div>
+    {!wide && (up > 0 || end > 0) && <div className="mx-auto mt-3 w-full max-w-xs space-y-2 px-4">{up > 0 && <CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} />}{end > 0 && <Countdown end={end} t={t} />}</div>}
+  </section>);
+}
 /** The page behind the "Special Offer" button: sky banner with the biggest discount and a countdown, a category filter, the offer products and the promotion cards. */
 export default function SpecialOffers({ all, festivalId }: { all: Product[]; festivalId?: string | null }) {
-  const { t, lang } = useI18n(); const { promotions } = usePromotions(); const { settings } = useSettings(); const heroImg = settings.offerHeroImage || "", mascotImg = settings.offerMascotImage || "", footerImg = settings.offerFooterImage || "", showText = settings.offerHeroText !== false; const [saved, setSaved] = useState(""); const [cat, setCat] = useState("");
+  const { t, lang } = useI18n(); const { promotions } = usePromotions(); const { settings } = useSettings(); const fullImg = settings.offerFullImage || "", heroImg = settings.offerHeroImage || "", mascotImg = settings.offerMascotImage || "", footerImg = settings.offerFooterImage || "", showText = settings.offerHeroText !== false; const k = Math.min(2.5, Math.max(0.5, (settings.offerMascotScale || 100) / 100)); const [saved, setSaved] = useState(""); const [cat, setCat] = useState("");
   const fests = liveFestivals(promotions.festivals); const hero = fests.find((f) => f.id === festivalId) ?? fests[0]; const rules = liveCampaigns(promotions.campaigns);
   const list = all.filter((p) => (festivalId && hero ? hero.productIds.includes(p.id) : inSpecialOffer(p, promotions.campaigns, promotions.festivals)));
   const cats = categoriesOf(list); const shown = cat && cats.includes(cat) ? list.filter((p) => p.category === cat) : list;
@@ -20,19 +34,20 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
   const spark = (c: string, cls: string) => <span aria-hidden="true" className={`pointer-events-none absolute ${cls}`} style={{ color: c }}>✦</span>;
   // full screen: the page breaks out of the shop's centred column and runs edge to edge (banner touches the header and both sides)
   return (<div className="relative left-1/2 -mt-5 w-screen -translate-x-1/2 space-y-6 sm:-mt-8">
-    <section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16">
+    {fullImg ? <FullBanner src={fullImg} up={up} end={end} t={t} /> : <section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16">
       {heroImg ? <img src={heroImg} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : <SkyBackdrop />}
       <div className={`relative mx-auto grid max-w-[1700px] items-center gap-4 lg:grid-cols-[1.1fr_1.25fr_1fr] ${heroImg ? "min-h-[12rem] sm:min-h-[16rem]" : ""}`}>
-        {showText ? <div className="text-center lg:text-left">
+        {showText ? <div className="relative z-10 text-center lg:text-left">
           {hero && <span className="mb-2 inline-block rounded-full bg-white/85 px-3 py-1 text-xs font-extrabold text-[#C2305F]">✨ {festivalName(hero, lang)}</span>}
           <h1 className="font-['Nunito'] text-5xl font-black leading-none tracking-tight text-[#1F4E9C] drop-shadow-[0_3px_0_rgba(255,255,255,.9)] [-webkit-text-stroke:7px_#fff] [paint-order:stroke_fill] sm:text-7xl">{t("Special Offer")}</h1>
           <p className={`${HAND} mt-4 inline-block -rotate-3 bg-[#FFB6CD] px-9 py-2 text-xl font-bold text-[#1F4E9C] shadow-soft [clip-path:polygon(0_0,100%_0,95%_50%,100%_100%,0_100%,5%_50%)] sm:text-2xl`}>{t("Don't miss out on these amazing deals!")}</p>
           <p className={`${HAND} mt-3 text-xl font-bold text-[#1F4E9C] sm:text-2xl`}>{hero && festivalText(hero, lang) ? festivalText(hero, lang) : `${t("Collect more happiness, for less!")} ♡`}</p></div>
           : <><h1 className="sr-only">{t("Special Offer")}</h1><div className="hidden lg:block" /></>}
-        <div className="hidden items-end justify-center lg:flex">{(!heroImg || mascotImg) && <Mascot src={mascotImg} className="-my-6 h-[20rem] w-auto max-w-full object-contain drop-shadow-xl xl:-my-10 xl:h-[26rem] 2xl:h-[30rem]" />}</div>
-        <div className="mx-auto w-full max-w-xs space-y-2 lg:ml-auto">
+        {mascotImg ? <div className="pointer-events-none relative z-0 -mb-6 hidden min-w-0 items-end justify-center self-end lg:flex xl:-mb-8"><div className="shrink-0" style={{ width: `min(${0.8 * k * 100}vw, ${90 * k}rem)` }}><Mascot src={mascotImg} className="block h-auto w-full drop-shadow-xl" /></div></div>
+          : <div className="hidden items-end justify-center lg:flex">{!heroImg && <Mascot className="-my-6 h-[20rem] w-auto max-w-full object-contain drop-shadow-xl xl:-my-10 xl:h-[26rem] 2xl:h-[30rem]" />}</div>}
+        <div className="relative z-10 mx-auto w-full max-w-xs space-y-2 lg:ml-auto">
           {up > 0 && <CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} />}
-          {end > 0 && <Countdown end={end} t={t} />}</div></div></section>
+          {end > 0 && <Countdown end={end} t={t} />}</div></div></section>}
   <div className="space-y-6 px-3 sm:px-6 lg:px-10">
     {hero?.code && <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl bg-white p-3 text-sm shadow-soft"><span className="font-bold">🎟️ {t("Quick event code")}:</span><span className="rounded-xl bg-[#EFE6FF] px-4 py-1.5 font-mono text-base font-extrabold text-[#4B2A99]">{hero.code}</span>
       <button type="button" onClick={() => useCode(hero.code!)} className="rounded-full bg-[#7A3FD8] px-4 py-1.5 text-xs font-extrabold text-white hover:bg-[#6930C4]">{t("Apply to Bag")}</button>
