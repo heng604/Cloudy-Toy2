@@ -56,7 +56,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     const f = new FormData(e.currentTarget); const v = (k: string) => String(f.get(k) ?? "");
     const res = await api("/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       customer: { name: v("name"), email: v("email"), phone: v("phone"), address: v("address"), notes: v("notes") || undefined, facebook: v("facebook") || undefined, telegram: v("telegram") || undefined }, area, ...(area === "PROVINCE" ? { province } : {}), method,
-      lines: lines.map((l) => ({ productId: l.id, qty: l.qty })), code: code.trim() || undefined, ...(hasPre ? { preorderPay: payFull ? "full" : "deposit" } : {}) }) });
+      lines: lines.map((l) => ({ productId: l.id, qty: l.qty, ...(l.opt ? { option: l.opt } : {}) })), code: code.trim() || undefined, ...(hasPre ? { preorderPay: payFull ? "full" : "deposit" } : {}) }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setErr(t(data.error ?? "Something went wrong.")); setBusy(false); return; }
     if (method === "QR_IMAGE" && file) { // send the payment screenshot to the admin, then show the notification popup
@@ -107,7 +107,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     {method === "QR_IMAGE" && !file && <p className="text-xs text-mute">Upload your payment screenshot to enable &quot;I have paid&quot;.</p>}
 </form>
     <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5 lg:sticky lg:top-24"><h2 className="font-extrabold">{t("Order summary")}</h2>
-      {items.map(({ l, p }) => <p key={l.id} className="flex justify-between text-sm"><span>{p!.name} × {l.qty}</span><span>{money((p!.salePrice ?? p!.price) * l.qty)}</span></p>)}
+      {items.map(({ l, p }) => <p key={`${l.id}|${l.opt ?? ""}`} className="flex justify-between text-sm"><span>{p!.name}{l.opt ? ` (${l.opt})` : ""} × {l.qty}</span><span>{money((p!.salePrice ?? p!.price) * l.qty)}</span></p>)}
       {autos.map((a) => <p key={a.id} className="flex justify-between text-sm text-green-700"><span>{a.name}</span><span>−{money(a.cents / 100)}</span></p>)}
       {gifts.map((g) => <p key={g.campaignId} className="flex justify-between text-sm text-green-700"><span>🎁 {g.name} × {g.qty}</span><span>{t("FREE")}</span></p>)}
       {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}

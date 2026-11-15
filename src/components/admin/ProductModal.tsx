@@ -9,6 +9,7 @@ import FilePicker from "./FilePicker";
 import SafeImg from "../SafeImg";
 import Icon from "./Icons";
 import Modal from "./Modal";
+import OptionsEditor from "./OptionsEditor";
 export const LABEL_STYLE: Record<string, string> = { new_arrival: "bg-[#DD0000] text-white", restock: "bg-[#40F146] text-white", limited_edition: "bg-[#C1ADE4] text-white", preorder: "bg-[#FFE597] text-white", best_seller: "bg-[#99C3E4] text-white" };
 export const MAX_IMAGES = 10; // photos per product (the server enforces the same limit)
 const field = "w-full rounded-xl border border-sky-border bg-[#F3F9FE] px-3.5 py-2.5 outline-none";
@@ -63,7 +64,7 @@ export default function ProductModal({ p, categories, onClose, onSaved, onManage
             {p && p.images.length > 0 && <ul className="space-y-2">{p.images.map((i) => { const on = kept.includes(i.src); return (<li key={i.src} className={`flex items-center gap-3 rounded-xl bg-[#F3F9FE] p-2 ${on ? "" : "opacity-50"}`}>
               <SafeImg src={i.src} alt={i.alt} className="h-11 w-11 rounded-lg object-cover" /><div className="min-w-0 flex-1 text-xs"><p className="font-bold">{on ? t("Existing Product Image") : t("Will be removed")}</p>{on && <p className="font-semibold text-[#2F8F5B]">✓ {t("Uploaded & Ready")}</p>}</div>
               <button type="button" onClick={() => setKept((k) => (on ? k.filter((s) => s !== i.src) : [...k, i.src]))} aria-label={on ? t("Remove image") : t("Keep image")} className="grid h-8 w-8 place-items-center rounded-full text-mute hover:bg-white hover:text-red-600"><Icon name={on ? "trash" : "plus"} size={16} /></button></li>); })}</ul>}</section>
-          <section className={box}><label className={lab}>{t("Product Option / Variants")}<input name="variants" maxLength={300} defaultValue={p?.variants} placeholder="e.g. Size: 11cm, Color: Pastel Pink" className={`${field} mt-2 bg-white`} /></label></section>
+          <section className={box}><OptionsEditor initial={p?.variants} /></section>
           {promotions.festivals.some((f) => festivalPhase(f) !== "ended" || f.productIds.includes(p?.id ?? "")) && <section className={box}><h3 className="text-sm font-extrabold">{t("Special Offer / Festival")}</h3>
             <div className="space-y-2">{promotions.festivals.filter((f) => festivalPhase(f) !== "ended" || (!!p && f.productIds.includes(p.id))).map((f) => <label key={f.id} className="flex items-start gap-2 text-xs font-bold"><input type="checkbox" name="festival" value={f.id} defaultChecked={!!p && f.productIds.includes(p.id)} className="mt-0.5 h-4 w-4" /><span>{f.name}{f.percent > 0 && <span className="ml-1 rounded-md bg-rose-500 px-1.5 py-0.5 text-white">-{f.percent}%</span>}<span className="ml-1 font-semibold text-mute">({festivalPhase(f) === "live" ? t("LIVE NOW") : festivalPhase(f) === "upcoming" ? t("SCHEDULED") : festivalPhase(f) === "paused" ? t("PAUSED") : t("ENDED")})</span></span></label>)}</div>
             <p className="text-xs text-mute">{t("Tick the festival / event offers this product belongs to. Create them in Promotions.")}</p></section>}

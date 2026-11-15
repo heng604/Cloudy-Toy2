@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { useCart } from "@/components/CartProvider";
-import { FALLBACK_IMG, money, preorderPhase, windowText, dayShort } from "@shared/products";
+import { FALLBACK_IMG, isValidOption, money, preorderPhase, windowText, dayShort } from "@shared/products";
 import type { CartProduct } from "@shared/cartTypes";
+import type { Line } from "@/components/CartProvider";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { usePromotions } from "@/lib/store";
@@ -24,18 +25,20 @@ function CloudArt() {
 
 export default function CartView({ products, telegram = "" }: { products: CartProduct[]; telegram?: string }) {
   const { lines, setQty, clear, ready } = useCart(); const { t } = useI18n(); const { user } = useAuth(); const { promotions } = usePromotions();
-  const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x): x is { l: { id: string; qty: number }; p: CartProduct } => !!x.p);
+  const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x): x is { l: Line; p: CartProduct } => !!x.p);
+  const totalQty = (id: string) => items.reduce((n, x) => n + (x.p.id === id ? x.l.qty : 0), 0); // the same toy in two options shares ONE stock
+  const optBad = (x: { l: Line; p: CartProduct }) => !isValidOption(x.p.options ?? [], x.l.opt); // option missing, or the admin changed the choices since it was added
   const unit = (p: CartProduct) => p.salePrice ?? p.price;
   const subtotal = items.reduce((s, x) => s + unit(x.p) * x.l.qty, 0);
   const saved = items.reduce((s, x) => s + (x.p.salePrice ? (x.p.price - x.p.salePrice) * x.l.qty : 0), 0);
   const count = items.reduce((s, x) => s + x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
   const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), mem = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0) }), autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
-  const gifts = bogoGifts(items.map((x) => ({ productId: x.p.id, category: x.p.category ?? "", qty: x.l.qty, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
+  const gifts = bogoGifts(items.map((x) => ({ productId: x.p.id, category: x.p.category ?? "", qty: x.l.qty, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - totalQty(bp.id))) }] : []; }).filter((g) => g.qty > 0);
   const cartInfo = { subtotalCents: Math.round(subtotal * 100), qty: count }, freeAll = freeShippingRule({ ...cartInfo, area: "PROVINCE" }, promotions.campaigns), freePP = freeAll ?? freeShippingRule({ ...cartInfo, area: "PHNOM_PENH" }, promotions.campaigns);
   const hasPre = items.some((x) => x.p.preorder);
   const closedPre = (p: CartProduct) => !!p.preorder && preorderPhase(p) !== "open"; // each pre-order item has its own dates
-  const blocked = items.some((x) => (x.p.stock ?? Infinity) <= 0 || x.l.qty > (x.p.stock ?? Infinity) || closedPre(x.p));
+  const blocked = items.some((x) => (x.p.stock ?? Infinity) <= 0 || totalQty(x.p.id) > (x.p.stock ?? Infinity) || closedPre(x.p) || optBad(x));
 
   if (!ready) return <div className="h-64" aria-busy="true" />;
 
@@ -65,10 +68,11 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
           {items.map(({ l, p }) => {
             const stock = p.stock ?? Infinity;
             const out = stock <= 0;
-            const over = !out && l.qty > stock;
-            const atMax = l.qty >= stock;
+            const over = !out && totalQty(p.id) > stock;
+            const atMax = totalQty(p.id) >= stock;
+            const needOpt = optBad({ l, p });
             return (
-              <li key={l.id} className="flex gap-4 rounded-xl2 border border-sky-border bg-white p-3 shadow-soft sm:p-4">
+              <li key={`${l.id}|${l.opt ?? ""}`} className="flex gap-4 rounded-xl2 border border-sky-border bg-white p-3 shadow-soft sm:p-4">
                 <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="shrink-0 overflow-hidden rounded-xl bg-sky-pale">
                   <img src={p.image ?? FALLBACK_IMG} alt={p.name} width={112} height={112} loading="lazy" className="h-24 w-24 object-cover sm:h-28 sm:w-28" />
                 </Link>
@@ -77,6 +81,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
                     <div className="min-w-0">
                       {p.category && <p className="text-xs font-semibold uppercase tracking-wide text-mute">{p.category}</p>}
                       <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="block font-extrabold leading-snug hover:underline">{p.name}</Link>
+                      {l.opt && <p className="mt-0.5 text-sm font-semibold text-[#2F5FA8]">{l.opt}</p>}
                       <p className="mt-1 text-sm text-mute">
                         {p.salePrice ? <><span className="font-semibold text-ink">{money(p.salePrice)}</span> <s>{money(p.price)}</s></> : money(p.price)} each
                       </p>
@@ -85,6 +90,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
                   </div>
 
                   {out && <p role="alert" className="text-sm font-semibold text-red-600">Sorry, this toy is out of stock. Please remove it.</p>}
+                  {needOpt && <p role="alert" className="text-sm font-semibold text-red-600">Please choose an option for this toy. <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="underline">Choose option</Link>, then remove this line.</p>}
                   {over && <p role="alert" className="text-sm font-semibold text-red-600">Only {stock} left. Please lower the quantity.</p>}
                   {p.preorder && windowText(p) && (preorderPhase(p) === "open" ? <p className="text-sm font-semibold text-[#A97A0B]">🕒 Pre-order: {windowText(p)}</p>
                     : <p role="alert" className="text-sm font-semibold text-red-600">{preorderPhase(p) === "upcoming" ? `Pre-order opens on ${dayShort(p.preorderStart!)}. Please remove it for now.` : `Pre-order closed on ${dayShort(p.preorderEnd!)}. Please remove it.`}</p>)}
@@ -92,11 +98,11 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
 
                   <div className="flex items-center justify-between">
                     <div className="inline-flex items-center rounded-full border border-sky-border bg-sky-pale p-1">
-                      <button type="button" aria-label={`Decrease ${p.name}`} onClick={() => setQty(l.id, l.qty - 1)} className={iconBtn}>−</button>
+                      <button type="button" aria-label={`Decrease ${p.name}`} onClick={() => setQty(l.id, l.qty - 1, l.opt)} className={iconBtn}>−</button>
                       <span aria-live="polite" className="min-w-8 text-center font-bold">{l.qty}</span>
-                      <button type="button" aria-label={`Increase ${p.name}`} disabled={atMax} onClick={() => setQty(l.id, l.qty + 1)} className={iconBtn}>+</button>
+                      <button type="button" aria-label={`Increase ${p.name}`} disabled={atMax} onClick={() => setQty(l.id, l.qty + 1, l.opt)} className={iconBtn}>+</button>
                     </div>
-                    <button type="button" onClick={() => setQty(l.id, 0)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-mute hover:bg-sky-pale hover:text-ink">
+                    <button type="button" onClick={() => setQty(l.id, 0, l.opt)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-mute hover:bg-sky-pale hover:text-ink">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" /></svg>
                       {t("Remove")}
                     </button>

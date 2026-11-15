@@ -68,4 +68,6 @@ export const KM_EXTRA: Record<string, string> = {
   "Thank you": "សូមអរគុណ", "for being here": "ដែលនៅទីនេះ", "Delivery Across Cambodia": "ដឹកជញ្ជូនទូទាំងកម្ពុជា", "Careful and on time": "ប្រុងប្រយ័ត្ន និងទាន់ពេល", "Cute Toys & Accessories": "ប្រដាប់ក្មេងលេង និងគ្រឿងអលង្ការគួរឱ្យស្រលាញ់",
   "Our Products": "ផលិតផលរបស់យើង", "Fresh toys just landed!": "ប្រដាប់លេងថ្មីៗទើបមកដល់!", "Reserve yours before it sells out!": "កក់ទុកមុនគេ មុនអស់ពីស្តុក!", "Every little cloud, all in one place!": "ពពកតូចៗទាំងអស់ នៅកន្លែងតែមួយ!", "Shop the sky!": "ទិញទំនិញលើមេឃ!", "cute finds waiting for you": "ផលិតផលគួរឱ្យស្រលាញ់កំពុងរង់ចាំអ្នក",
   "New Arrivals": "មកថ្មី", "Be the first to get our newest arrivals!": "ក្លាយជាអ្នកដំបូងដែលទទួលបានទំនិញថ្មីរបស់យើង!", "Add to favourites": "បន្ថែមក្នុងបញ្ជីចូលចិត្ត", "Remove from favourites": "ដកចេញពីបញ្ជីចូលចិត្ត",
+  // product options (admin editor + shop)
+  "Choose options": "ជ្រើសរើសជម្រើស", "Add option group": "បន្ថែមក្រុមជម្រើស", "Add a choice": "បន្ថែមជម្រើស", "Remove group": "លុបក្រុមជម្រើស", "Type a choice, then press Enter": "វាយជម្រើស រួចចុច Enter", "Option name (e.g. Character, Size, Color)": "ឈ្មោះជម្រើស (ឧ. តួអង្គ ទំហំ ពណ៌)", "Customers click one choice from each group before adding to cart.": "អតិថិជនចុចជ្រើសរើសមួយពីក្រុមនីមួយៗ មុនដាក់ចូលកន្ត្រក។",
 };

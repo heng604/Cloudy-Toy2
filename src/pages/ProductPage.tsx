@@ -3,7 +3,7 @@ import ProductGallery from "@/components/ProductGallery";
 import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
 import NotFound from "@/components/NotFound";
-import { badgeLabels, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor, stockStatus, preorderPhase, windowText, dayShort } from "@shared/products";
+import { parseOptions, badgeLabels, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor, stockStatus, preorderPhase, windowText, dayShort } from "@shared/products";
 import { useI18n } from "@/lib/i18n";
 import { useListedProducts, usePromotions } from "@/lib/store";
 import { useTitle } from "@/lib/title";
@@ -33,9 +33,8 @@ export default function ProductPage() {
           {pre && <p className="rounded-xl2 bg-[#FFF6D8] p-3 text-sm"><b>Pre-order:</b> pay a {promotions.preorder.depositPercent}% deposit when you order, the rest when it is dispatched. Estimated dispatch: {promotions.preorder.dispatchText}.{windowText(p) && <> <b>Pre-order dates:</b> {windowText(p)}.</>}</p>}
           {pre && preorderPhase(p) === "upcoming" && <p role="alert" className="rounded-xl2 bg-sky-pale p-3 text-sm font-bold">This pre-order opens on {dayShort(p.preorderStart!)}.</p>}
           {pre && preorderPhase(p) === "closed" && <p role="alert" className="rounded-xl2 bg-red-100 p-3 text-sm font-bold text-red-800">This pre-order closed on {dayShort(p.preorderEnd!)}.</p>}
-          {p.variants && <p className="text-sm"><b>Options:</b> {p.variants}</p>}
           {p.description && <p className="whitespace-pre-line leading-relaxed text-ink/90">{p.description}</p>}
-          <AddButton key={p.id} id={p.id} disabled={p.stock <= 0 || (pre && preorderPhase(p) !== "open")} />
+          <AddButton key={p.id} id={p.id} options={parseOptions(p.variants)} disabled={p.stock <= 0 || (pre && preorderPhase(p) !== "open")} />
           <p className="text-sm text-mute">SKU {p.sku}{p.brand ? ` · ${p.brand}` : ""} · Delivery across Cambodia</p>
         </div></div></div>
     {more.length > 0 && <section aria-labelledby="more-h"><div className="mb-4 flex items-end justify-between gap-3"><h2 id="more-h" className="text-2xl font-extrabold">More toys you may like</h2><Link to="/shop" className="font-semibold underline">See all</Link></div>

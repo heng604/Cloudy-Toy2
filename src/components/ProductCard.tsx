@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { type Product, FALLBACK_IMG, badgeLabels, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor } from "@shared/products";
+import { Link, useNavigate } from "react-router-dom";
+import { type Product, FALLBACK_IMG, parseOptions, badgeLabels, LABEL_CLASS, LABEL_SHORT, money, isPreorder, nameFor } from "@shared/products";
 import { useCart } from "./CartProvider";
 import { useI18n } from "@/lib/i18n";
 import SafeImg from "./SafeImg";
@@ -9,7 +9,8 @@ import { productPromo } from "@shared/promotions";
 const CartIcon = ({ s = 16 }: { s?: number }) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.400" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="9" cy="20" r="1.500" /><circle cx="18" cy="20" r="1.500" /><path d="M2 3h3l2.700 12.500a1.500 1.500 0 0 0 1.500 1.200h8.600a1.500 1.500 0 0 0 1.500-1.100L21 7H6" /></svg>;
 /** Shop card: white rounded card, picture on a sky background with badge + heart, pink price (with the "% OFF" pill), blue Add to Cart button. */
 export default function ProductCard({ p, compact = false }: { p: Product; compact?: boolean }) {
-  const { add } = useCart(); const { t, lang } = useI18n(); const { promotions } = usePromotions(); const promo = productPromo(p, promotions.campaigns, promotions.festivals); const { has, toggle } = useWishlist();
+  const { add } = useCart(); const nav = useNavigate(); const hasOpt = parseOptions(p.variants).length > 0; // a product with options must be opened so the customer can click one
+  const { t, lang } = useI18n(); const { promotions } = usePromotions(); const promo = productPromo(p, promotions.campaigns, promotions.festivals); const { has, toggle } = useWishlist();
   const img = p.images[0]; const out = p.stock <= 0; const pre = isPreorder(p); const name = nameFor(p, lang); const liked = has(p.id);
   // price: the promotion price when a campaign / festival applies, otherwise the product's own sale price, otherwise the normal price
   const promoOn = promo.offCents > 0, saleOn = !promoOn && !!p.salePrice && p.salePrice < p.price;
@@ -37,7 +38,7 @@ export default function ProductCard({ p, compact = false }: { p: Product; compac
           {percent > 0 && <span className="rounded-full bg-[#FF5C8A] px-2.5 py-0.5 text-[11px] font-extrabold uppercase text-white sm:text-xs">{percent}% {t("OFF")}</span>}
         </p>
         {compact && <p className={`flex items-center gap-1 text-[11px] font-bold ${out ? "text-slate-500" : "text-[#2F8F5B]"}`}><span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${out ? "bg-slate-400" : "bg-[#2F8F5B]"}`} />{out ? t("Out of stock") : t("In Stock")}</p>}
-        <button type="button" disabled={out} onClick={() => add(p.id)} className={`btn-blue mt-auto flex w-full items-center justify-center gap-2 rounded-full font-bold disabled:cursor-not-allowed ${compact ? "min-h-8 text-xs" : "min-h-11 text-sm sm:text-base"}`}>{!out && <CartIcon s={compact ? 13 : 17} />}{out ? t("Out of stock") : pre ? t("Pre-order now") : t("Add to cart")}</button>
+        <button type="button" disabled={out} onClick={() => (hasOpt ? nav(`/product/${p.slug}`) : add(p.id))} className={`btn-blue mt-auto flex w-full items-center justify-center gap-2 rounded-full font-bold disabled:cursor-not-allowed ${compact ? "min-h-8 text-xs" : "min-h-11 text-sm sm:text-base"}`}>{!out && <CartIcon s={compact ? 13 : 17} />}{out ? t("Out of stock") : hasOpt ? t("Choose options") : pre ? t("Pre-order now") : t("Add to cart")}</button>
       </div>
     </article>
   );
