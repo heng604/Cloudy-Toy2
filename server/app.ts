@@ -41,7 +41,7 @@ import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier
 import { getOverrides, setOverride } from "./lib/memberStore";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
 import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
-import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort } from "../shared/products";
+import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort, OPTION_LIMITS, isValidOption, parseOptions, serializeOptions } from "../shared/products";
 
 import type { StoredOrder } from "../shared/types";
 import { publicOrder } from "./lib/publicOrder";
@@ -112,7 +112,7 @@ const noMember = { spendCents: 0, tier: null as Tier | null, used: {} as Record<
 /* ---------------- public: checkout ---------------- */
 const Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
-  lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99) })).min(1).max(50),
+  lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99), option: z.string().trim().max(OPTION_LIMITS.selected).optional() })).min(1).max(50),
   area: z.enum(["PHNOM_PENH", "PROVINCE"]), province: z.enum(PROVINCE_NAMES).optional(), method: z.enum(["COD", "QR_IMAGE", "BAKONG"]), code: z.string().trim().max(40).optional(), preorderPay: z.enum(["deposit", "full"]).optional(),
 });
 /** A pre-order product's own open date and deadline, copied onto its order line (empty for normal products or when no dates are set). */
@@ -135,6 +135,10 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   const promos = await getPromotions(); const member = await memberOf(acct?.email, promos.membership).catch(() => noMember); const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
   const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds([...new Set([...ids, ...bonusIds])]))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
+  for (const l of lines) { // the option the customer clicked must be a real choice of that product (and every product that has options needs one)
+    const p = products.find((x) => x.id === l.productId); if (!p) continue;
+    if (!isValidOption(parseOptions(p.variants), l.option)) return res.status(400).json({ error: `Please choose an option for "${p.name}" in your cart (the choices may have changed).` });
+  }
   const catalog = catalogOf(products.filter((p) => ids.includes(p.id))); let usedCode: string | undefined;
   try {
     const t00 = computeTotals(lines, catalog, 0); const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
@@ -160,7 +164,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     if (hasPre && method === "COD") return res.status(400).json({ error: "Pre-order items are paid with a deposit online. Please choose Bakong or QR payment." });
     const orderNumber = `CT-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 5).toUpperCase()}`;
     const order: StoredOrder = { orderNumber, createdAt: new Date().toISOString(), area, ...(area === "PROVINCE" ? { province: parsed.data.province } : {}), method, customer,
-      items: t.items.map((i) => ({ productId: i.productId, sku: byId.get(i.productId)!.sku, name: i.name, qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents, ...itemDates(byId.get(i.productId)) })),
+      items: t.items.map((i, n) => { const option = lines[n]?.option?.trim() || undefined; return { productId: i.productId, sku: byId.get(i.productId)!.sku, name: option ? `${i.name} (${option})` : i.name, ...(option ? { option } : {}), qty: i.qty, unitCents: i.unitCents, lineCents: i.lineCents, ...itemDates(byId.get(i.productId)) }; }),
       subtotalCents: t.subtotalCents, discountCents: t.discountCents, shippingCents: t.shippingCents, totalCents: t.totalCents, currency: "USD" as const, ...(usedCode ? { discountCode: usedCode } : {}), ...(auto.length ? { autoDiscounts: auto } : {}), ...(member.tier ? { memberTier: member.tier.name } : {}), ...(memberPerks.length ? { memberPerks } : {}), ...(hasPre ? { preorder: preorderSplit(t.totalCents, promos.preorder, parsed.data.preorderPay === "full") } : {}), ...(acct?.email ? { accountEmail: acct.email.toLowerCase() } : {}),
       paymentStatus: "PENDING" as const, paymentReference: `PAY-${orderNumber}`, email: { status: "NONE" as const, attempts: 0 } };
     // Buy X Get Y: the free bonus items are added to the order at $0 and taken from stock (only as many as are in stock)
@@ -434,7 +438,7 @@ const Schema = z.object({
   name: z.string().trim().min(2, "Name needs at least 2 characters").max(120),
   sku: z.string().trim().min(2, "SKU needs at least 2 characters").max(40).regex(/^[A-Za-z0-9_#*-]+$/, "SKU: letters, numbers and the symbols # * _ - only (no spaces)"),
   category: z.string().trim().min(1, "Category is required").max(40),
-  nameKm: z.string().trim().max(120), brand: z.string().trim().max(60), uom: z.string().trim().max(20), variants: z.string().trim().max(300),
+  nameKm: z.string().trim().max(120), brand: z.string().trim().max(60), uom: z.string().trim().max(20), variants: z.string().trim().max(OPTION_LIMITS.stored),
   description: z.string().trim().max(2000), price: z.coerce.number().min(0).max(100000), stock: z.coerce.number().int("Stock must be a whole number").min(0).max(100000),
 });
 /** Every category with its product count: categories that products use, plus empty ones the admin added in Manage Categories. */
@@ -515,7 +519,7 @@ admin.post("/products/save", upload.any(), wrap(async (req, res) => {
     const small = new Uint8Array(await sharp(bytes).rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer());
     const src = await uploadProductImage(safeFileName(d.sku, "webp"), small, "image/webp"); uploaded.push(src); images.push({ src, alt: d.name });
   }
-  let savedId = id; try { savedId = await upsertProduct({ id: id || undefined, name: d.name, nameKm: d.nameKm, brand: d.brand, uom: d.uom, variants: d.variants, labels, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, ...(dates.start ? { preorderStart: dates.start, preorderEnd: dates.end } : {}), active: fld(req, "active") === "on" }); }
+  let savedId = id; try { savedId = await upsertProduct({ id: id || undefined, name: d.name, nameKm: d.nameKm, brand: d.brand, uom: d.uom, variants: serializeOptions(parseOptions(d.variants)), labels, sku: d.sku, category: d.category, description: d.description, price: d.price, stock: d.stock, images, ...(dates.start ? { preorderStart: dates.start, preorderEnd: dates.end } : {}), active: fld(req, "active") === "on" }); }
   catch (e) { await deleteProductImages(uploaded); return fail(hint(e instanceof Error ? e.message : "") || "Could not save to the database. Nothing was lost; please try again."); }
   await deleteProductImages(removed); // only after the product row is safely saved
   if (fld(req, "festivalsSent") === "1" && savedId) { // the "Special offer / festival" ticks in the product window (only when the form sent them)

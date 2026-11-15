@@ -53,3 +53,49 @@ export function slugify(s: string) { return s.toLowerCase().normalize("NFKD").re
 export type ProductRow = { id: string; slug: string; name: string; sku: string; price: number | string; sale_price: number | string | null; stock: number; created_at: string; category: string | null; description: string | null; images: { src: string; alt: string }[] | null; active: boolean; out_of_stock_at?: string | null; name_km?: string | null; brand?: string | null; uom?: string | null; variants?: string | null; labels?: string[] | null; preorder_start?: string | null; preorder_end?: string | null };
 export const toProduct = (r: ProductRow): Product => ({ id: r.id, slug: r.slug, name: r.name, sku: r.sku, price: Number(r.price), stock: r.stock, category: r.category ?? "", createdAt: r.created_at, description: r.description ?? "", images: r.images ?? [], active: r.active, ...(r.out_of_stock_at ? { outOfStockAt: r.out_of_stock_at } : {}), ...(r.preorder_start && r.preorder_end ? { preorderStart: String(r.preorder_start).slice(0, 10), preorderEnd: String(r.preorder_end).slice(0, 10) } : {}),
   ...(r.name_km ? { nameKm: r.name_km } : {}), ...(r.brand ? { brand: r.brand } : {}), ...(r.uom ? { uom: r.uom } : {}), ...(r.variants ? { variants: r.variants } : {}), ...(r.labels?.length ? { labels: r.labels.filter((l) => LABEL_IDS.includes(l)) as ProductLabel[] } : {}) });
+
+/* ---------------- Product options (what the customer clicks: Character, Size, Color ...) ----------------
+ * The admin adds option GROUPS to a product (e.g. "Character" with the choices Xavier, Zayne, Rafayel, Sylus).
+ * They are saved in the existing products.variants text column, as JSON, so no database change is needed.
+ * Old products that still have plain text such as "Character: Xavier, Zayne" or "Size: 11cm, Color: Pink" are read too. */
+export type OptionGroup = { name: string; values: string[] };
+export const OPTION_LIMITS = { groups: 6, values: 30, name: 30, value: 40, stored: 8000, selected: 300 } as const;
+/** What sits between two chosen options on an order line: "Character: Xavier · Size: 11cm". */
+export const OPTION_SEP = " · ";
+const cleanTxt = (s: unknown, max: number) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+/** Trim, drop empty/duplicate choices and empty groups. Never throws. */
+export function cleanOptionGroups(input: unknown): OptionGroup[] {
+  if (!Array.isArray(input)) return []; const out: OptionGroup[] = [];
+  for (const g of input) {
+    const name = cleanTxt((g as OptionGroup)?.name, OPTION_LIMITS.name); const raw = Array.isArray((g as OptionGroup)?.values) ? (g as OptionGroup).values : [];
+    const values = [...new Set(raw.map((v) => cleanTxt(v, OPTION_LIMITS.value)).filter(Boolean))].slice(0, OPTION_LIMITS.values);
+    if (name && values.length) { const same = out.find((o) => o.name.toLowerCase() === name.toLowerCase()); if (same) same.values = [...new Set([...same.values, ...values])].slice(0, OPTION_LIMITS.values); else out.push({ name, values }); }
+  }
+  return out.slice(0, OPTION_LIMITS.groups);
+}
+/** Read a product's options. JSON (saved by the admin form) or the old plain text: pieces split by commas, a piece with ":" starts a new group. */
+export function parseOptions(v?: string | null): OptionGroup[] {
+  const s = String(v ?? "").trim(); if (!s) return [];
+  if (s.startsWith("[")) { try { return cleanOptionGroups(JSON.parse(s)); } catch { /* fall through to plain text */ } }
+  const groups: { name: string; values: string[] }[] = [];
+  for (const piece of s.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean)) {
+    const i = piece.indexOf(":");
+    if (i > 0) { groups.push({ name: piece.slice(0, i), values: piece.slice(i + 1).trim() ? [piece.slice(i + 1)] : [] }); }
+    else if (groups.length) groups[groups.length - 1].values.push(piece); else groups.push({ name: "Option", values: [piece] });
+  }
+  return cleanOptionGroups(groups);
+}
+/** The text saved in products.variants ("" when there are no options). */
+export const serializeOptions = (groups: unknown): string => { const g = cleanOptionGroups(groups); return g.length ? JSON.stringify(g) : ""; };
+/** "Character: Xavier · Size: 11cm" from the customer's picks (one choice per group, in the admin's group order). */
+export const optionText = (groups: OptionGroup[], picks: Record<string, string>): string => groups.filter((g) => picks[g.name]).map((g) => `${g.name}: ${picks[g.name]}`).join(OPTION_SEP);
+/** Is this exactly one valid choice from every group of the product? (no options on the product = the option must be empty) */
+export function isValidOption(groups: OptionGroup[], opt?: string | null): boolean {
+  const s = String(opt ?? "").trim(); if (!groups.length) return s === "";
+  const walk = (gi: number, rest: string): boolean => {
+    if (gi === groups.length) return rest === "";
+    for (const v of groups[gi].values) { const piece = `${groups[gi].name}: ${v}`; if (rest === piece) { if (gi === groups.length - 1) return true; } else if (rest.startsWith(piece + OPTION_SEP) && walk(gi + 1, rest.slice(piece.length + OPTION_SEP.length))) return true; }
+    return false;
+  };
+  return walk(0, s);
+}
