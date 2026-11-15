@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 import { useResource, load, refreshPrefix } from "./data";
 import { DEFAULT_SETTINGS, type Settings } from "@shared/types";
 import { toProduct, slugify, isShopVisible, type Product, type ProductRow } from "@shared/products";
-import { hiddenFrom, resolvePage, type PagesStore, type PageSlug } from "@shared/pages";
+import { hiddenFrom, resolvePage, customLinks, type PagesStore, type PageSlug } from "@shared/pages";
 import { DEFAULT_PROMOTIONS, normalizePromotions, type Promotions } from "@shared/promotions";
 // Local preview without Supabase keys: sample products so the shop can be tried right after extracting.
 const DEMO_PRODUCTS: Product[] = [
@@ -33,7 +33,7 @@ export const useProducts = () => useResource("products", fetchProducts, { persis
 /** Products the shop shows: out-of-stock ones disappear after 2 days until the admin adds stock again. */
 export const useListedProducts = () => { const r = useProducts(); const data = useMemo(() => r.data?.filter((p) => isShopVisible(p)), [r.data]); return { ...r, data }; };
 export const useSettings = () => { const r = useResource("settings", fetchSettings, { persist: true, staleMs: 30_000 }); return { ...r, settings: r.data ?? DEFAULT_SETTINGS }; };
-export const usePages = () => { const r = useResource("pages", fetchPages, { persist: true, staleMs: 30_000 }); return { ...r, hidden: hiddenFrom(r.data ?? {}), page: (slug: PageSlug) => (r.data ? resolvePage(r.data, slug) : null) }; };
+export const usePages = () => { const r = useResource("pages", fetchPages, { persist: true, staleMs: 30_000 }); return { ...r, hidden: hiddenFrom(r.data ?? {}), links: customLinks(r.data ?? {}), page: (slug: PageSlug) => (r.data ? resolvePage(r.data, slug) : null) }; };
 /** Start downloading as soon as the script loads, before React has rendered. */
 export function prefetchStore() { if (!supabase) return; load("products", fetchProducts, true).catch(() => undefined); load("settings", fetchSettings, true).catch(() => undefined); load("pages", fetchPages, true).catch(() => undefined); }
 export const refreshStore = () => refreshPrefix("");

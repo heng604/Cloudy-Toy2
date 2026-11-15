@@ -1,5 +1,5 @@
 import { usePages, useSettings, usePromotions } from "@/lib/store";
-import { PAGE_DEFS, type PageSlug } from "@shared/pages";
+import { isBuiltin, type PageSlug } from "@shared/pages";
 import { TELEGRAM_FALLBACK } from "@/lib/supabase";
 import { useTitle } from "@/lib/title";
 import NotFound from "./NotFound";
@@ -8,20 +8,18 @@ const card = "group flex items-center gap-4 rounded-xl2 border border-sky-border
 const icon = "grid h-12 w-12 shrink-0 place-items-center rounded-full";
 
 /** Public page whose text is written by the admin. "## Heading" makes a heading; blank lines separate paragraphs. Plain text only (no HTML). */
-export default function ContentPage({ slug, title }: { slug: PageSlug; title: string }) {
-  useTitle(title);
+export default function ContentPage({ slug, title }: { slug: PageSlug; title?: string }) {
   const { page: getPage, loading } = usePages(); const { settings: s } = useSettings(); const { promotions } = usePromotions();
-  const def = PAGE_DEFS.find((d) => d.slug === slug)!;
-  const page = getPage(def.slug);
+  const page = getPage(slug); useTitle(title ?? page?.title ?? "");
   if (!page) return loading ? <div className="max-w-2xl animate-pulse space-y-4"><div className="h-9 w-48 rounded-full bg-sky-pale" /><div className="h-4 w-full rounded-full bg-sky-pale" /><div className="h-4 w-3/4 rounded-full bg-sky-pale" /></div> : null;
-  if (page.deleted) return <NotFound />;
+  if (page.deleted || (!isBuiltin(slug) && !page.custom)) return <NotFound />;
   const isContact = slug === "contact";
   // Admin sets the link in Admin > Settings. VITE_TELEGRAM_URL is an optional fallback (e.g. https://t.me/your_username).
   const telegram = isContact ? s.telegramUrl || TELEGRAM_FALLBACK : "";
   /** "@name" from an Instagram link such as https://www.instagram.com/toyscloudy/ (empty when it cannot be read). */
   const igHandle = (() => { try { const seg = new URL(s.instagramUrl).pathname.split("/").filter(Boolean)[0]; return seg ? `@${seg.replace(/^@/, "")}` : ""; } catch { return ""; } })();
   const blocks = page.content.trim().split(/\n\s*\n/).filter(Boolean);
-  return (<div className="max-w-2xl space-y-4"><h1 className="text-3xl font-extrabold">{def.title}</h1>
+  return (<div className="max-w-2xl space-y-4"><h1 className="text-3xl font-extrabold">{page.title}</h1>
     {blocks.length === 0 ? <p className="text-mute">This page has not been written yet.</p> : blocks.map((b, i) => b.startsWith("## ")
       ? <h2 key={i} className="pt-2 text-xl font-extrabold">{b.slice(3).trim()}</h2>
       : <p key={i} className="whitespace-pre-line leading-relaxed text-ink">{b}</p>)}

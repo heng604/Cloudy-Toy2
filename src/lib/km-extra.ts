@@ -1,6 +1,7 @@
 // More Khmer text (English text is the key). Merged into the main dictionary in i18n.tsx.
 export const KM_EXTRA: Record<string, string> = {
   // shop pages
+  "First page": "ទំព័រដំបូង", "Back": "ថយក្រោយ", "Next": "បន្ទាប់", "Page": "ទំព័រ",
   "Main menu": "ម៉ឺនុយមេ", "the free gift": "អំណោយឥតគិតថ្លៃ", "Applied automatically at checkout.": "អនុវត្តដោយស្វ័យប្រវត្តិពេលទូទាត់។", "Limited Time Only!": "មានតែរយៈពេលកំណត់!", "Shop now and enjoy special savings!": "ទិញឥឡូវនេះ ហើយទទួលបានការសន្សំពិសេស!", "Happy Shopping": "ទិញទំនិញឱ្យសប្បាយ",
   "Favourite": "ចូលចិត្ត", "Add to Cart": "ដាក់ចូលកន្ត្រក", "Don't miss out on these amazing deals!": "កុំខកខានការផ្តល់ជូនដ៏អស្ចារ្យទាំងនេះ!", "Collect more happiness, for less!": "ប្រមូលក្ដីសុខបន្ថែម ក្នុងតម្លៃថោកជាង!", "UP TO": "រហូតដល់", "OFF": "បញ្ចុះ",
   "Saved! It is filled in at checkout.": "បានរក្សាទុក! នឹងបំពេញដោយស្វ័យប្រវត្តិពេលទូទាត់។", "Go to cart": "ទៅកន្ត្រក", "No special offers right now. Please check back soon!": "បច្ចុប្បន្នមិនមានការផ្តល់ជូនពិសេសទេ។ សូមត្រឡប់មកមើលឆាប់ៗ!", "Filter by": "ត្រងតាម",

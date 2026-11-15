@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
-import { useSettings } from "@/lib/store";
+import { useSettings, usePages } from "@/lib/store";
 import { TELEGRAM_FALLBACK } from "@/lib/supabase";
 import CloudMascot from "./CloudMascot";
 const link = "whitespace-nowrap transition hover:text-[#1F4E9C] hover:underline";
@@ -23,7 +23,7 @@ const InstagramIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill
 const FacebookIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.600 21v-8h2.700l.5-3.200h-3.200V7.900c0-.9.400-1.700 1.800-1.700h1.500V3.400s-1.300-.2-2.600-.2c-2.600 0-4.300 1.600-4.300 4.400v2.200H7.300V13h2.700v8z" /></svg>;
 /** Footer in the shop style: cloud edge, thank-you note with the cloud mascots, four promises, round social buttons, then the policy links and copyright. Policy pages are written by the admin in Admin > Pages. */
 export default function Footer({ hidden = [] }: { logoUrl?: string; hidden?: string[] }) {
-  const { t } = useI18n(); const { settings: s } = useSettings(); const tg = s.telegramUrl || TELEGRAM_FALLBACK;
+  const { t } = useI18n(); const { settings: s } = useSettings(); const { links: extra } = usePages(); const tg = s.telegramUrl || TELEGRAM_FALLBACK;
   return (<footer className="relative mt-10 text-xs text-[#2F4D7A]">
     <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-[33px] h-[34px]" style={{ backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(SCALLOP)}")`, backgroundRepeat: "repeat-x", backgroundSize: "auto 34px" }} />
     <div className="bg-[#E3F0FF]">
@@ -46,6 +46,7 @@ export default function Footer({ hidden = [] }: { logoUrl?: string; hidden?: str
           {!hidden.includes("shipping") && !hidden.includes("preorder") && <Dot />}
           {!hidden.includes("preorder") && <Link to="/preorder" className={link}>{t("Pre-Order FAQ")}</Link>}
           {!hidden.includes("contact") && <><Dot /><Link to="/contact" className={link}>{t("Contact Us")}</Link></>}
+          {extra.map((l) => <span key={l.slug} className="contents"><Dot /><Link to={`/${l.slug}`} className={link}>{l.title}</Link></span>)}
         </nav>
         <p className="mt-3 text-center text-[11px] text-[#4A6FA5]">© {new Date().getFullYear()} Cloudy Toys · {t("Cute Toys & Accessories")} · {t("All rights reserved.")}</p>
       </div>

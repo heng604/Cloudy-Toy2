@@ -52,6 +52,7 @@ function Shell() {
           <Route path="/contact" element={<ContentRoute slug="contact" title="Contact" />} />
           <Route path="/shipping" element={<ContentRoute slug="shipping" title="Shipping Policy" />} />
           <Route path="/preorder" element={<ContentRoute slug="preorder" title="Pre-Order FAQ" />} />
+          <Route path="/:slug" element={<ContentRoute />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

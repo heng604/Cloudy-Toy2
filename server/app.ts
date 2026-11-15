@@ -17,7 +17,7 @@ import { resolveDiscount, listStoreDiscounts, createStoreDiscount, updateStoreDi
 import { saveOrder, getOrder, updateOrder, markPaidOnce, listAllOrders, listOrdersByEmail, deleteAllOrders, listAdminOrders, listPendingBakong, markUnpaidOnce, listPendingBakongAll, updatePendingOrder, listProofPaths } from "./lib/store";
 import { getSettings, saveSettings, DEFAULT_SETTINGS, beatWatcher, watcherSeenAt } from "./lib/settings";
 import type { Settings } from "../shared/types";
-import { getAllPages, savePage } from "./lib/pages";
+import { getAllPages, savePage, readStore, createCustomPage, removeCustomPage } from "./lib/pages";
 import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItemsEmail, sendBakongPaidEmail } from "./lib/email";
 import { methodOn } from "../shared/payOptions";
 import { bakongEnabled, makeKhqr, checkPaid, bakongName, bakongDiagnose, matchPaid, watcherSecret, QR_MAX, QR_GRACE_MS } from "./lib/bakong";
@@ -40,7 +40,7 @@ import { can } from "../shared/roles";
 import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier, MAX_TIERS, type Tier } from "../shared/membership";
 import { getOverrides, setOverride } from "./lib/memberStore";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule } from "../shared/promotions";
-import { isSlug, MAX_CONTENT, PAGE_DEFS } from "../shared/pages";
+import { isSlug, isBuiltin, MAX_CONTENT, MAX_TITLE, MAX_CUSTOM_PAGES, SLUG_RE, RESERVED_SLUGS, PAGE_DEFS, allDefs } from "../shared/pages";
 import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort, OPTION_LIMITS, isValidOption, parseOptions, serializeOptions, pruneOptionImages } from "../shared/products";
 
 import type { StoredOrder } from "../shared/types";
@@ -545,14 +545,32 @@ admin.post("/products/:id/stock", wrap(async (req, res) => { const n = Number(re
 // pages
 admin.get("/pages", wrap(async (_req, res) => res.json({ pages: await getAllPages() })));
 admin.post("/pages/save", wrap(async (req, res) => {
-  const slug = String(req.body?.slug ?? ""); if (!isSlug(slug)) return res.json({ error: "Unknown page" });
+  const slug = String(req.body?.slug ?? ""); if (!isSlug(slug, await readStore())) return res.json({ error: "Unknown page" });
   const content = String(req.body?.content ?? "").replace(/\r\n/g, "\n").trim();
   if (content.length > MAX_CONTENT) return res.json({ error: `Too long (max ${MAX_CONTENT} characters)` });
-  await savePage(slug, { content, deleted: false }); res.json({ ok: true });
+  const patch: { content: string; deleted: boolean; title?: string } = { content, deleted: false };
+  if (!isBuiltin(slug) && req.body?.title !== undefined) { const title = String(req.body.title).trim().slice(0, MAX_TITLE); if (!title) return res.json({ error: "Page title is required" }); patch.title = title; }
+  await savePage(slug, patch); res.json({ ok: true });
 }));
-/** "Delete" hides the page and its footer link and keeps the text, so Restore brings it back. */
-admin.post("/pages/:slug/delete", wrap(async (req, res) => { const d = PAGE_DEFS.find((p) => p.slug === req.params.slug); if (!d || !d.deletable) return res.json({ error: "This page cannot be deleted" }); await savePage(d.slug, { deleted: true }); res.json({ ok: true }); }));
-admin.post("/pages/:slug/restore", wrap(async (req, res) => { const d = PAGE_DEFS.find((p) => p.slug === req.params.slug); if (!d) return res.json({ error: "Unknown page" }); await savePage(d.slug, { deleted: false }); res.json({ ok: true }); }));
+/** New custom page: the admin picks a title and a web address (lowercase, digits, dashes). It appears in the shop footer right away. */
+admin.post("/pages/create", wrap(async (req, res) => {
+  const title = String(req.body?.title ?? "").trim().slice(0, MAX_TITLE); if (!title) return res.json({ error: "Page title is required" });
+  const slug = String(req.body?.slug ?? "").trim().toLowerCase();
+  if (!SLUG_RE.test(slug) || slug.length > 40) return res.json({ error: "Web address: use lowercase letters, numbers and dashes only (e.g. gift-guide)" });
+  if (RESERVED_SLUGS.includes(slug) || isBuiltin(slug)) return res.json({ error: "That web address is already used by the shop. Pick another." });
+  const content = String(req.body?.content ?? "").replace(/\r\n/g, "\n").trim(); if (content.length > MAX_CONTENT) return res.json({ error: `Too long (max ${MAX_CONTENT} characters)` });
+  if (allDefs(await readStore()).filter((d) => d.custom).length >= MAX_CUSTOM_PAGES) return res.json({ error: `You can have up to ${MAX_CUSTOM_PAGES} custom pages` });
+  if (!(await createCustomPage(slug, title, content))) return res.json({ error: "That web address is already used. Pick another." });
+  res.json({ ok: true, slug });
+}));
+/** "Delete" hides a built-in page and its footer link (text kept, Restore brings it back). A custom page is deleted for good. */
+admin.post("/pages/:slug/delete", wrap(async (req, res) => {
+  const slug = String(req.params.slug);
+  if (!isBuiltin(slug)) { return res.json((await removeCustomPage(slug)) ? { ok: true } : { error: "Unknown page" }); }
+  const d = PAGE_DEFS.find((p) => p.slug === slug); if (!d || !d.deletable) return res.json({ error: "This page cannot be deleted" });
+  await savePage(d.slug, { deleted: true }); res.json({ ok: true });
+}));
+admin.post("/pages/:slug/restore", wrap(async (req, res) => { const slug = String(req.params.slug); if (!isSlug(slug, await readStore())) return res.json({ error: "Unknown page" }); await savePage(slug, { deleted: false }); res.json({ ok: true }); }));
 
 // discounts: the admin creates codes worth 10-50% off the cart subtotal (customers type them at checkout)
 admin.get("/discounts", wrap(async (_req, res) => res.json({ codes: await listStoreDiscounts() })));

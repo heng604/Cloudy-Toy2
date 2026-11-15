@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import Pagination from "@/components/Pagination";
 import ProductCard from "@/components/ProductCard";
 import Skeleton from "@/components/Skeleton";
 import SectionHead from "@/components/SectionHead";
@@ -35,9 +37,12 @@ function ProductsBanner({ type }: { type?: string }) {
     </div>
   </section>);
 }
+const PER_PAGE = 16; // product cards on each page of the shop
 export default function Shop() {
   const { t, lang } = useI18n(); useTitle(t("Product"));
   const [sp] = useSearchParams(); const { data: all } = useListedProducts(); const { promotions } = usePromotions();
+  const pageParam = sp.get("page");
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [pageParam]); // new page = start at the top
   if (!all) return <Skeleton />;
   const q = (sp.get("q") ?? "").toLowerCase(), category = sp.get("category"), sort = sp.get("sort"), type = LABELS.find((l) => l.id === sp.get("type")), sale = sp.get("sale") === "1", fid = sp.get("festival");
   if (sale) return <SpecialOffers all={all} festivalId={fid} />; // the Special Offer button: event hero, promotion cards, offer products
@@ -45,6 +50,9 @@ export default function Shop() {
   const now = (p: (typeof list)[number]) => productPromo(p, promotions.campaigns, promotions.festivals).finalCents; // price after any category / festival discount
   if (sort === "price-asc") list = [...list].sort((a, b) => now(a) - now(b));
   if (sort === "price-desc") list = [...list].sort((a, b) => now(b) - now(a));
+  const pages = Math.max(1, Math.ceil(list.length / PER_PAGE)); const page = Math.min(pages, Math.max(1, Math.floor(Number(pageParam)) || 1));
+  const shown = list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const pageLink = (n: number) => { const q2 = new URLSearchParams(sp); if (n <= 1) q2.delete("page"); else q2.set("page", String(n)); const qs = q2.toString(); return qs ? `/shop?${qs}` : "/shop"; };
   const title = category ?? (type ? (lang === "km" ? type.km : type.en) : t("All Products"));
   const cats = categoriesOf(all); const small = "text-sm text-[#4A6FA5] hover:text-[#1F4E9C] hover:underline";
   return (<div>
@@ -58,5 +66,6 @@ export default function Shop() {
       {LABELS.map((l) => <Link key={l.id} to={`/shop?type=${l.id}`} aria-current={type?.id === l.id ? "page" : undefined} className={`rounded-full px-3 py-1 text-xs font-bold transition sm:text-sm ${type?.id === l.id ? "bg-[#1F4E9C] text-white" : "bg-white/80 text-[#1F4E9C] hover:bg-white"}`}>{lang === "km" ? l.km : l.en}</Link>)}
       <span className="ml-auto flex gap-3"><Link to="?sort=price-asc" className={small}>{t("Price ↑")}</Link><Link to="?sort=price-desc" className={small}>{t("Price ↓")}</Link></span></nav>
     {list.length === 0 ? <p className="rounded-[1.6rem] bg-white/80 p-8 text-center shadow-soft">{t("No products match.")} <Link to="/shop" className="underline">{t("Clear filters")}</Link></p>
-      : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">{list.map((p) => <ProductCard key={p.id} p={p} />)}</div>}</div>);
+      : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">{shown.map((p) => <ProductCard key={p.id} p={p} />)}</div>}
+    <Pagination page={page} pages={pages} to={pageLink} /></div>);
 }
