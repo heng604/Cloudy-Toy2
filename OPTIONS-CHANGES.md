@@ -1,0 +1,11 @@
+# Product options (v47)
+
+Customers can now click an option on the product page (e.g. Character: Xavier / Zayne / Rafayel / Sylus) and the choice is kept in the cart, the order, the invoice, the emails and the admin orders.
+
+**Admin:** Products > Add/Edit Product > "Product Option / Variants". Add an option group (name + choices), press Enter after each choice. Up to 6 groups x 30 choices. No database change: options are saved as JSON in the existing `products.variants` column. Old plain text such as `Character: Xavier, Zayne` is still read and shown as clickable choices (it is converted the next time the product is saved).
+
+**Customer:** one choice per group is required before "Add to cart". The same toy in two options is two cart lines (stock is shared). Shop cards of products with options say "Choose options" and open the product page.
+
+**Server (`POST /api/checkout`):** each line may carry `option`; it must be exactly one valid choice from every group of that product (checked against the database, never trusted from the browser). The option is saved on the order item (`option`) and appended to the item name, e.g. `LNDS keychain (Character: Xavier)`.
+
+Files: `shared/products.ts` (option helpers), `src/components/admin/OptionsEditor.tsx` (new), `src/pages/AddButton.tsx`, `src/components/CartProvider.tsx`, `CartView.tsx`, `CheckoutForm.tsx`, `ProductCard.tsx`, `OfferProductCard.tsx`, `server/app.ts`, `tests/options.test.ts` (new).
