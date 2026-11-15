@@ -26,13 +26,13 @@ const blankPerk = (): PerkForm => ({ kind: "percent", title: "", percent: "5", a
 
 function TierModal({ tier, tiers, pointCents, onClose, onDone }: { tier?: Tier; tiers: Tier[]; pointCents: number; onClose: () => void; onDone: (m: Msg) => void }) {
   const { t } = useI18n(); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
-  const [name, setName] = useState(tier?.name ?? ""), [emoji, setEmoji] = useState(tier?.emoji ?? "⭐"), [image, setImage] = useState(tier?.image ?? ""), [spend, setSpend] = useState(tier ? String(tier.minSpendCents / 100) : ""), [points, setPoints] = useState(tier && tier.pointsMore ? String(tier.pointsMore) : "");
+  const [name, setName] = useState(tier?.name ?? ""), [emoji, setEmoji] = useState(tier?.emoji ?? "⭐"), [image, setImage] = useState(tier?.image ?? ""), [spend, setSpend] = useState(tier ? String(tier.minSpendCents / 100) : ""), [points, setPoints] = useState(tier && tier.pointsMore ? String(tier.pointsMore) : ""), [specialName, setSpecialName] = useState(tier?.specialName ?? "");
   const at = tier ? tiers.findIndex((x) => x.id === tier.id) : tiers.length; const first = at === 0; const before = at > 0 ? tiers[at - 1] : null; // the first level is reached by spend, the others by points
   const [perks, setPerks] = useState<PerkForm[]>(tier ? tier.perks.map(toForm) : []);
   const setPerk = (i: number, patch: Partial<PerkForm>) => setPerks((l) => l.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   async function submit(e: FormEvent, close: () => void) {
     e.preventDefault(); if (busy) return; setBusy(true); setErr("");
-    const r = await send("/admin/promotions/membership/save", { id: tier?.id, active: tier?.active ?? true, name, emoji, image, minSpend: first ? spend : undefined, pointsMore: first ? undefined : points, perks }, tier ? "Level saved" : "Level added");
+    const r = await send("/admin/promotions/membership/save", { id: tier?.id, active: tier?.active ?? true, name, emoji, image, minSpend: first ? spend : undefined, pointsMore: first ? undefined : points, specialName, perks }, tier ? "Level saved" : "Level added");
     setBusy(false); if (!r.ok) { setErr(r.text); return; } onDone(r); close();
   }
   return (<Modal wide title={tier ? t("Edit membership level") : t("Add membership level")} icon="users" onClose={onClose}>{(close) => (
@@ -46,12 +46,13 @@ function TierModal({ tier, tiers, pointCents, onClose, onDone }: { tier?: Tier; 
       <p className="text-xs text-mute">{first ? t("A customer gets this level automatically when the total of their paid orders (delivery not counted) reaches this amount. Points start counting after it.") : t("After the first level the customer earns 1 point for every {amount} they pay. They reach this level after earning this many more points than the level before. Delivery is not counted.", { amount: usd(pointCents) })}</p>
       <div className="space-y-3"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-extrabold uppercase tracking-wide text-mute">{t("Specials for this level")}</h3>
         {perks.length < MAX_PERKS && <button type="button" onClick={() => setPerks((l) => [...l, blankPerk()])} className="text-sm font-extrabold text-[#E0456B] hover:underline">+ {t("Add special")}</button>}</div>
+        {perks.some((p) => p.kind !== "custom") && <label className={lab}>{t("Name shown to the customer")}<input value={specialName} onChange={(e) => setSpecialName(e.target.value)} maxLength={60} placeholder={name.trim() || "e.g. Member discount"} className={`${field} mt-1`} /><span className="mt-1 block text-xs font-normal text-mute">{t("One name for all the specials of this level. Every special you add next uses the same name. Leave it empty to use the level name.")}</span></label>}
         {perks.length === 0 && <p className="rounded-xl border border-dashed border-sky-border p-4 text-center text-sm text-mute">{t("No specials yet. Add a discount, free delivery or any other special for this level.")}</p>}
         {perks.map((p, i) => (<div key={p.id ?? i} className="space-y-3 rounded-2xl border border-sky-border bg-[#F6FAFF] p-3.5">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className={lab}>{t("Type")}<select value={p.kind} onChange={(e) => setPerk(i, { kind: e.target.value as PerkKind })} className={`${field} mt-1`}>{(Object.keys(KIND_NAME) as PerkKind[]).map((k) => <option key={k} value={k}>{t(KIND_NAME[k])}</option>)}</select></label>
             {p.kind === "custom" ? <label className={lab}>{t("What the member gets")}<input value={p.title} onChange={(e) => setPerk(i, { title: e.target.value })} required minLength={2} maxLength={60} placeholder="e.g. Birthday gift" className={`${field} mt-1`} /></label>
-              : <p className="self-end rounded-xl border border-dashed border-sky-border px-3.5 py-2.5 text-sm text-mute">{t("Shown to the customer under the level name: {name}", { name: name.trim() || t("Level name") })}</p>}</div>
+              : <p className="self-end rounded-xl border border-dashed border-sky-border px-3.5 py-2.5 text-sm text-mute">{t("Shown to the customer as: {name}", { name: specialName.trim() || name.trim() || t("Level name") })}</p>}</div>
           {p.kind !== "custom" && <div className="grid gap-3 sm:grid-cols-2">
             {p.kind === "percent" && <label className={lab}>{t("Discount %")}<input type="number" min="1" max="90" step="1" value={p.percent} onChange={(e) => setPerk(i, { percent: e.target.value })} required className={`${field} mt-1`} /></label>}
             {p.kind === "amount" && <label className={lab}>{t("Discount amount (USD)")}<input type="number" min="0.01" step="0.01" value={p.amount} onChange={(e) => setPerk(i, { amount: e.target.value })} required className={`${field} mt-1`} /></label>}

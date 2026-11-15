@@ -637,7 +637,7 @@ admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur 
 /** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
 // membership levels: add / edit (including their specials) / delete / reorder. The FIRST level starts at its own "spend" amount (e.g. $30). Every later level needs
 // "pointsMore" more points than the level before it (1 point = memberPointCents paid, default $10); its spend is worked out by layoutTiers.
-const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, pointsMore: b?.pointsMore, perks: b?.perks, active: b?.active });
+const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, pointsMore: b?.pointsMore, specialName: b?.specialName, perks: b?.perks, active: b?.active });
 admin.post("/promotions/membership/save", wrap(async (req, res) => {
   const c = tierFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const at = cur.membership.findIndex((t) => t.id === id); const exists = at >= 0;

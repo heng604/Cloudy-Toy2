@@ -62,16 +62,24 @@ describe("membership levels", () => {
 });
 
 describe("one name per level", () => {
-  it("money and delivery specials take the level's name; a custom special keeps its own words", () => {
-    const t = checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "percent", title: "ignored", percent: 10 }, { kind: "free_shipping" }, { kind: "custom", title: "Birthday gift" }] });
+  it("all money / delivery specials of a level share its one name; a custom special keeps its own words", () => {
+    const t = checkTier({ name: "Gold", specialName: "Royal Club", minSpend: 30, perks: [{ kind: "percent", title: "ignored", percent: 10 }, { kind: "free_shipping", title: "other" }, { kind: "custom", title: "Birthday gift" }] });
     expect(t.ok).toBe(true); if (!t.ok) return;
-    expect(t.value.perks.map((p) => p.title)).toEqual(["Gold", "Gold", "Birthday gift"]);
-    expect(memberBenefits(t.value, { subtotalCents: 10000, leftCents: 10000 }).discounts.map((d) => d.name)).toEqual(["Gold member"]);
+    expect(t.value.specialName).toBe("Royal Club");
+    expect(t.value.perks.map((p) => p.title)).toEqual(["Royal Club", "Royal Club", "Birthday gift"]);
+    expect(memberBenefits(t.value, { subtotalCents: 10000, leftCents: 10000 }).discounts.map((d) => d.name)).toEqual(["Gold member: Royal Club"]);
     expect(checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "custom" }] }).ok).toBe(false);
   });
-  it("renaming the level renames its specials", () => {
-    const t = checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "percent", percent: 5 }] }); if (!t.ok) throw new Error(t.error);
-    const re = normalizeTiers([{ ...t.value, name: "Royal" }]); expect(re[0].perks[0].title).toBe("Royal");
+  it("no name given = the level name", () => {
+    const t = checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "percent", percent: 5 }, { kind: "amount", amount: 1 }] }); if (!t.ok) throw new Error(t.error);
+    expect(t.value.perks.map((p) => p.title)).toEqual(["Gold", "Gold"]);
+    expect(memberBenefits(t.value, { subtotalCents: 10000, leftCents: 10000 }).discounts.map((d) => d.name)).toEqual(["Gold member", "Gold member"]);
+  });
+  it("changing the name renames every special; old data takes the first special's name", () => {
+    const t = checkTier({ name: "Gold", specialName: "Royal Club", minSpend: 30, perks: [{ kind: "percent", percent: 5 }] }); if (!t.ok) throw new Error(t.error);
+    expect(normalizeTiers([{ ...t.value, specialName: "VIP" }])[0].perks[0].title).toBe("VIP");
+    const old = normalizeTiers([{ id: "g", name: "Gold", emoji: "x", minSpendCents: 3000, active: true, perks: [{ id: "a", kind: "percent", title: "Member discount", percent: 5, amountCents: 0, minSpendCents: 0, active: true }, { id: "b", kind: "free_shipping", title: "Free ship", percent: 0, amountCents: 0, minSpendCents: 0, active: true }] }]);
+    expect(old[0].specialName).toBe("Member discount"); expect(old[0].perks.map((p) => p.title)).toEqual(["Member discount", "Member discount"]);
   });
 });
 

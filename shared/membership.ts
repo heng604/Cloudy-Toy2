@@ -9,7 +9,7 @@ export type Perk = { id: string; kind: PerkKind; title: string; percent: number;
   /** true (default): the special ALSO takes money off products that are already discounted (sale price, category / product discount, festival offer), on top of that discount. false: it only applies to full-price products. */ onPromo: boolean };
 /** A level. The FIRST level (lowest) is reached by paying `minSpendCents` in total. After that the customer earns points (1 point per `memberPointCents` paid, default $10).
  *  Every later level needs `pointsMore` MORE points than the level before it; its `minSpendCents` is worked out from that (see layoutTiers), so the rest of the shop keeps using plain spend. */
-export type Tier = { id: string; name: string; emoji: string; image: string; minSpendCents: number; pointsMore: number; perks: Perk[]; active: boolean };
+export type Tier = { id: string; name: string; emoji: string; image: string; minSpendCents: number; pointsMore: number; /** the one name shown to customers for ALL this level's money / delivery specials (empty = the level name) */ specialName: string; perks: Perk[]; active: boolean };
 export const MAX_TIERS = 10, MAX_PERKS = 12, MAX_MONTHLY_LIMIT = 999, MAX_POINTS_MORE = 100_000;
 /** Dollars paid for 1 point (default $10, in cents). The admin can change it on Admin > Membership. */
 export const DEFAULT_POINT_CENTS = 1000;
@@ -23,17 +23,17 @@ export function layoutTiers(tiers: Tier[], pointCents: number = DEFAULT_POINT_CE
 }
 /** Bronze at $30 paid, then Silver +10 points, Gold +20 more, Platinum +30 more (1 point = $10 paid after Bronze). */
 export const DEFAULT_TIERS: Tier[] = layoutTiers([
-  { id: "bronze", name: "Bronze", emoji: "🥉", image: "", minSpendCents: 3000, pointsMore: 0, perks: [], active: true },
-  { id: "silver", name: "Silver", emoji: "🥈", image: "", minSpendCents: 0, pointsMore: 10, perks: [], active: true },
-  { id: "gold", name: "Gold", emoji: "🥇", image: "", minSpendCents: 0, pointsMore: 20, perks: [], active: true },
-  { id: "platinum", name: "Platinum", emoji: "💎", image: "", minSpendCents: 0, pointsMore: 30, perks: [], active: true },
+  { id: "bronze", name: "Bronze", emoji: "🥉", image: "", minSpendCents: 3000, pointsMore: 0, specialName: "", perks: [], active: true },
+  { id: "silver", name: "Silver", emoji: "🥈", image: "", minSpendCents: 0, pointsMore: 10, specialName: "", perks: [], active: true },
+  { id: "gold", name: "Gold", emoji: "🥇", image: "", minSpendCents: 0, pointsMore: 20, specialName: "", perks: [], active: true },
+  { id: "platinum", name: "Platinum", emoji: "💎", image: "", minSpendCents: 0, pointsMore: 30, specialName: "", perks: [], active: true },
 ]);
 type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : NaN; };
 const idOk = (v: unknown) => typeof v === "string" && /^[a-z0-9-]{1,24}$/.test(v);
 const newId = () => Math.random().toString(36).slice(2, 10);
 
-/** One special. A money / delivery special has no name of its own: it is shown under its LEVEL's name (tierName), described by what it does. Only a "custom" special needs its own words. */
+/** One special. A money / delivery special has no name of its own: it uses the ONE name of its level (tierName = the level's special name, or the level name). Only a "custom" special needs its own words. */
 export function checkPerk(i: { id?: unknown; kind?: unknown; title?: unknown; percent?: unknown; amount?: unknown; minSpend?: unknown; active?: unknown; monthlyLimit?: unknown; onPromo?: unknown }, tierName?: string): Checked<Perk> {
   const kind = i.kind as PerkKind; const title = kind !== "custom" && tierName ? tierName : String(i.title ?? "").trim();
   if (!PERK_KINDS.includes(kind)) return { ok: false, error: "Choose a special type" };
@@ -48,7 +48,7 @@ export function checkPerk(i: { id?: unknown; kind?: unknown; title?: unknown; pe
   return { ok: true, value: base };
 }
 /** Validates one level (dollars in, cents out). */
-export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; image?: unknown; minSpend?: unknown; pointsMore?: unknown; perks?: unknown; active?: unknown }): Checked<Tier> {
+export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; image?: unknown; minSpend?: unknown; pointsMore?: unknown; specialName?: unknown; perks?: unknown; active?: unknown }): Checked<Tier> {
   const name = String(i.name ?? "").trim(), emoji = String(i.emoji ?? "").trim();
   const noSpend = i.minSpend === undefined || i.minSpend === null || i.minSpend === "", minSpendCents = noSpend ? 0 : Math.round(num(i.minSpend) * 100);
   const noPoints = i.pointsMore === undefined || i.pointsMore === null || i.pointsMore === "", pointsMore = noPoints ? 0 : num(i.pointsMore);
@@ -57,10 +57,11 @@ export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; im
   const image = String(i.image ?? "").trim(); if (image.length > 600 || (image && !/^(\/|https?:\/\/)/.test(image))) return { ok: false, error: "Level picture is not valid" };
   if (!noSpend && (!Number.isFinite(minSpendCents) || minSpendCents < 1 || minSpendCents > 100_000_000)) return { ok: false, error: "Spend to reach this level must be more than $0" };
   if (!noPoints && (!Number.isInteger(pointsMore) || pointsMore < 0 || pointsMore > MAX_POINTS_MORE)) return { ok: false, error: "Points needed must be a whole number (1 or more)" };
+  const specialName = String(i.specialName ?? "").trim(); if (specialName.length > 60) return { ok: false, error: "Name shown to the customer is too long (60 characters at most)" };
   const raw = Array.isArray(i.perks) ? i.perks : []; if (raw.length > MAX_PERKS) return { ok: false, error: `At most ${MAX_PERKS} specials per level` };
   const perks: Perk[] = [];
-  for (const p of raw) { const c = checkPerk((p ?? {}) as Record<string, unknown>, name); if (!c.ok) return c; perks.push(c.value); }
-  return { ok: true, value: { id: idOk(i.id) ? String(i.id) : newId(), name, emoji, image, minSpendCents, pointsMore, perks, active: i.active !== false } };
+  for (const p of raw) { const c = checkPerk((p ?? {}) as Record<string, unknown>, specialName || name); if (!c.ok) return c; perks.push(c.value); }
+  return { ok: true, value: { id: idOk(i.id) ? String(i.id) : newId(), name, emoji, image, minSpendCents, pointsMore, specialName, perks, active: i.active !== false } };
 }
 /** Reads whatever is stored (missing, old or hand-edited) and always returns valid levels in ladder order. Never saved = the four default levels (Bronze, Silver, Gold, Platinum); saved empty = no levels.
  *  Levels saved before points existed have no pointsMore: it is worked out from their old spend amounts, so nobody's level jumps. */
@@ -70,7 +71,7 @@ export function normalizeTiers(v: unknown, pointCents: number = DEFAULT_POINT_CE
   for (const x of v) {
     const t = (x ?? {}) as Partial<Tier>;
     if (typeof t.pointsMore !== "number") legacy = true;
-    const c = checkTier({ id: t.id, name: t.name, emoji: t.emoji, image: t.image, minSpend: (t.minSpendCents ?? 0) / 100 || undefined, pointsMore: typeof t.pointsMore === "number" ? t.pointsMore : undefined, active: t.active, perks: (Array.isArray(t.perks) ? t.perks : []).map((p) => { const q = (p ?? {}) as Partial<Perk>; return { id: q.id, kind: q.kind, title: q.title, percent: q.percent, amount: (q.amountCents ?? 0) / 100, minSpend: (q.minSpendCents ?? 0) / 100, active: q.active, monthlyLimit: q.monthlyLimit, onPromo: q.onPromo }; }) });
+    const c = checkTier({ id: t.id, name: t.name, emoji: t.emoji, image: t.image, minSpend: (t.minSpendCents ?? 0) / 100 || undefined, pointsMore: typeof t.pointsMore === "number" ? t.pointsMore : undefined, specialName: t.specialName ?? (Array.isArray(t.perks) ? (t.perks as Partial<Perk>[]).find((p) => p && p.kind !== "custom" && typeof p.title === "string")?.title : undefined), active: t.active, perks: (Array.isArray(t.perks) ? t.perks : []).map((p) => { const q = (p ?? {}) as Partial<Perk>; return { id: q.id, kind: q.kind, title: q.title, percent: q.percent, amount: (q.amountCents ?? 0) / 100, minSpend: (q.minSpendCents ?? 0) / 100, active: q.active, monthlyLimit: q.monthlyLimit, onPromo: q.onPromo }; }) });
     if (c.ok && !out.some((o) => o.id === c.value.id)) out.push(c.value);
   }
   if (legacy) { out.sort((a, b) => a.minSpendCents - b.minSpendCents); out.forEach((t, i) => { t.pointsMore = i === 0 ? 0 : Math.max(1, Math.round((t.minSpendCents - out[i - 1].minSpendCents) / pointCents)); }); }
@@ -103,8 +104,8 @@ export function perkDetail(p: Perk, t: Tr = id): string {
   const lim = p.monthlyLimit > 0 ? `${base} · ${t("max {n} a month", { n: p.monthlyLimit })}` : base;
   return p.onPromo || p.kind === "free_shipping" || p.kind === "custom" ? lim : `${lim} · ${t("full-price products only")}`;
 }
-/** How a special is shown to people: money / delivery specials by what they do (the level name is already on the page), a custom special by the words the admin wrote. */
-export const perkName = (p: Perk, t: Tr = id): string => (p.kind === "custom" ? p.title : perkDetail(p, t));
+/** How a special is shown to people: the level's one name plus what it does (a custom special: the words the admin wrote). */
+export const perkName = (p: Perk, t: Tr = id): string => (p.kind === "custom" ? p.title : `${p.title} · ${perkDetail(p, t)}`);
 export type MemberDiscount = { id: string; name: string; cents: number };
 /** The shop's calendar month (Phnom Penh time, UTC+7) of a date, e.g. "2026-11". */
 export const shopMonth = (d: string | number | Date = Date.now()) => new Date(new Date(d).getTime() + 7 * 3600_000).toISOString().slice(0, 7);
@@ -124,7 +125,7 @@ export function memberBenefits(tier: Tier | null, cart: { subtotalCents: number;
     if (p.kind === "free_shipping") { freeShipping = true; shipPerks.push(p.id); continue; }
     const base = p.onPromo ? cart.subtotalCents : Math.min(cart.subtotalCents, Math.max(0, cart.fullPriceCents ?? cart.subtotalCents)); // a special that is not for discounted products only looks at the full-price part of the cart
     const want = p.kind === "percent" ? Math.round((base * p.percent) / 100) : p.kind === "amount" ? Math.min(p.amountCents, base) : 0;
-    const cents = Math.min(want, left); if (cents > 0) { out.push({ id: `member-${tier.id}-${p.id}`, name: p.kind === "custom" ? `${tier.name} member: ${p.title}` : `${tier.name} member`, cents }); perks.push(p.id); left -= cents; }
+    const cents = Math.min(want, left); if (cents > 0) { out.push({ id: `member-${tier.id}-${p.id}`, name: p.title === tier.name ? `${tier.name} member` : `${tier.name} member: ${p.title}`, cents }); perks.push(p.id); left -= cents; }
   }
   return { discounts: out, freeShipping, perks, shipPerks };
 }
