@@ -12,14 +12,15 @@ import { inSpecialOffer, liveCampaigns, liveFestivals, festivalName, festivalTex
 /** The picture the admin uploads IS the banner, full width. The live "UP TO %" goes in the picture's cloud and the countdown in its white board; scaled to any screen size. */
 function PictureBanner({ src, k, up, end, t }: { src: string; k: number; up: number; end: number; t: (s: string) => string }) {
   const ref = useRef<HTMLDivElement>(null); const [w, setW] = useState(1920);
-  useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setW(el.clientWidth)); ro.observe(el); setW(el.clientWidth); return () => ro.disconnect(); }, []);
-  const sc = w / 1920; // the live parts are drawn at desktop size and scaled with the picture, so they sit in the cloud and the board on every screen (phone, tablet, laptop, desktop)
+  useEffect(() => { const el = ref.current; if (!el) return; const upd = () => setW(el.clientWidth); const ro = new ResizeObserver(upd); ro.observe(el); upd(); return () => ro.disconnect(); }, []);
+  const root = typeof document === "undefined" ? 16 : parseFloat(getComputedStyle(document.documentElement).fontSize) || 16; // the site grows its rem on big screens; cancel that so the live parts are always the same size relative to the picture
+  const sc = (w / 1920) * (16 / root); // the live parts are drawn at desktop size and scaled with the picture, so they sit in the cloud and the board on every screen (phone, tablet, laptop, desktop)
   return (<section aria-label={t("Special Offer")}>
     <div ref={ref} className="relative w-full overflow-hidden"><h1 className="sr-only">{t("Special Offer")}</h1>
       <ScaledBanner src={src} k={k} fetchPriority="high" />
       {/* the live discount sits inside the cloud on the right of the picture, the countdown inside the white board under it */}
       {up > 0 && <div className="absolute flex items-center justify-center" style={{ left: "78%", top: "13%", width: "19%", height: "40%" }}><div className="w-[14rem] shrink-0" style={{ transform: `scale(${sc})` }}><CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} /></div></div>}
-      {end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76%", top: "57%", width: "21.5%", height: "28%" }}><div className="w-[19rem] shrink-0" style={{ transform: `scale(${sc})` }}><Countdown end={end} t={t} /></div></div>}
+      {end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76%", top: "61%", width: "21.5%", height: "28%" }}><div className="w-[16rem] shrink-0" style={{ transform: `scale(${sc})` }}><Countdown end={end} t={t} /></div></div>}
     </div>
   </section>);
 }
