@@ -19,7 +19,7 @@ function PictureBanner({ src, k, up, end, t }: { src: string; k: number; up: num
       <ScaledBanner src={src} k={k} fetchPriority="high" />
       {/* the live discount sits inside the cloud on the right of the picture, the countdown inside the white board under it */}
       {up > 0 && <div className="absolute flex items-center justify-center" style={{ left: "78%", top: "13%", width: "19%", height: "40%" }}><div className="w-[14rem] shrink-0" style={{ transform: `scale(${sc})` }}><CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} /></div></div>}
-      {end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76%", top: "57%", width: "21.5%", height: "28%" }}><div className="w-[18rem] shrink-0" style={{ transform: `scale(${sc})` }}><Countdown end={end} t={t} /></div></div>}
+      {end > 0 && <div className="absolute flex items-center justify-center" style={{ left: "76%", top: "57%", width: "21.5%", height: "28%" }}><div className="w-[20rem] shrink-0" style={{ transform: `scale(${sc})` }}><Countdown end={end} t={t} /></div></div>}
     </div>
   </section>);
 }
