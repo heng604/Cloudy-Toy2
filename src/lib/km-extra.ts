@@ -70,4 +70,5 @@ export const KM_EXTRA: Record<string, string> = {
   "New Arrivals": "មកថ្មី", "Be the first to get our newest arrivals!": "ក្លាយជាអ្នកដំបូងដែលទទួលបានទំនិញថ្មីរបស់យើង!", "Add to favourites": "បន្ថែមក្នុងបញ្ជីចូលចិត្ត", "Remove from favourites": "ដកចេញពីបញ្ជីចូលចិត្ត",
   // product options (admin editor + shop)
   "Choose options": "ជ្រើសរើសជម្រើស", "Add option group": "បន្ថែមក្រុមជម្រើស", "Add a choice": "បន្ថែមជម្រើស", "Remove group": "លុបក្រុមជម្រើស", "Type a choice, then press Enter": "វាយជម្រើស រួចចុច Enter", "Option name (e.g. Character, Size, Color)": "ឈ្មោះជម្រើស (ឧ. តួអង្គ ទំហំ ពណ៌)", "Customers click one choice from each group before adding to cart.": "អតិថិជនចុចជ្រើសរើសមួយពីក្រុមនីមួយៗ មុនដាក់ចូលកន្ត្រក។",
+  "Photo for this choice": "រូបភាពសម្រាប់ជម្រើសនេះ", "Click the photo that shows this choice": "ចុចលើរូបភាពដែលបង្ហាញជម្រើសនេះ", "Use this photo": "ប្រើរូបភាពនេះ", "No photo": "គ្មានរូបភាព", "Add and save the product photos first, then link a photo to each choice.": "បន្ថែម និងរក្សាទុករូបភាពផលិតផលជាមុនសិន រួចភ្ជាប់រូបភាពទៅជម្រើសនីមួយៗ។",
 };

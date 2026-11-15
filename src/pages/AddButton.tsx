@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useCart } from "@/components/CartProvider";
 import { optionText, type OptionGroup } from "@shared/products";
 /** Quantity + Add to cart. When the product has options (set by the admin), the customer clicks one choice in every group first. */
-export default function AddButton({ id, disabled, options = [] }: { id: string; disabled: boolean; options?: OptionGroup[] }) {
+export default function AddButton({ id, disabled, options = [], onPickImage }: { id: string; disabled: boolean; options?: OptionGroup[]; onPickImage?: (src: string) => void }) {
   const { add } = useCart(); const [q, setQ] = useState(1); const [done, setDone] = useState(false);
   const [picks, setPicks] = useState<Record<string, string>>({}); const [missing, setMissing] = useState<string[]>([]);
-  const pick = (g: string, v: string) => { setPicks((p) => ({ ...p, [g]: v })); setMissing((m) => m.filter((x) => x !== g)); setDone(false); };
+  const pick = (g: string, v: string) => { setPicks((p) => ({ ...p, [g]: v })); setMissing((m) => m.filter((x) => x !== g)); setDone(false); const src = options.find((x) => x.name === g)?.images?.[v]; if (src) onPickImage?.(src); }; // a choice with a photo (set by the admin) shows that photo in the gallery
   function addToCart() {
     const left = options.filter((g) => !picks[g.name]).map((g) => g.name);
     if (left.length) { setMissing(left); setDone(false); return; }
@@ -17,7 +17,7 @@ export default function AddButton({ id, disabled, options = [] }: { id: string; 
         <p className="mb-2 text-sm"><b>{g.name}:</b> <span className={picks[g.name] ? "font-semibold" : "text-mute"}>{picks[g.name] ?? "choose one"}</span></p>
         <div className="flex flex-wrap gap-2">{g.values.map((v) => { const on = picks[g.name] === v; return (
           <button key={v} type="button" role="radio" aria-checked={on} onClick={() => pick(g.name, v)}
-            className={`min-h-10 rounded-full border-2 px-4 py-1.5 text-sm font-bold transition ${on ? "border-[#4A86D8] bg-sky text-ink shadow-soft" : bad ? "border-red-300 bg-white hover:bg-sky-pale" : "border-sky-border bg-white hover:border-sky-hover hover:bg-sky-pale"}`}>{on && <span aria-hidden="true">✓ </span>}{v}</button>); })}</div>
+            className={`min-h-10 rounded-full border-2 px-4 py-1.5 text-sm font-bold transition ${on ? "border-[#4A86D8] bg-sky text-ink shadow-soft" : bad ? "border-red-300 bg-white hover:bg-sky-pale" : "border-sky-border bg-white hover:border-sky-hover hover:bg-sky-pale"}`}>{g.images?.[v] && <img src={g.images[v]} alt="" width={28} height={28} loading="lazy" className="-ml-2 mr-2 inline-block h-7 w-7 rounded-full object-cover align-middle" />}{on && <span aria-hidden="true">✓ </span>}{v}</button>); })}</div>
         {bad && <p role="alert" className="mt-1.5 text-sm font-semibold text-red-600">Please choose a {g.name.toLowerCase()}.</p>}
       </div>); })}
     <div className="flex items-center gap-3"><label className="sr-only" htmlFor="qty">Quantity</label>

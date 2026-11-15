@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ProductGallery from "@/components/ProductGallery";
 import ProductCard from "@/components/ProductCard";
@@ -11,7 +12,7 @@ import AddButton from "./AddButton";
 import { productPromo, orderCampaigns, campaignDetail, isProductRule, festivalName, festivalText } from "@shared/promotions";
 export default function ProductPage() {
   const { slug } = useParams(); const { data: all } = useListedProducts(); const { lang } = useI18n(); const { promotions } = usePromotions();
-  const p = all?.find((x) => x.slug === slug);
+  const p = all?.find((x) => x.slug === slug); const [focus, setFocus] = useState<{ src: string; n: number }>();
   useTitle(all ? (p ? nameFor(p, lang) : "Not found") : undefined);
   if (!all) return <Skeleton />;
   if (!p) return <NotFound />;
@@ -22,7 +23,7 @@ export default function ProductPage() {
     <div>
       <nav aria-label="Breadcrumb" className="mb-4 text-sm text-mute"><Link to="/shop" className="hover:underline">Shop</Link>{p.category && <> <span aria-hidden="true">/</span> <Link to={`/shop?category=${encodeURIComponent(p.category)}`} className="hover:underline">{p.category}</Link></>}</nav>
       <div className="grid items-start gap-8 md:grid-cols-2 lg:gap-12">
-        <ProductGallery key={p.id} images={p.images} name={name} />
+        <ProductGallery key={p.id} images={p.images} name={name} focus={focus} />
         <div className="space-y-4 md:sticky md:top-24">
           <div className="flex flex-wrap gap-2">{badgeLabels(p).filter(() => st !== "OUT").map((l) => <span key={l.id} className={`rounded-full px-3 py-1 text-sm font-extrabold uppercase tracking-wide ${LABEL_CLASS[l.id]}`}>{lang === "km" ? LABEL_SHORT[l.id].km : LABEL_SHORT[l.id].en}</span>)}{p.category && <span className="rounded-full bg-sky-pale px-3 py-1 text-sm font-semibold">{p.category}</span>}</div>
           <h1 className="text-3xl font-extrabold leading-tight md:text-4xl">{name}</h1>
@@ -34,7 +35,7 @@ export default function ProductPage() {
           {pre && preorderPhase(p) === "upcoming" && <p role="alert" className="rounded-xl2 bg-sky-pale p-3 text-sm font-bold">This pre-order opens on {dayShort(p.preorderStart!)}.</p>}
           {pre && preorderPhase(p) === "closed" && <p role="alert" className="rounded-xl2 bg-red-100 p-3 text-sm font-bold text-red-800">This pre-order closed on {dayShort(p.preorderEnd!)}.</p>}
           {p.description && <p className="whitespace-pre-line leading-relaxed text-ink/90">{p.description}</p>}
-          <AddButton key={p.id} id={p.id} options={parseOptions(p.variants)} disabled={p.stock <= 0 || (pre && preorderPhase(p) !== "open")} />
+          <AddButton key={p.id} id={p.id} options={parseOptions(p.variants)} onPickImage={(src) => setFocus((f) => ({ src, n: (f?.n ?? 0) + 1 }))} disabled={p.stock <= 0 || (pre && preorderPhase(p) !== "open")} />
           <p className="text-sm text-mute">SKU {p.sku}{p.brand ? ` · ${p.brand}` : ""} · Delivery across Cambodia</p>
         </div></div></div>
     {more.length > 0 && <section aria-labelledby="more-h"><div className="mb-4 flex items-end justify-between gap-3"><h2 id="more-h" className="text-2xl font-extrabold">More toys you may like</h2><Link to="/shop" className="font-semibold underline">See all</Link></div>
