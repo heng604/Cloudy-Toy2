@@ -1,15 +1,31 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import ScaledBanner from "@/components/ScaledBanner";
+import { sizeOf } from "@/lib/imageSize";
 import { Link } from "react-router-dom";
 import OfferCard, { buildOffers } from "@/components/OfferCard";
-import { HAND, SkyBackdrop, CloudBadge, Countdown, endOf } from "@/components/OfferDeco";
+import { HAND, CloudBadge, Countdown, endOf } from "@/components/OfferDeco";
 import OfferProductCard, { discountOf } from "@/components/OfferProductCard";
 import { usePromotions, useSettings } from "@/lib/store";
 import { useI18n } from "@/lib/i18n";
 import { categoriesOf, type Product } from "@shared/products";
 import { inSpecialOffer, liveCampaigns, liveFestivals, festivalName, festivalText, productPromo, orderCampaigns } from "@shared/promotions";
+/** The picture the admin uploads (Admin > Settings > Special Offer page banner > Top banner background) IS the banner, full width. Only the live "UP TO %" discount and the countdown are drawn on top, on the right; on a phone they sit under the picture. */
+function PictureBanner({ src, k, up, end, t }: { src: string; k: number; up: number; end: number; t: (s: string) => string }) {
+  const ref = useRef<HTMLDivElement>(null); const [w, setW] = useState(1920);
+  useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setW(el.clientWidth)); ro.observe(el); setW(el.clientWidth); return () => ro.disconnect(); }, []);
+  const wide = w >= 900, sc = Math.min(1.25, Math.max(0.5, w / 1920));
+  const live = <>{up > 0 && <CloudBadge top={t("UP TO")} big={`${up}%`} bottom={t("OFF")} />}{end > 0 && <Countdown end={end} t={t} />}</>;
+  return (<section aria-label={t("Special Offer")}>
+    <div ref={ref} className="relative w-full overflow-hidden"><h1 className="sr-only">{t("Special Offer")}</h1>
+      <ScaledBanner src={src} k={k} fetchPriority="high" />
+      {wide && (up > 0 || end > 0) && <div className="absolute inset-y-0 right-[4%] flex items-center"><div className="w-[18rem] space-y-2" style={{ transform: `scale(${sc})`, transformOrigin: "right center" }}>{live}</div></div>}
+    </div>
+    {!wide && (up > 0 || end > 0) && <div className="mx-auto mt-3 w-full max-w-xs space-y-2 px-4">{live}</div>}
+  </section>);
+}
 /** The page behind the "Special Offer" button: sky banner with the biggest discount and a countdown, a category filter, the offer products and the promotion cards. */
 export default function SpecialOffers({ all, festivalId }: { all: Product[]; festivalId?: string | null }) {
-  const { t, lang } = useI18n(); const { promotions } = usePromotions(); const { settings } = useSettings(); const showText = settings.offerHeroText !== false; const [saved, setSaved] = useState(""); const [cat, setCat] = useState("");
+  const { t, lang } = useI18n(); const { promotions } = usePromotions(); const { settings } = useSettings(); const heroImg = settings.offerHeroImage || "", kh = sizeOf(settings, "offer-hero"), showText = settings.offerHeroText !== false; const [saved, setSaved] = useState(""); const [cat, setCat] = useState("");
   const fests = liveFestivals(promotions.festivals); const hero = fests.find((f) => f.id === festivalId) ?? fests[0]; const rules = liveCampaigns(promotions.campaigns);
   const list = all.filter((p) => (festivalId && hero ? hero.productIds.includes(p.id) : inSpecialOffer(p, promotions.campaigns, promotions.festivals)));
   const cats = categoriesOf(list); const shown = cat && cats.includes(cat) ? list.filter((p) => p.category === cat) : list;
@@ -20,9 +36,9 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
   const spark = (c: string, cls: string) => <span aria-hidden="true" className={`pointer-events-none absolute ${cls}`} style={{ color: c }}>✦</span>;
   // full screen: the page breaks out of the shop's centred column and runs edge to edge (banner touches the header and both sides)
   return (<div className="relative left-1/2 -mt-5 w-screen -translate-x-1/2 space-y-6 sm:-mt-8">
-    {<section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16">
-      <SkyBackdrop />
-      <div className="relative mx-auto grid max-w-[1700px] items-center gap-6 lg:grid-cols-[1.6fr_1fr]">
+    {heroImg ? <PictureBanner src={heroImg} k={kh} up={up} end={end} t={t} /> : <section className="relative overflow-hidden px-4 py-6 sm:px-10 sm:py-8 lg:px-16">
+      
+      <div style={{ minHeight: `${12 * kh}rem` }} className="relative mx-auto grid max-w-[1700px] items-center gap-6 lg:grid-cols-[1.6fr_1fr]">
         {showText ? <div className="relative z-10 text-center lg:text-left">
           {hero && <span className="mb-2 inline-block rounded-full bg-white/85 px-3 py-1 text-xs font-extrabold text-[#C2305F]">✨ {festivalName(hero, lang)}</span>}
           <h1 className="font-['Nunito'] text-5xl font-black leading-none tracking-tight text-[#1F4E9C] drop-shadow-[0_3px_0_rgba(255,255,255,.9)] [-webkit-text-stroke:7px_#fff] [paint-order:stroke_fill] sm:text-7xl">{t("Special Offer")}</h1>

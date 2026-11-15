@@ -23,20 +23,21 @@ export const Cloud = ({ className = "" }: { className?: string }) => (<svg viewB
 export const Star = ({ className = "", color = "#FFD84D" }: { className?: string; color?: string }) => (<svg viewBox="0 0 48 48" className={`pointer-events-none absolute drop-shadow ${className}`} aria-hidden="true"><path d="M24 5l5.200 12.400 13.300 1.100-10.100 8.700 3.100 13-11.500-7-11.500 7 3.100-13L5.500 18.500l13.300-1.100z" fill={color} stroke={color} strokeWidth="5" strokeLinejoin="round" /></svg>);
 export const Heart = ({ className = "", color = "#FF8FB8" }: { className?: string; color?: string }) => (<svg viewBox="0 0 24 24" className={`pointer-events-none absolute drop-shadow ${className}`} aria-hidden="true"><path d="M20.800 5.600a5.200 5.200 0 0 0-7.400 0L12 7l-1.400-1.400a5.200 5.200 0 0 0-7.400 7.400L12 21.800l8.800-8.800a5.200 5.200 0 0 0 0-7.400z" fill={color} /></svg>);
 export const Spark = ({ className = "", color = "#fff" }: { className?: string; color?: string }) => (<svg viewBox="0 0 24 24" className={`pointer-events-none absolute ${className}`} aria-hidden="true"><path d="M12 1l2.600 8.400L23 12l-8.400 2.600L12 23l-2.600-8.400L1 12l8.400-2.600z" fill={color} opacity=".9" /></svg>);
-/** Simple, clean background behind the offer banner: a flat soft blue, no clouds or decorations. */
-export function SkyBackdrop() {
-  return <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#EAF2FF]" />;
+/** Banner background: ONLY the picture the admin uploaded (Admin > Settings). With no picture there is no background at all. */
+export function BannerBg({ src }: { src?: string }) {
+  return src ? <img src={src} alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full object-cover" /> : null;
 }
-/** The discount badge: "UP TO 29% OFF", "BUY 2 GET 1 FREE", "FREE GIFT" ... (plain rounded card, no cloud shape) */
+/** The live discount: "UP TO 29% OFF", "BUY 2 GET 1 FREE", "FREE GIFT" ... Text only, no card or cloud behind it (white outline keeps it readable on any picture). */
 export function CloudBadge({ top, big, bottom }: { top?: string; big: string; bottom?: string }) {
-  return (<div className="mx-auto flex w-full max-w-[14rem] flex-col items-center justify-center rounded-3xl border-2 border-[#DCEBFA] bg-white px-6 py-4 text-center shadow-soft" role="img" aria-label={[top, big, bottom].filter(Boolean).join(" ")}>
-    {top && <p className="text-sm font-black text-[#1F4E9C]">{top}</p>}<p className={`font-black leading-none text-[#FF3D83] ${big.length > 6 ? "text-3xl sm:text-4xl" : "text-5xl sm:text-6xl"}`}>{big}</p>{bottom && <p className="text-sm font-black text-[#1F4E9C]">{bottom}</p>}</div>);
+  const line = "[paint-order:stroke_fill] [-webkit-text-stroke:5px_#fff]";
+  return (<div className="mx-auto flex w-full max-w-[14rem] flex-col items-center justify-center text-center" role="img" aria-label={[top, big, bottom].filter(Boolean).join(" ")}>
+    {top && <p className={`text-base font-black text-[#1F4E9C] ${line}`}>{top}</p>}<p className={`font-black leading-none text-[#FF3D83] [paint-order:stroke_fill] [-webkit-text-stroke:8px_#fff] ${big.length > 6 ? "text-4xl sm:text-5xl" : "text-6xl sm:text-7xl"}`}>{big}</p>{bottom && <p className={`text-base font-black text-[#1F4E9C] ${line}`}>{bottom}</p>}</div>);
 }
 export const endOf = (d?: string) => (d ? new Date(`${d}T23:59:59+07:00`).getTime() : 0); // offers end at the end of their last day, shop time (Cambodia)
 export function Countdown({ end, t }: { end: number; t: (s: string) => string }) {
   const [now, setNow] = useState(Date.now()); useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
   const ms = Math.max(0, end - now), s = Math.floor(ms / 1000); const parts: [number, string][] = [[Math.floor(s / 86400), "Days"], [Math.floor((s % 86400) / 3600), "Hours"], [Math.floor((s % 3600) / 60), "Min"], [s % 60, "Sec"]];
-  return (<div><p className="mx-auto flex w-fit items-center justify-center gap-1.5 rounded-full bg-white/85 px-3 py-1 text-sm font-extrabold text-[#1F4E9C]"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF5C93" strokeWidth="2.400" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.500 2M9 2h6" /></svg>{t("Limited Time Only!")}</p>
+  return (<div><p className="mx-auto flex w-fit items-center justify-center gap-1.5 px-3 py-1 text-sm font-extrabold text-[#1F4E9C] [paint-order:stroke_fill] [-webkit-text-stroke:4px_#fff]"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF5C93" strokeWidth="2.400" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.500 2M9 2h6" /></svg>{t("Limited Time Only!")}</p>
     <div className="mt-2 grid grid-cols-4 gap-2" role="timer" aria-label={t("Limited Time Only!")}>{parts.map(([n, l]) => <div key={l} className="rounded-xl border-2 border-[#FFD3E3] bg-white px-1 py-1.5 text-center shadow-soft"><p className="text-xl font-extrabold leading-none text-[#1F4E9C] sm:text-2xl">{String(n).padStart(2, "0")}</p><p className="mt-1 text-[10px] font-bold text-mute">{t(l)}</p></div>)}</div></div>);
 }
 /** The pink-and-lilac "Shop now and enjoy special savings!" banner (picture and mascot can be changed in admin). */
