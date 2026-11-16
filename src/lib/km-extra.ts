@@ -1,5 +1,6 @@
 // More Khmer text (English text is the key). Merged into the main dictionary in i18n.tsx.
 export const KM_EXTRA: Record<string, string> = {
+  "{name} member: Free delivery": "សមាជិក {name}៖ ដឹកជញ្ជូនឥតគិតថ្លៃ",
   "Your {name} member special is applied automatically": "អត្ថប្រយោជន៍សមាជិក {name} របស់អ្នកត្រូវបានប្រើដោយស្វ័យប្រវត្តិ",
   "Your {name} member special is not used while a discount code is entered. Clear the code to use it.": "អត្ថប្រយោជន៍សមាជិក {name} មិនត្រូវបានប្រើនៅពេលមានបញ្ចូលកូដបញ្ចុះតម្លៃទេ។ សូមលុបកូដ ដើម្បីប្រើវា។",
   "Each use counts toward your monthly limit. A discount code can't be used together with it.": "ការប្រើនីមួយៗរាប់ក្នុងកម្រិតប្រចាំខែរបស់អ្នក។ មិនអាចប្រើរួមជាមួយកូដបញ្ចុះតម្លៃបានទេ។",

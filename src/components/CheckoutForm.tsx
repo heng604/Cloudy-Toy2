@@ -110,6 +110,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5 lg:sticky lg:top-24"><h2 className="font-extrabold">{t("Order summary")}</h2>
       {items.map(({ l, p }) => <p key={`${l.id}|${l.opt ?? ""}`} className="flex justify-between text-sm"><span>{p!.name}{l.opt ? ` (${l.opt})` : ""} × {l.qty}</span><span>{money((p!.salePrice ?? p!.price) * l.qty)}</span></p>)}
       {autos.map((a) => <p key={a.id} className="flex justify-between text-sm text-green-700"><span>{a.name}</span><span>−{money(a.cents / 100)}</span></p>)}
+      {memTier && mem.freeShipping && !freeShip && <p className="flex justify-between text-sm text-green-700"><span>{t("{name} member: Free delivery", { name: memTier.name })}</span><span>{t("FREE")}</span></p>}
       {gifts.map((g) => <p key={g.campaignId} className="flex justify-between text-sm text-green-700"><span>🎁 {g.name} × {g.qty}</span><span>{t("FREE")}</span></p>)}
       {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}
       <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span className={freeShip || mem.freeShipping ? "font-semibold text-green-700" : ""}>{freeShip || mem.freeShipping ? t("FREE") : money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(totalC / 100)}</span></p>

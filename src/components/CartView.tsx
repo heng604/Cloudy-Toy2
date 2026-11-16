@@ -120,6 +120,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
             {saved > 0 && <div className="flex justify-between text-green-700"><dt>{t("You save")}</dt><dd className="font-semibold">−{money(saved)}</dd></div>}
             {autos.map((a) => <div key={a.id} className="flex justify-between text-green-700"><dt>{a.name}</dt><dd className="font-semibold">−{money(a.cents / 100)}</dd></div>)}
             {memTier && (memAll.discounts.length > 0 || memAll.freeShipping) && <div className="rounded-xl bg-[#F6FAFF] p-2.5 text-xs font-bold text-[#7A4FD0]">{t("Your {name} member special is applied automatically. A discount code at checkout replaces it.", { name: memTier.name })}</div>}
+            {memTier && mem.freeShipping && !freeAll && <div className="flex justify-between text-green-700"><dt>{t("{name} member: Free delivery", { name: memTier.name })}</dt><dd className="font-semibold">{t("FREE")}</dd></div>}
             {gifts.map((g) => <div key={g.campaignId} className="flex justify-between text-green-700"><dt>🎁 {g.name} × {g.qty}</dt><dd className="font-semibold">{t("FREE")}</dd></div>)}
             <div className="flex justify-between"><dt className="text-mute">{t("Delivery")}</dt><dd className={`font-semibold ${freePP || mem.freeShipping ? "text-green-700" : ""}`}>{freeAll || mem.freeShipping ? t("FREE") : freePP ? t("FREE in Phnom Penh") : t("Calculated at checkout")}</dd></div>
           </dl>
