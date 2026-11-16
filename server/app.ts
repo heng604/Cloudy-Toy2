@@ -601,14 +601,28 @@ admin.get("/members", wrap(async (_req, res) => {
     const spendCents = memberSpendOf(os), auto = tierFor(spendCents, promos.membership), o = ov[email], forced = o?.tierId ? promos.membership.find((t) => t.id === o.tierId) ?? null : null;
     const last = os.reduce((a, x) => ((x.createdAt ?? "") > (a.createdAt ?? "") ? x : a), os[0]);
     return { email, name: last.customer.name, phone: last.customer.phone, spendCents, orders: os.length, lastOrderAt: last.createdAt ?? "", autoTierId: auto?.id ?? null, tierId: o?.blocked || o?.removed ? null : (forced ?? auto)?.id ?? null, forcedTierId: o?.tierId ?? null, blocked: !!o?.blocked, removed: !!o?.removed, used: monthUsage(os) };
-  }).sort((a, b) => b.spendCents - a.spendCents).slice(0, 2000);
+  });
+  for (const [email, o] of Object.entries(ov)) { // members the admin added by hand who have no order yet
+    if (by.has(email) || !o.added) continue;
+    members.push({ email, name: o.name || email, phone: o.phone || "", spendCents: 0, orders: 0, lastOrderAt: "", autoTierId: null, tierId: o.blocked || o.removed ? null : o.tierId ?? null, forcedTierId: o.tierId ?? null, blocked: !!o.blocked, removed: !!o.removed, used: {} });
+  }
+  members.sort((a, b) => b.spendCents - a.spendCents); members.length = Math.min(members.length, 2000);
   res.json({ members });
 }));
 admin.post("/members/set", wrap(async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase(); const tierId = String(req.body?.tierId ?? ""); const promos = await getPromotions();
   if (!email || email.length > 200) return res.json({ error: "Member not found" });
   if (tierId && !promos.membership.some((t) => t.id === tierId)) return res.json({ error: "Level not found" });
-  await setOverride(email, { tierId: tierId || undefined, blocked: req.body?.blocked === true, removed: req.body?.removed === true }); res.json({ ok: true });
+  const prev = (await getOverrides())[email];
+  await setOverride(email, { tierId: tierId || undefined, blocked: req.body?.blocked === true, removed: req.body?.removed === true, added: prev?.added, name: prev?.name, phone: prev?.phone }); res.json({ ok: true });
+}));
+// add a person to membership by hand (they may have no account or order yet): email + level, name and phone optional
+admin.post("/members/add", wrap(async (req, res) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase(); const name = String(req.body?.name ?? "").trim().slice(0, 80); const phone = String(req.body?.phone ?? "").trim().slice(0, 30); const tierId = String(req.body?.tierId ?? ""); const promos = await getPromotions();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) return res.json({ error: "Enter a valid email address" });
+  if (!tierId || !promos.membership.some((t) => t.id === tierId)) return res.json({ error: "Choose a membership level" });
+  const prev = (await getOverrides())[email];
+  await setOverride(email, { tierId, blocked: false, removed: false, added: prev?.added ?? true, name: name || prev?.name, phone: phone || prev?.phone }); res.json({ ok: true });
 }));
 admin.post("/discounts/delete", wrap(async (req, res) => { const code = normalizeCode(String(req.body?.code ?? "")); if (!CODE_RE.test(code)) return res.json({ error: "Unknown code" }); await deleteStoreDiscount(code); res.json({ ok: true }); }));
 
