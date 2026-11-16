@@ -132,7 +132,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const acct = userOf(req); const ids = lines.map((l) => l.productId); // only the products in this cart are read (a cart has a few items, the catalogue has hundreds)
   // abandoned Bakong orders give their stock back BEFORE the stock check (swept at most every 5 s); settings load at the same time
-  const promos = await getPromotions(); const memberAll = await memberOf(acct?.email, promos.membership).catch(() => noMember); const member = codeIn ? { ...memberAll, tier: null as Tier | null } : memberAll; /* the member special applies automatically; a typed discount code replaces it (never both) */ const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
+  const promos = await getPromotions(); const memberAll = await memberOf(acct?.email, promos.membership).catch(() => noMember); const member = memberAll; /* the member specials apply automatically and a typed discount code stacks on top (the code takes its % off what is left after campaigns and member specials) */ const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
   const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds([...new Set([...ids, ...bonusIds])]))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   for (const l of lines) { // the option the customer clicked must be a real choice of that product (and every product that has options needs one)
@@ -207,8 +207,10 @@ api.post("/discount/validate", wrap(async (req, res) => {
   try {
     const [products, promos, who] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions(), userFromReq(req)]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    /* a code replaces the member special, so the preview counts only the shop campaigns */
-    const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }], false, who?.email ?? undefined);
+    /* a code stacks on the member specials: it takes its % off what is left after campaigns AND the member's level specials (same as checkout) */
+    const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); const byId = new Map(products.map((p) => [p.id, p]));
+    const mb = memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, mem.used);
+    const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) - mb.discounts.reduce((s, d) => s + d.cents, 0) }], false, who?.email ?? undefined);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }
 }));
