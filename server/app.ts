@@ -113,7 +113,7 @@ const noMember = { spendCents: 0, tier: null as Tier | null, used: {} as Record<
 const Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
   lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99), option: z.string().trim().max(OPTION_LIMITS.selected).optional() })).min(1).max(50),
-  area: z.enum(["PHNOM_PENH", "PROVINCE"]), province: z.enum(PROVINCE_NAMES).optional(), method: z.enum(["COD", "QR_IMAGE", "BAKONG"]), code: z.string().trim().max(40).optional(), preorderPay: z.enum(["deposit", "full"]).optional(),
+  area: z.enum(["PHNOM_PENH", "PROVINCE"]), province: z.enum(PROVINCE_NAMES).optional(), method: z.enum(["COD", "QR_IMAGE", "BAKONG"]), code: z.string().trim().max(40).optional(), preorderPay: z.enum(["deposit", "full"]).optional(), useMember: z.boolean().optional(),
 });
 /** A pre-order product's own open date and deadline, copied onto its order line (empty for normal products or when no dates are set). */
 const itemDates = (p?: { labels?: readonly string[]; preorderStart?: string; preorderEnd?: string }) => (p && isPreorder(p) && p.preorderStart && p.preorderEnd ? { opens: p.preorderStart, closes: p.preorderEnd } : {});
@@ -132,7 +132,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
   const acct = userOf(req); const ids = lines.map((l) => l.productId); // only the products in this cart are read (a cart has a few items, the catalogue has hundreds)
   // abandoned Bakong orders give their stock back BEFORE the stock check (swept at most every 5 s); settings load at the same time
-  const promos = await getPromotions(); const member = await memberOf(acct?.email, promos.membership).catch(() => noMember); const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
+  const promos = await getPromotions(); const memberAll = await memberOf(acct?.email, promos.membership).catch(() => noMember); const member = parsed.data.useMember === true ? memberAll : { ...memberAll, tier: null as Tier | null }; /* a member special is used only when the customer chooses it at checkout */ const bonusIds = promos.campaigns.filter((c) => (c.kind === "bogo" || c.kind === "spend_gift") && c.bonusProductId).map((c) => c.bonusProductId!); // free gifts are read with the cart items
   const [settings, products] = await Promise.all([getSettings(), expireStaleBakong(5_000).then(() => listProductsByIds([...new Set([...ids, ...bonusIds])]))]);
   if (!methodOn(settings, method)) return res.status(400).json({ error: "This payment option is not available right now. Please choose another one." });
   for (const l of lines) { // the option the customer clicked must be a real choice of that product (and every product that has options needs one)
@@ -200,14 +200,14 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
 /** Preview only: tells the customer how much a code takes off. Does NOT use up the code. */
 api.post("/discount/validate", wrap(async (req, res) => {
   if (tooMany(`v:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
-  const b = z.object({ code: z.string().max(40), lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99) })).min(1).max(50) }).safeParse(req.body);
+  const b = z.object({ code: z.string().max(40), lines: z.array(z.object({ productId: z.string(), qty: z.number().int().min(1).max(99) })).min(1).max(50), useMember: z.boolean().optional() }).safeParse(req.body);
   if (!b.success) return res.status(400).json({ error: "Bad request" });
   const code = normalizeCode(b.data.code);
   if (!CODE_RE.test(code)) return res.status(400).json({ error: "That discount code is not valid." });
   try {
     const [products, promos, who] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions(), userFromReq(req)]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); auto.push(...memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t.items.flatMap((i) => { const p = products.find((x) => x.id === i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, mem.used).discounts);
+    const mem = b.data.useMember === true ? await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember) : noMember; auto.push(...memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t.items.flatMap((i) => { const p = products.find((x) => x.id === i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, mem.used).discounts);
     const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) }], false, who?.email ?? undefined);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }
