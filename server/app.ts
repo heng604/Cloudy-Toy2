@@ -127,6 +127,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   const { customer, lines, area, method } = parsed.data; const codeIn = normalizeCode(parsed.data.code ?? "");
   if (codeIn && tooMany(`c:${clientKey(req)}`)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
   if (codeIn && !CODE_RE.test(codeIn)) return res.status(400).json({ error: "That discount code is not valid." });
+  if (codeIn && parsed.data.useMember === true) return res.status(400).json({ error: "Member specials and discount codes can't be used together. Choose one." }); // a member special and a discount code are either/or, never both
   if (area === "PROVINCE" && !parsed.data.province) return res.status(400).json({ error: "Please choose your province." });
   if (method === "BAKONG" && !bakongEnabled()) return res.status(400).json({ error: "Bakong payment is not available right now. Please choose another payment method." });
   if (!methodAllowed(method, area)) return res.status(400).json({ error: "Pay with delivery is only available in Phnom Penh." });
@@ -204,6 +205,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
   if (!b.success) return res.status(400).json({ error: "Bad request" });
   const code = normalizeCode(b.data.code);
   if (!CODE_RE.test(code)) return res.status(400).json({ error: "That discount code is not valid." });
+  if (b.data.useMember === true) return res.status(400).json({ error: "Member specials and discount codes can't be used together. Choose one." });
   try {
     const [products, promos, who] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions(), userFromReq(req)]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);

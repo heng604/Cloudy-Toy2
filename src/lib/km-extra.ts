@@ -1,5 +1,8 @@
 // More Khmer text (English text is the key). Merged into the main dictionary in i18n.tsx.
 export const KM_EXTRA: Record<string, string> = {
+  "Member specials and discount codes can't be used together. Untick your member special to use a code.": "មិនអាចប្រើអត្ថប្រយោជន៍សមាជិក និងកូដបញ្ចុះតម្លៃរួមគ្នាបានទេ។ សូមដកធីកអត្ថប្រយោជន៍សមាជិក ដើម្បីប្រើកូដ។",
+  "It can't be used together with a discount code.": "មិនអាចប្រើរួមជាមួយកូដបញ្ចុះតម្លៃបានទេ។",
+  "Member specials and discount codes can't be used together. Choose one.": "មិនអាចប្រើអត្ថប្រយោជន៍សមាជិក និងកូដបញ្ចុះតម្លៃរួមគ្នាបានទេ។ សូមជ្រើសរើសមួយ។",
   // shop pages
   "Shown to the customer as: {name}": "បង្ហាញដល់អតិថិជនថា៖ {name}", "One name for all the specials of this level. Every special you add next uses the same name. Leave it empty to use the level name.": "ឈ្មោះតែមួយសម្រាប់អត្ថប្រយោជន៍ទាំងអស់នៃកម្រិតនេះ។ អត្ថប្រយោជន៍ដែលអ្នកបន្ថែមបន្ទាប់ប្រើឈ្មោះដូចគ្នា។ ទុកទទេដើម្បីប្រើឈ្មោះកម្រិត។",
   "What the member gets": "អ្វីដែលសមាជិកទទួលបាន", "Shown to the customer under the level name: {name}": "បង្ហាញដល់អតិថិជនក្រោមឈ្មោះកម្រិត៖ {name}",
