@@ -8,6 +8,8 @@ import sharp from "sharp";
 import path from "path";
 import fs from "fs";
 import { z } from "zod";
+import { ProfileInput } from "../shared/profile";
+import { getProfile, saveProfile, setAvatar, profilesByEmail } from "./lib/profileStore";
 import { requireAdmin, requireUser, userFromReq, adminOf, userOf, needs, roleOf } from "./lib/auth";
 import { roleFor, listStaff, addStaff, updateStaff, deleteStaff } from "./lib/staff";
 import { getPromotions, savePromotions } from "./lib/promotionsStore";
@@ -37,7 +39,7 @@ import { validateImage, safeFileName } from "../shared/images";
 import { r2Enabled, r2Get } from "./lib/r2";
 import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
-import { tierFor, nextTier, memberBenefits, memberSpendOf, monthUsage, checkTier, layoutTiers, isPointCents, pointsOf, MAX_TIERS, type Tier } from "../shared/membership";
+import { tierByOrders, levelAfter, memberBenefits, memberSpendOf, monthUsage, checkTier, layoutTiers, isPointCents, MAX_TIERS, type Tier } from "../shared/membership";
 import { getOverrides, setOverride } from "./lib/memberStore";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule, fullPriceCents } from "../shared/promotions";
 import { isSlug, isBuiltin, MAX_CONTENT, MAX_TITLE, MAX_CUSTOM_PAGES, SLUG_RE, RESERVED_SLUGS, PAGE_DEFS, allDefs } from "../shared/pages";
@@ -105,7 +107,7 @@ const memberOf = async (email: string | undefined, tiers: Tier[]) => {
   if (!email || tiers.length === 0) return none;
   const orders = await listOrdersByEmail(email); const spendCents = memberSpendOf(orders); const ov = (await getOverrides())[email.toLowerCase()];
   const forced = ov?.tierId ? tiers.find((t) => t.id === ov.tierId && t.active) ?? null : null; // the admin can fix a member's level
-  const tier = ov?.blocked || ov?.removed ? null : forced ?? tierFor(spendCents, tiers); // blocked = no level specials at all
+  const tier = ov?.blocked || ov?.removed ? null : forced ?? tierByOrders(orders, tiers); // blocked = no level specials at all
   return { spendCents, tier, used: monthUsage(orders) };
 };
 const noMember = { spendCents: 0, tier: null as Tier | null, used: {} as Record<string, number> };
@@ -365,7 +367,26 @@ api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = use
 /** The signed-in customer's membership: what they have paid so far, their level and the next one. Levels come from the admin's Membership page. */
 api.get("/membership/me", requireUser, wrap(async (req, res) => {
   const u = userOf(req); const promos = await getPromotions(); const m = await memberOf(u.email ?? undefined, promos.membership);
-  res.json({ spendCents: m.spendCents, points: pointsOf(m.spendCents, promos.membership, promos.memberPointCents), used: m.used, tierId: m.tier?.id ?? null, nextId: nextTier(m.spendCents, promos.membership)?.id ?? null });
+  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: levelAfter(m.tier, promos.membership)?.id ?? null });
+}));
+
+/** The signed-in customer's own profile: name, phone, address, Facebook, Telegram and photo. Only these fields can be changed; role, totals and level never are. */
+api.get("/account/profile", requireUser, wrap(async (req, res) => { const u = userOf(req); const m = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
+  res.json({ profile: await getProfile(u.id, m.full_name || m.name || ""), email: u.email ?? "" }); }));
+api.post("/account/profile", requireUser, wrap(async (req, res) => {
+  const u = userOf(req); if (tooMany(`profile:${u.id}`, 30)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  const p = ProfileInput.safeParse(req.body ?? {}); if (!p.success) return res.json({ error: p.error.issues[0]?.message ?? "Invalid input" });
+  try { await saveProfile(u.id, u.email ?? undefined, p.data); } catch (e) { console.error("[profile save]", e); return res.json({ error: "Could not save. Check that the database migration 0018 has been applied." }); }
+  res.json({ ok: true });
+}));
+/** Profile photo: re-encoded to a small square, stored like every other picture. Field "remove" = delete the photo. */
+api.post("/account/profile/avatar", requireUser, upload.any(), wrap(async (req, res) => {
+  const u = userOf(req); if (tooMany(`avatar:${u.id}`, 10)) return res.json({ error: "Too many tries. Please wait a minute." });
+  const f = files(req, "image")[0]; if (!f && fld(req, "remove") !== "1") return res.json({ error: "Choose a picture first" });
+  let url = ""; if (f) { const r = await savePicture(f, "avatar", 400, 400, "cover"); if ("error" in r) return res.json({ error: r.error }); url = r.url; }
+  let old = ""; try { old = await setAvatar(u.id, u.email ?? undefined, url); } catch (e) { console.error("[avatar save]", e); await dropImage(url); return res.json({ error: "Could not save. Check that the database migration 0018 has been applied." }); }
+  if (old && old !== url) await dropImage(old);
+  res.json({ ok: true, url });
 }));
 
 /** Which admin role (owner / admin / editor) this signed-in account has, or null. The browser uses it to show the admin area. */
@@ -597,16 +618,17 @@ admin.post("/discounts/update", wrap(async (req, res) => {
 }));
 // members: every customer with an account or order, their level, spend and this month's use of each special. The admin can fix a member's level or switch their specials off.
 admin.get("/members", wrap(async (_req, res) => {
-  const [orders, promos, ov] = await Promise.all([listAllOrders(), getPromotions(), getOverrides()]); const by = new Map<string, typeof orders>();
+  const [orders, promos, ov, profiles] = await Promise.all([listAllOrders(), getPromotions(), getOverrides(), profilesByEmail()]); const by = new Map<string, typeof orders>();
   for (const o of orders) { const e = (o.accountEmail || o.customer.email || "").toLowerCase(); if (!e) continue; (by.get(e) ?? by.set(e, []).get(e)!).push(o); }
   const members = [...by.entries()].map(([email, os]) => {
-    const spendCents = memberSpendOf(os), auto = tierFor(spendCents, promos.membership), o = ov[email], forced = o?.tierId ? promos.membership.find((t) => t.id === o.tierId) ?? null : null;
+    const spendCents = memberSpendOf(os), auto = tierByOrders(os, promos.membership), o = ov[email], forced = o?.tierId ? promos.membership.find((t) => t.id === o.tierId) ?? null : null;
     const last = os.reduce((a, x) => ((x.createdAt ?? "") > (a.createdAt ?? "") ? x : a), os[0]);
-    return { email, name: last.customer.name, phone: last.customer.phone, spendCents, orders: os.length, lastOrderAt: last.createdAt ?? "", autoTierId: auto?.id ?? null, tierId: o?.blocked || o?.removed ? null : (forced ?? auto)?.id ?? null, forcedTierId: o?.tierId ?? null, blocked: !!o?.blocked, removed: !!o?.removed, used: monthUsage(os) };
+    const pr = profiles.get(email); // what the customer wrote on their own profile wins over what was typed on the last order
+    return { email, name: pr?.name || last.customer.name, phone: pr?.phone || last.customer.phone, avatar: pr?.avatar ?? "", address: pr?.address || last.customer.address || "", facebook: pr?.facebook || last.customer.facebook || "", telegram: pr?.telegram || last.customer.telegram || "", spendCents, orders: os.length, lastOrderAt: last.createdAt ?? "", autoTierId: auto?.id ?? null, tierId: o?.blocked || o?.removed ? null : (forced ?? auto)?.id ?? null, forcedTierId: o?.tierId ?? null, blocked: !!o?.blocked, removed: !!o?.removed, used: monthUsage(os) };
   });
   for (const [email, o] of Object.entries(ov)) { // members the admin added by hand who have no order yet
     if (by.has(email) || !o.added) continue;
-    members.push({ email, name: o.name || email, phone: o.phone || "", spendCents: 0, orders: 0, lastOrderAt: "", autoTierId: null, tierId: o.blocked || o.removed ? null : o.tierId ?? null, forcedTierId: o.tierId ?? null, blocked: !!o.blocked, removed: !!o.removed, used: {} });
+    const pr = profiles.get(email); members.push({ email, name: pr?.name || o.name || email, phone: pr?.phone || o.phone || "", avatar: pr?.avatar ?? "", address: pr?.address ?? "", facebook: pr?.facebook ?? "", telegram: pr?.telegram ?? "", spendCents: 0, orders: 0, lastOrderAt: "", autoTierId: null, tierId: o.blocked || o.removed ? null : o.tierId ?? null, forcedTierId: o.tierId ?? null, blocked: !!o.blocked, removed: !!o.removed, used: {} });
   }
   members.sort((a, b) => b.spendCents - a.spendCents); members.length = Math.min(members.length, 2000);
   res.json({ members });
@@ -652,19 +674,21 @@ admin.post("/promotions/campaigns/toggle", wrap(async (req, res) => {
 admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const gone = cur.campaigns.find((x) => x.id === id); await savePromotions({ ...cur, campaigns: cur.campaigns.filter((x) => x.id !== id) }); await dropImage(gone?.image); res.json({ ok: true }); }));
 /** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
 // membership levels: add / edit (including their specials) / delete / reorder. The FIRST level starts at its own "spend" amount (e.g. $30). Every later level needs
-// "pointsMore" more points than the level before it (1 point = memberPointCents paid, default $10); its spend is worked out by layoutTiers.
-const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, pointsMore: b?.pointsMore, specialName: b?.specialName, perks: b?.perks, active: b?.active });
+// "singleOrderCents": the customer must pay that much in ONE order (after holding the level before it).
+const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, singleOrder: b?.singleOrder, specialName: b?.specialName, perks: b?.perks, active: b?.active });
 admin.post("/promotions/membership/save", wrap(async (req, res) => {
   const c = tierFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const at = cur.membership.findIndex((t) => t.id === id); const exists = at >= 0;
   if (!exists && cur.membership.length >= MAX_TIERS) return res.json({ error: `At most ${MAX_TIERS} levels. Delete one first.` });
   const index = exists ? at : cur.membership.length; // a new level goes on top of the ladder (use Move down / up to change)
   if (index === 0 && c.value.minSpendCents < 1) return res.json({ error: "Enter how much a customer pays to join this first level (more than $0)" });
-  if (index > 0 && c.value.pointsMore < 1) return res.json({ error: "Points needed must be 1 or more" });
+  if (index > 0 && c.value.singleOrderCents < 1) return res.json({ error: "Enter how much a customer pays in ONE order to upgrade to this level (more than $0)" });
   const prev = exists ? cur.membership[at] : undefined;
   const value: Tier = exists ? { ...c.value, id, minSpendCents: index === 0 ? c.value.minSpendCents : prev!.minSpendCents } : { ...c.value, id: crypto.randomUUID().slice(0, 8) };
   const list = exists ? cur.membership.map((t, i) => (i === at ? value : t)) : [...cur.membership, value];
-  await savePromotions({ ...cur, membership: layoutTiers(list, cur.memberPointCents) }); if (prev?.image && prev.image !== value.image) await dropImage(prev.image); res.json({ ok: true });
+  await savePromotions({ ...cur, membership: layoutTiers(list, cur.memberPointCents) }); if (prev?.image && prev.image !== value.image) await dropImage(prev.image);
+  const keep = new Set(value.perks.map((p) => p.image).filter(Boolean)); for (const p of prev?.perks ?? []) if (p.image && !keep.has(p.image)) await dropImage(p.image); // pictures of specials that were deleted or replaced
+  res.json({ ok: true });
 }));
 /** Dollars paid for 1 point (default $10). Every level's spend is worked out again from its points. */
 admin.post("/promotions/membership/points", wrap(async (req, res) => {
@@ -685,7 +709,7 @@ admin.post("/promotions/membership/toggle", wrap(async (req, res) => {
 admin.post("/promotions/membership/delete", wrap(async (req, res) => {
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); if (!cur.membership.some((t) => t.id === id)) return res.json({ error: "Level not found" });
   const gone = cur.membership.find((t) => t.id === id);
-  await savePromotions({ ...cur, membership: layoutTiers(cur.membership.filter((t) => t.id !== id), cur.memberPointCents) }); await dropImage(gone?.image); res.json({ ok: true });
+  await savePromotions({ ...cur, membership: layoutTiers(cur.membership.filter((t) => t.id !== id), cur.memberPointCents) }); await dropImage(gone?.image); for (const p of gone?.perks ?? []) await dropImage(p.image); res.json({ ok: true });
 }));
 admin.post("/promotions/image", upload.any(), wrap(async (req, res) => {
   const f = files(req, "image")[0]; if (!f) return res.json({ error: "Choose a picture first" });

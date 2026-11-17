@@ -8,7 +8,7 @@ import type { Area, Method } from "@shared/delivery";
 import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings, usePromotions } from "@/lib/store";
-import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule, fullPriceCents } from "@shared/promotions";
+import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule, fullPriceCents, lineDiscounts } from "@shared/promotions";
 import { memberBenefits } from "@shared/membership";
 import { useMembership } from "@/lib/membership";
 import { useAuth } from "@/lib/auth";
@@ -35,6 +35,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
   const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p!, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
+  const lineOff = lineDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id })), autos, promotions.campaigns, promotions.festivals); // each line's price after the promotions and member specials
   const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
   const ship = freeShip || mem.freeShipping ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
@@ -108,8 +109,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     {method === "QR_IMAGE" && !file && <p className="text-xs text-mute">Upload your payment screenshot to enable &quot;I have paid&quot;.</p>}
 </form>
     <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5 lg:sticky lg:top-24"><h2 className="font-extrabold">{t("Order summary")}</h2>
-      {items.map(({ l, p }) => <p key={`${l.id}|${l.opt ?? ""}`} className="flex justify-between text-sm"><span>{p!.name}{l.opt ? ` (${l.opt})` : ""} × {l.qty}</span><span>{money((p!.salePrice ?? p!.price) * l.qty)}</span></p>)}
-      {autos.map((a) => <p key={a.id} className="flex justify-between text-sm text-green-700"><span>{a.name}</span><span>−{money(a.cents / 100)}</span></p>)}
+      {items.map(({ l, p }, i) => <p key={`${l.id}|${l.opt ?? ""}`} className="flex justify-between text-sm"><span>{p!.name}{l.opt ? ` (${l.opt})` : ""} × {l.qty}</span><span>{money((Math.round((p!.salePrice ?? p!.price) * 100) * l.qty - lineOff[i]) / 100)}</span></p>)}
       {memTier && mem.freeShipping && !freeShip && <p className="flex justify-between text-sm text-green-700"><span>{t("{name} member: Free delivery", { name: memTier.name })}</span><span>{t("FREE")}</span></p>}
       {gifts.map((g) => <p key={g.campaignId} className="flex justify-between text-sm text-green-700"><span>🎁 {g.name} × {g.qty}</span><span>{t("FREE")}</span></p>)}
       {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}

@@ -209,6 +209,22 @@ export function freeShippingRule(cart: { subtotalCents: number; qty: number; are
   return liveCampaigns(campaigns, now).find((c) => c.kind === "free_shipping" && (c.area !== "PHNOM_PENH" || cart.area === "PHNOM_PENH") && ((c.minQty ?? 0) > 0 ? cart.qty >= c.minQty! : cart.subtotalCents >= c.minSpendCents)) ?? null;
 }
 export const autoTotal = (d: AutoDiscount[]) => d.reduce((s, x) => s + x.cents, 0);
+/** Spreads every automatic discount (campaigns, festival offers, member specials) over the cart lines it belongs to, so each line can show its price AFTER discount.
+ *  A discount for one category / product / festival goes only to the matching lines; an order-wide one (spend & save, member special) is shared by every line in proportion to what is left of it.
+ *  Returns cents taken off each line, in the same order as `lines`. The sum always equals autoTotal(autos) (as far as the lines can take it). */
+export function lineDiscounts(lines: { category: string; lineCents: number; productId?: string }[], autos: AutoDiscount[], campaigns: Campaign[], festivals: Festival[] = []): number[] {
+  const off = lines.map(() => 0);
+  for (const a of autos) {
+    const camp = campaigns.find((c) => c.id === a.id), fest = a.id.startsWith("fest-") ? festivals.find((f) => `fest-${f.id}` === a.id) : undefined;
+    const hit = (l: (typeof lines)[number]) => camp ? (camp.kind === "category_percent" || camp.kind === "category_amount" ? l.category.trim().toLowerCase() === camp.category.trim().toLowerCase() : camp.kind === "product_percent" || camp.kind === "product_amount" ? !!l.productId && (camp.productIds ?? []).includes(l.productId) : true) : fest ? !!l.productId && fest.productIds.includes(l.productId) : true;
+    let idx = lines.map((_, i) => i).filter((i) => hit(lines[i]) && lines[i].lineCents - off[i] > 0); if (idx.length === 0) idx = lines.map((_, i) => i).filter((i) => lines[i].lineCents - off[i] > 0);
+    const room = (i: number) => lines[i].lineCents - off[i]; const sum = idx.reduce((s, i) => s + room(i), 0); if (sum <= 0) continue;
+    let left = Math.min(a.cents, sum);
+    for (const i of idx) { const share = Math.min(room(i), Math.floor((a.cents * room(i)) / sum)); off[i] += share; left -= share; }
+    for (const i of [...idx].sort((x, y) => room(y) - room(x))) { if (left <= 0) break; const n = Math.min(left, room(i)); off[i] += n; left -= n; }
+  }
+  return off;
+}
 /** Pre-order orders pay only this deposit now (or the full price when `full` is true: the customer's choice at checkout); any rest is paid when the order is dispatched. */
 export function preorderSplit(totalCents: number, rules: PreorderRules, full = false) {
   const depositCents = full ? totalCents : Math.min(totalCents, Math.max(1, Math.ceil((totalCents * rules.depositPercent) / 100)));

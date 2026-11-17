@@ -4,6 +4,7 @@ import { useCart } from "./CartProvider";
 import { useI18n, LangSwitch } from "@/lib/i18n";
 import { useSettings } from "@/lib/store";
 import { sizeOf } from "@/lib/imageSize";
+import { useProfile } from "@/lib/profile";
 const NAV = [
   { href: "/", label: "Home", match: (p: string) => p === "/" },
   { href: "/shop", label: "Product", match: (p: string) => p.startsWith("/shop") || p.startsWith("/product") },
@@ -32,7 +33,7 @@ const ON = "bg-gradient-to-b from-[#5BAEF5] to-[#3D86E0] text-white shadow-[0_5p
 const itemCls = (active: boolean) => `relative inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-extrabold transition duration-200 hover:-translate-y-0.5 active:scale-95 xl:text-sm ${active ? ON : "text-[#1F4E9C] hover:bg-[#E3F0FF]"}`;
 const Inner = ({ id, label }: { id: ItemId; label: string }) => <>{id !== "home" && ICONS[id]}{label}</>;
 export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string }) {
-  const { count } = useCart(); const { t } = useI18n(); const { settings: sz } = useSettings(); const logoK = sizeOf(sz, "logo");
+  const { count } = useCart(); const { profile } = useProfile(); const { t } = useI18n(); const { settings: sz } = useSettings(); const logoK = sizeOf(sz, "logo");
   const loc = useLocation(); const pathname = loc.pathname; const navigate = useNavigate(); const q = new URLSearchParams(loc.search);
   const [open, setOpen] = useState(false); const [menu, setMenu] = useState(false);
   useEffect(() => { setMenu(false); }, [pathname]);
@@ -56,7 +57,7 @@ export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string
           <button type="button" aria-label={open ? t("Close search") : t("Open search")} aria-expanded={open} onClick={() => { setOpen(!open); setMenu(false); }} className={`${icon} 2xl:hidden`}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{open ? <path d="M6 6l12 12M18 6L6 18" /> : <><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.500-3.500" /></>}</svg></button>
           <LangSwitch className="mx-0.5 sm:mx-1" />
-          <Link to="/account" aria-label={t("Account")} title={t("Account")} aria-current={acctOn ? "page" : undefined} className={`${icon} hidden lg:grid ${acctOn ? ON : ""}`}><UserIcon /></Link>
+          <Link to="/account" aria-label={t("Account")} title={t("Account")} aria-current={acctOn ? "page" : undefined} className={`${icon} hidden lg:grid ${acctOn ? ON : ""}`}>{profile?.avatar ? <img src={profile.avatar} alt="" className={`h-8 w-8 rounded-full object-cover ring-2 ${acctOn ? "ring-white" : "ring-[#CFE3F8]"}`} /> : <UserIcon />}</Link>
           <Link to="/cart" aria-label={t("Cart")} title={t("Cart")} aria-current={cartOn ? "page" : undefined} className={`${icon} hidden lg:grid ${cartOn ? ON : ""}`}><CartIcon />
             {count > 0 && <span key={count} className="badge-pop absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#FF5C8A] px-1 text-[11px] font-extrabold text-white" aria-label={`${count} items`}>{count}</span>}</Link>
           <button type="button" aria-label={menu ? t("Close menu") : t("Open menu")} aria-expanded={menu} aria-controls="mobile-menu" onClick={() => { setMenu(!menu); setOpen(false); }} className={`${icon} lg:hidden`}>
