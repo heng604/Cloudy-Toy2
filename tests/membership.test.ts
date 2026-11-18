@@ -1,45 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TIERS, checkTier, memberBenefits, monthUsage, shopMonth, memberSpendOf, normalizeTiers, tierByOrders, levelAfter } from "../shared/membership";
+import { DEFAULT_TIERS, pointsBalance, checkTier, memberBenefits, monthUsage, shopMonth, memberSpendOf, normalizeTiers, tierByOrders, levelAfter } from "../shared/membership";
 import { DEFAULT_PROMOTIONS, normalizePromotions } from "../shared/promotions";
 
 describe("membership levels", () => {
-  it("defaults: Bronze at $30 paid in total, then ONE order of $200 / $300 / $400", () => {
-    expect(DEFAULT_TIERS.map((t) => [t.name, t.singleOrderCents])).toEqual([["Bronze", 0], ["Silver", 20000], ["Gold", 30000], ["Platinum", 40000]]);
+  it("defaults: Bronze at $30 paid in total, then ONE order of $45 / $100 / $150", () => {
+    expect(DEFAULT_TIERS.map((t) => [t.name, t.singleOrderCents])).toEqual([["Bronze", 0], ["Silver", 4500], ["Gold", 10000], ["Platinum", 15000]]);
     expect(DEFAULT_TIERS[0].minSpendCents).toBe(3000);
   });
   const ord = (n: number, cents: number, shipping = 0, status = "PAID") => ({ paymentStatus: status, totalCents: cents + shipping, shippingCents: shipping, createdAt: `2026-01-${String(n).padStart(2, "0")}T00:00:00Z` });
-  it("Bronze comes from the total paid; Silver needs ONE order of $200 after that", () => {
+  it("Bronze comes from the total paid; Silver needs ONE order of $45 after that", () => {
     expect(tierByOrders([ord(1, 2999)], DEFAULT_TIERS)).toBeNull();
     expect(tierByOrders([ord(1, 1500), ord(2, 1500)], DEFAULT_TIERS)?.name).toBe("Bronze");
-    expect(tierByOrders([ord(1, 3000), ord(2, 10000), ord(3, 10000)], DEFAULT_TIERS)?.name).toBe("Bronze"); // $200 paid in two orders is not enough
-    expect(tierByOrders([ord(1, 3000), ord(2, 19999)], DEFAULT_TIERS)?.name).toBe("Bronze");
-    expect(tierByOrders([ord(1, 3000), ord(2, 20000)], DEFAULT_TIERS)?.name).toBe("Silver");
+    expect(tierByOrders([ord(1, 3000), ord(2, 2500), ord(3, 2500)], DEFAULT_TIERS)?.name).toBe("Bronze"); // $50 paid in two orders is not enough
+    expect(tierByOrders([ord(1, 3000), ord(2, 4499)], DEFAULT_TIERS)?.name).toBe("Bronze");
+    expect(tierByOrders([ord(1, 3000), ord(2, 4500)], DEFAULT_TIERS)?.name).toBe("Silver");
   });
-  it("Gold needs one $300 order after Silver; Platinum one $400 order after Gold", () => {
-    expect(tierByOrders([ord(1, 3000), ord(2, 20000), ord(3, 29999)], DEFAULT_TIERS)?.name).toBe("Silver");
-    expect(tierByOrders([ord(1, 3000), ord(2, 20000), ord(3, 30000)], DEFAULT_TIERS)?.name).toBe("Gold");
-    expect(tierByOrders([ord(1, 3000), ord(2, 20000), ord(3, 30000), ord(4, 39999)], DEFAULT_TIERS)?.name).toBe("Gold");
-    expect(tierByOrders([ord(1, 3000), ord(2, 20000), ord(3, 30000), ord(4, 40000)], DEFAULT_TIERS)?.name).toBe("Platinum");
+  it("Gold needs one $100 order after Silver; Platinum one $150 order after Gold", () => {
+    expect(tierByOrders([ord(1, 3000), ord(2, 4500), ord(3, 9999)], DEFAULT_TIERS)?.name).toBe("Silver");
+    expect(tierByOrders([ord(1, 3000), ord(2, 4500), ord(3, 10000)], DEFAULT_TIERS)?.name).toBe("Gold");
+    expect(tierByOrders([ord(1, 3000), ord(2, 4500), ord(3, 10000), ord(4, 14999)], DEFAULT_TIERS)?.name).toBe("Gold");
+    expect(tierByOrders([ord(1, 3000), ord(2, 4500), ord(3, 10000), ord(4, 15000)], DEFAULT_TIERS)?.name).toBe("Platinum");
   });
   it("the order that makes them a member does not upgrade them; one big order after Bronze can climb several levels", () => {
     expect(tierByOrders([ord(1, 50000)], DEFAULT_TIERS)?.name).toBe("Bronze");
-    expect(tierByOrders([ord(1, 3000), ord(2, 40000)], DEFAULT_TIERS)?.name).toBe("Platinum");
+    expect(tierByOrders([ord(1, 3000), ord(2, 15000)], DEFAULT_TIERS)?.name).toBe("Platinum");
   });
   it("delivery and unpaid / refunded orders do not count; order of arrival does not matter", () => {
-    expect(tierByOrders([ord(1, 3000), ord(2, 19000, 1500)], DEFAULT_TIERS)?.name).toBe("Bronze");
-    expect(tierByOrders([ord(1, 3000), ord(2, 20000, 0, "PENDING"), ord(3, 20000, 0, "REFUNDED")], DEFAULT_TIERS)?.name).toBe("Bronze");
-    expect(tierByOrders([ord(2, 20000), ord(1, 3000)], DEFAULT_TIERS)?.name).toBe("Silver");
+    expect(tierByOrders([ord(1, 3000), ord(2, 4000, 1500)], DEFAULT_TIERS)?.name).toBe("Bronze");
+    expect(tierByOrders([ord(1, 3000), ord(2, 4500, 0, "PENDING"), ord(3, 4500, 0, "REFUNDED")], DEFAULT_TIERS)?.name).toBe("Bronze");
+    expect(tierByOrders([ord(2, 4500), ord(1, 3000)], DEFAULT_TIERS)?.name).toBe("Silver");
   });
   it("levelAfter: the first level for a non-member, then the ladder, null at the top", () => {
     expect(levelAfter(null, DEFAULT_TIERS)?.name).toBe("Bronze"); expect(levelAfter(DEFAULT_TIERS[1], DEFAULT_TIERS)?.name).toBe("Gold"); expect(levelAfter(DEFAULT_TIERS[3], DEFAULT_TIERS)).toBeNull();
   });
-  it("levels saved with the old point rules get the $200 / $300 one-order amounts", () => {
+  it("levels saved with the old point rules get the default one-order amounts", () => {
     const old = normalizeTiers([{ id: "b", name: "Bronze", emoji: "x", minSpendCents: 3000, active: true, perks: [] }, { id: "s", name: "Silver", emoji: "y", minSpendCents: 7000, pointsMore: 4, active: true, perks: [] }]);
-    expect(old.map((t) => t.singleOrderCents)).toEqual([0, 20000]);
+    expect(old.map((t) => t.singleOrderCents)).toEqual([0, 4500]);
   });
   it("paused levels are ignored", () => {
     const t = DEFAULT_TIERS.map((x) => (x.id === "gold" ? { ...x, active: false } : x));
-    expect(tierByOrders([ord(1, 3000), ord(2, 20000), ord(3, 30000)], t)?.name).toBe("Silver");
+    expect(tierByOrders([ord(1, 3000), ord(2, 4500), ord(3, 10000)], t)?.name).toBe("Silver");
   });
   it("spend counts only PAID orders, without delivery", () => {
     expect(memberSpendOf([{ paymentStatus: "PAID", totalCents: 5000, shippingCents: 150 }, { paymentStatus: "PENDING", totalCents: 9000, shippingCents: 0 }, { paymentStatus: "REFUNDED", totalCents: 4000, shippingCents: 0 }])).toBe(4850);
@@ -136,5 +136,22 @@ describe("custom special with detail and picture", () => {
   it("rejects a bad picture address or a too-long detail", () => {
     expect(checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "custom", title: "Gift", image: "javascript:alert(1)" }] }).ok).toBe(false);
     expect(checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "custom", title: "Gift", detail: "a".repeat(301) }] }).ok).toBe(false);
+  });
+  it("default specials: Silver 5% / Gold 10% from $10, Platinum 15% + free delivery from $60, all FULL-PRICE only, every level earns points", () => {
+    const by = (id: string) => DEFAULT_TIERS.find((t) => t.id === id)!;
+    expect(by("bronze").perks.map((p) => p.kind)).toEqual(["custom"]);
+    const sil = by("silver").perks.find((p) => p.kind === "percent")!, gold = by("gold").perks.find((p) => p.kind === "percent")!, plat = by("platinum");
+    expect([sil.percent, sil.minSpendCents, sil.onPromo]).toEqual([5, 1000, false]); expect([gold.percent, gold.minSpendCents, gold.onPromo]).toEqual([10, 1000, false]);
+    expect(plat.perks.find((p) => p.kind === "percent")).toMatchObject({ percent: 15, minSpendCents: 0, onPromo: false }); expect(plat.perks.find((p) => p.kind === "free_shipping")?.minSpendCents).toBe(6000);
+    for (const t of DEFAULT_TIERS) expect(t.perks.some((p) => p.kind === "custom" && /points/i.test(p.title))).toBe(true);
+  });
+  it("the % special only looks at the in-stock full-price part of the cart; delivery is free from $60 on Platinum", () => {
+    const plat = DEFAULT_TIERS[3]; const m = memberBenefits(plat, { subtotalCents: 6000, leftCents: 6000, fullPriceCents: 4000 });
+    expect(m.discounts.map((d) => d.cents)).toEqual([600]); expect(m.freeShipping).toBe(true);
+    expect(memberBenefits(plat, { subtotalCents: 5999, leftCents: 5999 }).freeShipping).toBe(false);
+    expect(memberBenefits(DEFAULT_TIERS[1], { subtotalCents: 999, leftCents: 999 }).discounts).toEqual([]); // Silver: from $10
+  });
+  it("points: 1 per $10 after the first $30, minus what was spent on gifts", () => {
+    expect(pointsBalance(3000, DEFAULT_TIERS, 0)).toBe(0); expect(pointsBalance(13000, DEFAULT_TIERS, 0)).toBe(10); expect(pointsBalance(13000, DEFAULT_TIERS, 4)).toBe(6); expect(pointsBalance(13000, DEFAULT_TIERS, 99)).toBe(0);
   });
 });

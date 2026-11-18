@@ -7,6 +7,7 @@ import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 import type { StoredOrder } from "@shared/types";
 import MemberCard from "@/components/MemberCard";
+import GiftExchange from "@/components/GiftExchange";
 import Avatar from "@/components/Avatar";
 import { useProfile } from "@/lib/profile";
 function OrdersCard({ email }: { email: string }) {
@@ -21,6 +22,7 @@ export default function Account() {
   return (<RequireUser>{(user) => (<div className="max-w-xl space-y-4"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("My account")}</h1>
     <div className="flex items-center gap-3"><Avatar src={profile?.avatar} name={profile?.name || user.email || ""} size={52} /><div className="min-w-0">{profile?.name && <p className="truncate font-extrabold">{profile.name}</p>}<p className="truncate text-mute">{t("Signed in as {email}", { email: user.email ?? "" })}</p></div></div>
     <MemberCard />
+    <GiftExchange />
     <div className="grid gap-3 sm:grid-cols-2"><Link to="/account/profile" className="rounded-xl2 border border-sky-border bg-white p-5 font-bold shadow-soft">{t("Profile")}</Link><OrdersCard email={user.email ?? user.id} /></div>
     <button onClick={async () => { await signOut(); navigate("/"); }} className="min-h-11 rounded-full border border-sky-border bg-white px-6 font-bold">{t("Sign out")}</button></div>)}</RequireUser>);
 }

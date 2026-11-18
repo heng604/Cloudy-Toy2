@@ -9,7 +9,8 @@ import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings, usePromotions } from "@/lib/store";
 import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule, fullPriceCents, lineDiscounts } from "@shared/promotions";
-import { memberBenefits } from "@shared/membership";
+import { memberBenefits, pointsOf } from "@shared/membership";
+import { useProfile } from "@/lib/profile";
 import { useMembership } from "@/lib/membership";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
@@ -26,6 +27,11 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const [code, setCode] = useState(() => { try { return sessionStorage.getItem("ct-event-code") ?? ""; } catch { return ""; } }); const [applied, setApplied] = useState<{ code: string; cents: number } | null>(null); const [codeMsg, setCodeMsg] = useState(""); const [checking, setChecking] = useState(false); // an event code picked on the Special Offer page is pre-filled in the code box (press Apply)
   const [area, setArea] = useState<Area>("PHNOM_PENH"); const [pick, setPick] = useState<Method | null>(null); const setMethod = (m: Method) => setPick(m);
   const [bakong, setBakong] = useState(false); const [payFull, setPayFull] = useState(false); // pre-order carts: 50% deposit (default) or the full price now
+  const formRef = useRef<HTMLFormElement>(null); const { profile } = useProfile();
+  useEffect(() => { // contact details come from the customer's own profile (Account > Profile); only empty boxes are filled, so nothing they typed is overwritten
+    if (!profile || !formRef.current) return; const f = formRef.current;
+    for (const [k, v] of Object.entries({ name: profile.name, phone: profile.phone, address: profile.address, facebook: profile.facebook, telegram: profile.telegram })) { const el = f.elements.namedItem(k) as HTMLInputElement | HTMLTextAreaElement | null; if (el && !el.value && v) el.value = v; }
+  }, [profile]);
   useEffect(() => { let live = true; fetch("/api/payment/bakong/enabled").then((r) => r.json()).then((j) => { if (live && j?.enabled) setBakong(true); }).catch(() => {}); return () => { live = false; }; }, []);
   const hasPre = lines.some((l) => products.find((p) => p.id === l.id)?.preorder);
   const avail: Record<Method, boolean> = { BAKONG: bakong && methodOn(site, "BAKONG"), QR_IMAGE: methodOn(site, "QR_IMAGE"), COD: methodOn(site, "COD") && area === "PHNOM_PENH" && !hasPre };
@@ -34,7 +40,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
-  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p!, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
+  const { tier: memTier, spendCents: memSpend } = useMembership(), subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p!, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
   const lineOff = lineDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id })), autos, promotions.campaigns, promotions.festivals); // each line's price after the promotions and member specials
   const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
@@ -75,9 +81,9 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   };
   const link = "block rounded-full bg-sky px-4 py-2 text-center font-bold hover:bg-sky-hover";
   const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3"; const opt = "flex items-start gap-3 rounded-xl border border-sky-border bg-white p-4";
-  return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form onSubmit={submit} className="space-y-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Checkout")}</h1>
+  return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form ref={formRef} onSubmit={submit} className="space-y-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Checkout")}</h1>
     <label className="block">{t("Full name")}<input name="name" required minLength={2} autoComplete="name" placeholder="Example: Sok Dara" className={cls} /></label>
-    <label className="block">{t("Email")}<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
+    <label className="block">{t("Email")}<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} readOnly={!!user?.email} title={user?.email ? t("From your login") : undefined} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
     <label className="block">{t("Phone")}<input name="phone" type="tel" required minLength={6} autoComplete="tel" placeholder="Example: 012 345 678" className={cls} /></label>
     <div className="grid gap-3 sm:grid-cols-2"><label className="block">{t("Facebook name")}<input name="facebook" maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
       <label className="block">{t("Telegram username")}<input name="telegram" maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
@@ -114,6 +120,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       {gifts.map((g) => <p key={g.campaignId} className="flex justify-between text-sm text-green-700"><span>🎁 {g.name} × {g.qty}</span><span>{t("FREE")}</span></p>)}
       {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}
       <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span className={freeShip || mem.freeShipping ? "font-semibold text-green-700" : ""}>{freeShip || mem.freeShipping ? t("FREE") : money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(totalC / 100)}</span></p>
+      {user && promotions.membership.length > 0 && (() => { const goods = Math.max(0, totalC - Math.round((freeShip || mem.freeShipping ? 0 : ship) * 100)), pts = pointsOf(memSpend + goods, promotions.membership, promotions.memberPointCents) - pointsOf(memSpend, promotions.membership, promotions.memberPointCents); return <p className="flex justify-between text-sm font-bold text-[#5B3FC8]"><span>{t("Points you earn with this order")}</span><span>+{pts} {t("pts")}</span></p>; })()}
       {split && <><p className="flex justify-between text-sm font-bold text-[#A97A0B]"><span>{split.balanceCents > 0 ? `Deposit due now (${split.percent}%)` : "Full price due now"}</span><span>{money(split.depositCents / 100)}</span></p>{split.balanceCents > 0 && <p className="flex justify-between text-sm text-mute"><span>Balance at dispatch ({split.dispatch})</span><span>{money(split.balanceCents / 100)}</span></p>}</>}
       <p className="text-xs text-mute">The server sets the final total.</p></aside>
     <dialog ref={dlg} onClose={onClosePopup} className="max-w-sm rounded-xl2 p-6 backdrop:bg-black/40"><h2 className="text-lg font-extrabold">Please contact our admin</h2>
