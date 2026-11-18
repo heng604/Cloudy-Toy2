@@ -41,19 +41,19 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x) => x.p);
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
-  const { tier: memTier, spendCents: memSpend } = useMembership(), subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p!, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
+  const { tier: memTier, spendCents: memSpend, isMember: isMem } = useMembership(), noCode = !!memTier || isMem, subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p!, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
   const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
   const ship = freeShip || mem.freeShipping ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
   if (!items.length) return <p className="rounded-3xl bg-white/90 p-8 text-center shadow-soft">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;
   async function applyCode() {
-    if (!code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
+    if (noCode || !code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
     const res = await api("/discount/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, lines: lines.map((l) => ({ productId: l.id, qty: l.qty })) }) });
     const d = await res.json().catch(() => ({})); setChecking(false);
     if (!res.ok) { setCodeMsg(t(d.error ?? "Could not check the code.")); return; }
     setApplied({ code: d.code, cents: d.discountCents }); setCodeMsg("");
   }
-  const discount = applied ? applied.cents / 100 : 0;
+  const discount = applied && !noCode ? applied.cents / 100 : 0;
   const totalC = Math.round((subtotal - autoOff - discount + ship) * 100), split = hasPre ? preorderSplit(totalC, promotions.preorder, payFull) : null, payNow = (split ? split.depositCents : totalC) / 100;
   const goodsC = Math.max(0, totalC - Math.round(ship * 100)); // goods only: delivery never counts toward points or levels
   function pickArea(a: Area) { setArea(a); }
@@ -64,7 +64,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     const f = new FormData(e.currentTarget); const v = (k: string) => String(f.get(k) ?? "");
     const res = await api("/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       customer: { name: v("name"), email: v("email"), phone: v("phone"), address: v("address"), notes: v("notes") || undefined, facebook: v("facebook") || undefined, telegram: v("telegram") || undefined }, area, ...(area === "PROVINCE" ? { province } : {}), method,
-      lines: lines.map((l) => ({ productId: l.id, qty: l.qty, ...(l.opt ? { option: l.opt } : {}) })), code: memTier ? undefined : code.trim() || undefined, ...(hasPre ? { preorderPay: payFull ? "full" : "deposit" } : {}) }) });
+      lines: lines.map((l) => ({ productId: l.id, qty: l.qty, ...(l.opt ? { option: l.opt } : {}) })), code: noCode ? undefined : code.trim() || undefined, ...(hasPre ? { preorderPay: payFull ? "full" : "deposit" } : {}) }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setErr(t(data.error ?? "Something went wrong.")); setBusy(false); return; }
     if (method === "QR_IMAGE" && file) { // send the payment screenshot to the admin, then show the notification popup
@@ -110,10 +110,10 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => pickProof(e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-xl border border-sky-border bg-white px-3 py-2 text-sm font-normal" /></label>
         {preview && <img src={preview} alt="Your payment screenshot" className="mx-auto max-h-48 rounded-lg border border-sky-border" />}</div></div>}
     </section>
-    <section className={`${card} space-y-3`}>{memTier && (memAll.discounts.length > 0 || memAll.freeShipping) && <div className="rounded-2xl border border-[#D6E6FB] bg-[#EEF4FF] p-3.5 text-sm font-bold text-[#5B3FC8]"><span>{t("Your {name} member special is applied automatically", { name: memTier.name })}</span><span className="block text-xs font-normal text-mute">{[...memAll.discounts.map((d) => `${d.name}: −${money(d.cents / 100)}`), ...(memAll.freeShipping ? [t("Free delivery")] : [])].join(" · ")} {t("Each use counts toward your monthly limit. You can also add a discount code on top.")}</span></div>}
-    <div><label className="block">{t("Discount code")}<span className="mt-1 flex gap-2"><input value={code} placeholder="Example: TOY10" onChange={(e) => { setCode(e.target.value.toUpperCase()); setApplied(null); setCodeMsg(""); }} maxLength={40} autoComplete="off" className={`${cls} font-mono uppercase`} />
-      <button type="button" onClick={applyCode} disabled={checking || !code.trim()} className="mt-1 rounded-full bg-[#E6EEFF] px-5 font-extrabold text-[#2B3FA8] hover:bg-[#D5E3FF] disabled:opacity-50">{checking ? "…" : t("Apply")}</button></span></label>
-      <p className="mt-1 text-xs text-mute">{memTier ? t("Discount codes are for customers without a membership. Your member specials are applied automatically.") : t("Takes 10% to 50% off products that have no discount. Not for members.")}</p>{applied && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div></section>
+    <section className={`${card} space-y-3`}>{memTier && (memAll.discounts.length > 0 || memAll.freeShipping) && <div className="rounded-2xl border border-[#D6E6FB] bg-[#EEF4FF] p-3.5 text-sm font-bold text-[#5B3FC8]"><span>{t("Your {name} member special is applied automatically", { name: memTier.name })}</span><span className="block text-xs font-normal text-mute">{[...memAll.discounts.map((d) => `${d.name}: −${money(d.cents / 100)}`), ...(memAll.freeShipping ? [t("Free delivery")] : [])].join(" · ")} {t("Each use counts toward your monthly limit.")}</span></div>}
+    <div><label className="block">{t("Discount code")}<span className="mt-1 flex gap-2"><input value={code} placeholder="Example: TOY10" onChange={(e) => { setCode(e.target.value.toUpperCase()); setApplied(null); setCodeMsg(""); }} maxLength={40} autoComplete="off" disabled={noCode} className={`${cls} font-mono uppercase disabled:cursor-not-allowed disabled:opacity-50`} />
+      <button type="button" onClick={applyCode} disabled={noCode || checking || !code.trim()} className="mt-1 rounded-full bg-[#E6EEFF] px-5 font-extrabold text-[#2B3FA8] hover:bg-[#D5E3FF] disabled:opacity-50">{checking ? "…" : t("Apply")}</button></span></label>
+      <p className="mt-1 text-xs text-mute">{noCode ? t("Discount codes are for customers without a membership. Your member specials are applied automatically.") : t("Takes 10% to 50% off products that have no discount. Not for members.")}</p>{applied && !noCode && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div></section>
     {err && <p role="alert" className="text-red-700">{err}</p>}
     {method === "QR_IMAGE" && !file && <p className="text-xs text-mute">Upload your payment screenshot to enable &quot;I have paid&quot;.</p>}
 </form>
