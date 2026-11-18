@@ -138,14 +138,14 @@ export function monthUsage(orders: { createdAt?: string; paymentStatus: string; 
   return out;
 }
 /** Money specials of a level for one cart. subtotalCents = cart before discounts (used for each special's minimum), leftCents = what is still left to discount after the shop's automatic campaigns. Never takes off more than leftCents. used = times each special was already used this month; a special at its monthly limit is skipped. perks = ids of the specials that applied (recorded on the order so the limit can be counted). */
-export function memberBenefits(tier: Tier | null, cart: { subtotalCents: number; leftCents: number; /** part of the cart that is NOT already discounted (see fullPriceCents); leave out = whole cart */ fullPriceCents?: number }, used: Record<string, number> = {}): { discounts: MemberDiscount[]; freeShipping: boolean; perks: string[]; shipPerks: string[] } {
-  const out: MemberDiscount[] = [], perks: string[] = [], shipPerks: string[] = []; let left = Math.max(0, cart.leftCents), freeShipping = false;
+export function memberBenefits(tier: Tier | null, cart: { subtotalCents: number; leftCents: number; /** part of the cart that is NOT already discounted (see fullPriceCents); leave out = whole cart */ fullPriceCents?: number; /** pre-order part of the cart: pre-order products get NO member discount, and a cart with one gets NO member free delivery */ preorderCents?: number }, used: Record<string, number> = {}): { discounts: MemberDiscount[]; freeShipping: boolean; perks: string[]; shipPerks: string[] } {
+  const out: MemberDiscount[] = [], perks: string[] = [], shipPerks: string[] = []; const pre = Math.max(0, cart.preorderCents ?? 0), eff = Math.max(0, cart.subtotalCents - pre); let left = Math.min(Math.max(0, cart.leftCents), eff), freeShipping = false;
   if (!tier) return { discounts: out, freeShipping, perks, shipPerks };
   for (const p of tier.perks) {
-    if (!p.active || cart.subtotalCents < p.minSpendCents) continue;
+    if (!p.active || eff < p.minSpendCents) continue;
     if (p.monthlyLimit > 0 && (used[p.id] ?? 0) >= p.monthlyLimit) continue;
-    if (p.kind === "free_shipping") { freeShipping = true; shipPerks.push(p.id); continue; }
-    const base = p.onPromo ? cart.subtotalCents : Math.min(cart.subtotalCents, Math.max(0, cart.fullPriceCents ?? cart.subtotalCents)); // a special that is not for discounted products only looks at the full-price part of the cart
+    if (p.kind === "free_shipping") { if (pre > 0) continue; freeShipping = true; shipPerks.push(p.id); continue; } // no member free delivery when the cart has a pre-order
+    const base = p.onPromo ? eff : Math.min(eff, Math.max(0, cart.fullPriceCents ?? eff)); // a special that is not for discounted products only looks at the full-price part of the cart
     const want = p.kind === "percent" ? Math.round((base * p.percent) / 100) : p.kind === "amount" ? Math.min(p.amountCents, base) : 0;
     const cents = Math.min(want, left); if (cents > 0) { out.push({ id: `member-${tier.id}-${p.id}`, name: p.title === tier.name ? `${tier.name} member` : `${tier.name} member: ${p.title}`, cents }); perks.push(p.id); left -= cents; }
   }

@@ -142,3 +142,9 @@ describe("discount codes only on products without a discount", () => {
   });
   it("is 0 when every line has a discount", () => { expect(codeEligibleCents([{ p: sale, lineCents: 1500 }], [])).toBe(0); });
 });
+
+describe("pre-order products and discount codes", () => {
+  it("excludes pre-order lines from code discounts", () => {
+    expect(codeEligibleCents([{ p: { id: "x", category: "Blocks", price: 20, salePrice: null, stock: 5, labels: ["preorder"] }, lineCents: 2000 }, { p: { id: "y", category: "Blocks", price: 10, salePrice: null, stock: 5 }, lineCents: 1000 }], [])).toBe(1000);
+  });
+});

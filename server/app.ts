@@ -145,18 +145,18 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   }
   const catalog = catalogOf(products.filter((p) => ids.includes(p.id))); let usedCode: string | undefined;
   try {
-    const t00 = computeTotals(lines, catalog, 0); const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
-    const memShip = memberBenefits(member.tier, { subtotalCents: t00.subtotalCents, leftCents: 0 }, member.used); const memFree = memShip.freeShipping; // a member special can waive delivery too
+    const t00 = computeTotals(lines, catalog, 0); const preOf = (its: { productId: string; lineCents: number }[]) => its.reduce((n, i) => { const p = products.find((x) => x.id === i.productId); return p && isPreorder(p) ? n + i.lineCents : n; }, 0); // pre-order lines: no member discount, no member free delivery, no code const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
+    const memShip = memberBenefits(member.tier, { subtotalCents: t00.subtotalCents, leftCents: 0, preorderCents: preOf(t00.items) }, member.used); const memFree = memShip.freeShipping; // a member special can waive delivery too
     const ship = freeShip || memFree ? 0 : shippingFor(area, settings); // a live "Free Shipping" rule waives the delivery fee
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
     // automatic campaigns first (stack, never more than the subtotal), then the typed code takes its % off what is left
     const auto = autoDiscounts(t0.items.map((i) => ({ category: byId.get(i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    const mb = memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, member.used); auto.push(...mb.discounts); const memberPerks = [...mb.perks, ...(memFree && !freeShip ? memShip.shipPerks : [])]; // the member's level specials stack after the shop's campaigns
+    const mb = memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto), preorderCents: preOf(t0.items), fullPriceCents: fullPriceCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, member.used); auto.push(...mb.discounts); const memberPerks = [...mb.perks, ...(memFree && !freeShip ? memShip.shipPerks : [])]; // the member's level specials stack after the shop's campaigns
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
       if (member.isMember) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
       const codeBase = Math.min(codeEligibleCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals), t0.subtotalCents - discount);
-      if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Every product in your cart already has a sale, campaign or promotion." });
+      if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Pre-order products and products that already have a sale or promotion are not included." });
       const ev = await resolveDiscount(codeIn, [{ lineCents: codeBase }], true, acct?.email ?? undefined);
       if (!ev.ok) return res.status(400).json({ error: ev.error });
       usedCode = codeIn; discount += ev.discountCents;
@@ -218,7 +218,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
     const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); const byId = new Map(products.map((p) => [p.id, p]));
     if (mem.isMember) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
     const codeBase = Math.min(codeEligibleCents(t.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals), t.subtotalCents - autoTotal(auto));
-    if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Every product in your cart already has a sale, campaign or promotion." });
+    if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Pre-order products and products that already have a sale or promotion are not included." });
     const ev = await resolveDiscount(code, [{ lineCents: codeBase }], false, who?.email ?? undefined);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }

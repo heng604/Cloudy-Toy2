@@ -34,7 +34,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
   const saved = items.reduce((s, x) => s + (x.p.salePrice ? (x.p.price - x.p.salePrice) * x.l.qty : 0), 0);
   const count = items.reduce((s, x) => s + x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p.category ?? "", lineCents: Math.round(unit(x.p) * 100) * x.l.qty, productId: x.p.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
-  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...memAll.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
+  const { tier: memTier } = useMembership(), subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), preorderCents: items.reduce((n, x) => (x.p.preorder ? n + Math.round(unit(x.p) * 100) * x.l.qty : n), 0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...memAll.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p.id, category: x.p.category ?? "", qty: x.l.qty, lineCents: Math.round(unit(x.p) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - totalQty(bp.id))) }] : []; }).filter((g) => g.qty > 0);
   const cartInfo = { subtotalCents: Math.round(subtotal * 100), qty: count }, freeAll = freeShippingRule({ ...cartInfo, area: "PROVINCE" }, promotions.campaigns), freePP = freeAll ?? freeShippingRule({ ...cartInfo, area: "PHNOM_PENH" }, promotions.campaigns);
   const hasPre = items.some((x) => x.p.preorder);
@@ -125,7 +125,7 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
             <p className="mt-3 flex items-baseline justify-between border-t border-sky-border pt-3"><span className="font-extrabold text-[#2B1A8F]">{t("Total due")}</span><span className="text-2xl font-extrabold text-[#2B1A8F]">{money(subtotal - autoOff)}</span></p>
             <PointsBox goodsCents={Math.round((subtotal - autoOff) * 100)} /></div>
           {hasPre && <p className="rounded-xl bg-[#FFF6D8] p-3 text-xs">Your cart has a <b>pre-order</b> item: you pay a {promotions.preorder.depositPercent}% deposit at checkout (or the full price if you prefer) and any rest when it is dispatched ({promotions.preorder.dispatchText}).</p>}
-          <p className="text-xs text-mute">Display only. Delivery and your discount code (10% to 50% off, non-members, products without a discount) are applied at checkout.</p>
+          <p className="text-xs text-mute">Display only. Delivery and your discount code (10% to 50% off, non-members, products without a discount, not pre-order) are applied at checkout.</p>
 
           {blocked
             ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Please fix the items marked above before checking out.</p>
