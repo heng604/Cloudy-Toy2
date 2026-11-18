@@ -8,7 +8,7 @@ import type { Area, Method } from "@shared/delivery";
 import { ADMIN_EMAIL } from "@shared/admin";
 import { compressFormData } from "@/lib/compress";
 import { useSettings, usePromotions } from "@/lib/store";
-import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule, fullPriceCents, lineDiscounts } from "@shared/promotions";
+import { autoDiscounts, autoTotal, preorderSplit, bogoGifts, freeShippingRule, fullPriceCents } from "@shared/promotions";
 import { memberBenefits, pointsOf } from "@shared/membership";
 import { useProfile } from "@/lib/profile";
 import { useMembership } from "@/lib/membership";
@@ -17,6 +17,7 @@ import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PROVINCES } from "@shared/provinces";
 import { methodOn, modeOf } from "@shared/payOptions";
+import { MemberPill, MemberPanel, PointsBox, SecHead, Line, card, field, radioCard, bigBtn, cardTitle } from "@/components/cartUi";
 export default function CheckoutForm({ fees, products, telegram = "", facebook = "" }: { fees: { pp: number; prov: number }; products: CartProduct[]; telegram?: string; facebook?: string }) {
   const { settings: site } = useSettings(); const { promotions } = usePromotions(); const { user } = useAuth(); const { t, lang } = useI18n(); const [province, setProvince] = useState("");
   const { lines, clear } = useCart(); const navigate = useNavigate(); const router = { push: (p: string) => navigate(p) };
@@ -41,11 +42,10 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   const subtotal = items.reduce((s, x) => s + (x.p!.salePrice ?? x.p!.price) * x.l.qty, 0);
   const autos0 = autoDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id, qty: x.l.qty })), promotions.campaigns, promotions.festivals);
   const { tier: memTier, spendCents: memSpend } = useMembership(), subC = Math.round(subtotal * 100), memAll = memberBenefits(memTier, { subtotalCents: subC, leftCents: subC - autoTotal(autos0), fullPriceCents: fullPriceCents(items.map((x) => ({ p: x.p!, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns, promotions.festivals) }), mem = memAll, autos = [...autos0, ...mem.discounts], autoOff = autoTotal(autos) / 100; // the customer's membership level specials
-  const lineOff = lineDiscounts(items.map((x) => ({ category: x.p!.category ?? "", lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty, productId: x.p!.id })), autos, promotions.campaigns, promotions.festivals); // each line's price after the promotions and member specials
   const freeShip = freeShippingRule({ subtotalCents: Math.round(subtotal * 100), qty: items.reduce((n, x) => n + x.l.qty, 0), area }, promotions.campaigns);
   const gifts = bogoGifts(items.map((x) => ({ productId: x.p!.id, category: x.p!.category ?? "", qty: x.l.qty, lineCents: Math.round((x.p!.salePrice ?? x.p!.price) * 100) * x.l.qty })), promotions.campaigns).flatMap((g) => { const bp = products.find((p) => p.id === g.productId); return bp && (bp.stock ?? 0) > 0 ? [{ ...g, name: bp.name, qty: Math.min(g.qty, Math.max(0, (bp.stock ?? 0) - (items.find((x) => x.p!.id === bp.id)?.l.qty ?? 0))) }] : []; }).filter((g) => g.qty > 0);
   const ship = freeShip || mem.freeShipping ? 0 : (area === "PHNOM_PENH" ? fees.pp : fees.prov) / 100;
-  if (!items.length) return <p className="rounded-xl2 bg-sky-pale p-8 text-center">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;
+  if (!items.length) return <p className="rounded-3xl bg-white/90 p-8 text-center shadow-soft">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;
   async function applyCode() {
     if (!code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
     const res = await fetch("/api/discount/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, lines: lines.map((l) => ({ productId: l.id, qty: l.qty })) }) });
@@ -55,6 +55,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   }
   const discount = applied ? applied.cents / 100 : 0;
   const totalC = Math.round((subtotal - autoOff - discount + ship) * 100), split = hasPre ? preorderSplit(totalC, promotions.preorder, payFull) : null, payNow = (split ? split.depositCents : totalC) / 100;
+  const goodsC = Math.max(0, totalC - Math.round(ship * 100)); // goods only: delivery never counts toward points or levels
   function pickArea(a: Area) { setArea(a); }
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); if (busy || placed) return; setErr("");
@@ -80,50 +81,59 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     clear(); router.push(ok ? "/" : `/payment/${placed}`);
   };
   const link = "block rounded-full bg-sky px-4 py-2 text-center font-bold hover:bg-sky-hover";
-  const cls = "w-full rounded-xl border border-sky-border bg-white px-4 py-3"; const opt = "flex items-start gap-3 rounded-xl border border-sky-border bg-white p-4";
-  return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form ref={formRef} onSubmit={submit} className="space-y-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Checkout")}</h1>
+  const cls = field, opt = radioCard;
+  return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form id="checkout-form" ref={formRef} onSubmit={submit} className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="font-display text-3xl font-extrabold text-[#2B1A8F] sm:text-4xl">{t("Checkout")}</h1><p className="text-mute">{t("One more step to a happy delivery")} ♡</p></div><MemberPill /></div>
+    <section className={`${card} space-y-3`}><div className="flex items-start justify-between gap-3"><div><h2 className={cardTitle}>{t("Contact & Delivery Information")}</h2><p className="text-sm text-mute">{t("Name and email are filled automatically from your logged-in account.")}</p></div><span className="shrink-0 rounded-full border border-[#D6E6FB] bg-[#EEF4FF] px-3 py-1 text-xs font-extrabold text-[#5B3FC8]">{t("From your login")}</span></div>
     <label className="block">{t("Full name")}<input name="name" required minLength={2} autoComplete="name" placeholder="Example: Sok Dara" className={cls} /></label>
     <label className="block">{t("Email")}<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} readOnly={!!user?.email} title={user?.email ? t("From your login") : undefined} placeholder="Example: sokdara@gmail.com" className={cls} /></label>
     <label className="block">{t("Phone")}<input name="phone" type="tel" required minLength={6} autoComplete="tel" placeholder="Example: 012 345 678" className={cls} /></label>
     <div className="grid gap-3 sm:grid-cols-2"><label className="block">{t("Facebook name")}<input name="facebook" maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
       <label className="block">{t("Telegram username")}<input name="telegram" maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
-    <fieldset className="space-y-2"><legend className="font-semibold">{t("Delivery area")}</legend>
+    <fieldset className="space-y-2"><legend className="mb-1 text-sm font-extrabold text-[#2B1A8F]">🚚 {t("Delivery area")}</legend>
       <label className={opt}><input type="radio" name="area" checked={area === "PHNOM_PENH"} onChange={() => pickArea("PHNOM_PENH")} />{t("Phnom Penh")} · {money(fees.pp / 100)}</label>
       <label className={opt}><input type="radio" name="area" checked={area === "PROVINCE"} onChange={() => pickArea("PROVINCE")} />{t("Province")} · {money(fees.prov / 100)}</label>
       {area === "PROVINCE" && <label className="block">{t("Choose province")}<select name="province" required value={province} onChange={(e) => setProvince(e.target.value)} className={cls}><option value="" disabled>{t("Select your province")}</option>{PROVINCES.map((p) => <option key={p.en} value={p.en}>{lang === "km" ? p.km : p.en}</option>)}</select></label>}</fieldset>
     <label className="block">{t("Delivery address")}<textarea name="address" required minLength={5} rows={3} placeholder="Example: House 12, Street 271, Sangkat Tuol Tumpung 1, Khan Chamkar Mon, Phnom Penh" className={cls} /></label>
     <label className="block">{t("Delivery instructions")}<input name="notes" placeholder="Example: Call me before arriving" className={cls} /></label>
-    {split && <fieldset className="space-y-2 rounded-xl2 border border-sky-border p-4"><legend className="px-1 font-semibold">Pre-order payment</legend>
+    </section>
+    {split && <section className={`${card} space-y-2`}><h2 className={cardTitle}>Pre-order payment</h2><div className="space-y-2">
       <label className={opt}><input type="radio" name="prepay" checked={!payFull} onChange={() => setPayFull(false)} /><span>Pay {promotions.preorder.depositPercent}% deposit now <span className="text-mute">· {money(preorderSplit(totalC, promotions.preorder).depositCents / 100)} now, the rest when we dispatch</span></span></label>
-      <label className={opt}><input type="radio" name="prepay" checked={payFull} onChange={() => setPayFull(true)} /><span>Pay the full price now <span className="text-mute">· {money(totalC / 100)}, nothing more to pay later</span></span></label></fieldset>}
-    <fieldset className="space-y-2"><legend className="font-semibold">{t("Payment")}</legend>
+      <label className={opt}><input type="radio" name="prepay" checked={payFull} onChange={() => setPayFull(true)} /><span>Pay the full price now <span className="text-mute">· {money(totalC / 100)}, nothing more to pay later</span></span></label></div></section>}
+    <section className={`${card} space-y-3`}><h2 className={cardTitle}>{t("Payment Method")}</h2><fieldset className="grid gap-2 sm:grid-cols-2"><legend className="sr-only">{t("Payment")}</legend>
       <label className={`${opt} ${avail.BAKONG ? "" : "opacity-50"}`}><input type="radio" name="pay" disabled={!avail.BAKONG} checked={method === "BAKONG"} onChange={() => { setMethod("BAKONG"); }} /><span>Pay with Bakong KHQR <span className="text-mute">· {avail.BAKONG ? "scan with any banking app, confirmed automatically" : modeOf(site, "BAKONG") === "soon" || !bakong ? "coming soon" : "temporarily unavailable"}</span></span></label>
       <label className={`${opt} ${avail.QR_IMAGE ? "" : "opacity-50"}`}><input type="radio" name="pay" disabled={!avail.QR_IMAGE} checked={method === "QR_IMAGE"} onChange={() => { setMethod("QR_IMAGE"); }} />Scan QR image and pay. We verify it with you on Telegram or Facebook.{!avail.QR_IMAGE && (modeOf(site, "QR_IMAGE") === "soon" ? " · Coming soon" : " (temporarily unavailable)")}</label>
       <label className={`${opt} ${!avail.COD ? "opacity-50" : ""}`}><input type="radio" name="pay" disabled={!avail.COD} checked={method === "COD"} onChange={() => { setMethod("COD"); }} />Pay with delivery (Phnom Penh only){hasPre ? " · not available for pre-order items" : ""}{!methodOn(site, "COD") && (modeOf(site, "COD") === "soon" ? " · Coming soon" : " (temporarily unavailable)")}</label></fieldset>
-    {method === "QR_IMAGE" && <div className="space-y-3 rounded-xl2 border border-sky-border bg-white p-4 text-center">
+    {method === "QR_IMAGE" && <div className="space-y-3 rounded-2xl border border-sky-border bg-[#F6FAFF] p-4 text-center">
       {site.qrUrl === "none" ? <p className="rounded-xl bg-sky-pale px-4 py-6 text-sm text-mute">The payment QR is not available right now. Please contact us on Telegram or Facebook to pay.</p> : <img src={site.qrUrl || "/img/qr-pay.png"} alt="ABA PAY QR code for Cloudy Toys (YIHOR THENG)" className="mx-auto w-full max-w-sm rounded-xl2 border border-sky-border" />}
       <p>Scan and pay exactly <b>{money(payNow)}</b>{split && (split.balanceCents > 0 ? <> (your {split.percent}% pre-order deposit)</> : <> (full pre-order price)</>)}.</p>
       <div className="mx-auto max-w-sm space-y-2 text-left"><label className="block text-sm font-semibold">Upload your payment screenshot (required)
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => pickProof(e.target.files?.[0] ?? null)} className="mt-1 w-full rounded-xl border border-sky-border bg-white px-3 py-2 text-sm font-normal" /></label>
         {preview && <img src={preview} alt="Your payment screenshot" className="mx-auto max-h-48 rounded-lg border border-sky-border" />}</div></div>}
-    {memTier && (memAll.discounts.length > 0 || memAll.freeShipping) && <div className="rounded-2xl border border-sky-border bg-[#F6FAFF] p-3.5 text-sm font-bold"><span>{t("Your {name} member special is applied automatically", { name: memTier.name })}</span><span className="block text-xs font-normal text-mute">{[...memAll.discounts.map((d) => `${d.name}: −${money(d.cents / 100)}`), ...(memAll.freeShipping ? [t("Free delivery")] : [])].join(" · ")} {t("Each use counts toward your monthly limit. You can also add a discount code on top.")}</span></div>}
+    </section>
+    <section className={`${card} space-y-3`}>{memTier && (memAll.discounts.length > 0 || memAll.freeShipping) && <div className="rounded-2xl border border-[#D6E6FB] bg-[#EEF4FF] p-3.5 text-sm font-bold text-[#5B3FC8]"><span>{t("Your {name} member special is applied automatically", { name: memTier.name })}</span><span className="block text-xs font-normal text-mute">{[...memAll.discounts.map((d) => `${d.name}: −${money(d.cents / 100)}`), ...(memAll.freeShipping ? [t("Free delivery")] : [])].join(" · ")} {t("Each use counts toward your monthly limit. You can also add a discount code on top.")}</span></div>}
     <div><label className="block">{t("Discount code")}<span className="mt-1 flex gap-2"><input value={code} placeholder="Example: TOY10" onChange={(e) => { setCode(e.target.value.toUpperCase()); setApplied(null); setCodeMsg(""); }} maxLength={40} autoComplete="off" className={`${cls} font-mono uppercase`} />
-      <button type="button" onClick={applyCode} disabled={checking || !code.trim()} className="rounded-full border border-sky-border bg-white px-5 font-bold hover:bg-sky-pale disabled:opacity-50">{checking ? "…" : t("Apply")}</button></span></label>
-      <p className="mt-1 text-xs text-mute">{memTier && (memAll.discounts.length > 0 || memAll.freeShipping) ? t("A code works together with your member specials. It takes its % off what is left.") : t("Takes 10% to 50% off your subtotal.")}</p>{applied && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div>
+      <button type="button" onClick={applyCode} disabled={checking || !code.trim()} className="mt-1 rounded-full bg-[#E6EEFF] px-5 font-extrabold text-[#2B3FA8] hover:bg-[#D5E3FF] disabled:opacity-50">{checking ? "…" : t("Apply")}</button></span></label>
+      <p className="mt-1 text-xs text-mute">{memTier && (memAll.discounts.length > 0 || memAll.freeShipping) ? t("A code works together with your member specials. It takes its % off what is left.") : t("Takes 10% to 50% off your subtotal.")}</p>{applied && <p role="status" className="mt-1 text-sm text-green-700">Code {applied.code} applied: −{money(discount)}</p>}{codeMsg && <p role="alert" className="mt-1 text-sm text-red-700">{codeMsg}</p>}</div></section>
     {err && <p role="alert" className="text-red-700">{err}</p>}
-    <button disabled={busy || !!placed || !firstOn || (method === "QR_IMAGE" && !file)} className="min-h-11 rounded-full bg-sky px-8 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{busy ? t("Sending…") : method === "QR_IMAGE" ? t("I have paid") : method === "BAKONG" ? "Continue to KHQR" : t("Place order")}</button>
     {method === "QR_IMAGE" && !file && <p className="text-xs text-mute">Upload your payment screenshot to enable &quot;I have paid&quot;.</p>}
 </form>
-    <aside className="h-fit space-y-2 rounded-xl2 border border-sky-border bg-white p-5 lg:sticky lg:top-24"><h2 className="font-extrabold">{t("Order summary")}</h2>
-      {items.map(({ l, p }, i) => <p key={`${l.id}|${l.opt ?? ""}`} className="flex justify-between text-sm"><span>{p!.name}{l.opt ? ` (${l.opt})` : ""} × {l.qty}</span><span>{money((Math.round((p!.salePrice ?? p!.price) * 100) * l.qty - lineOff[i]) / 100)}</span></p>)}
-      {memTier && mem.freeShipping && !freeShip && <p className="flex justify-between text-sm text-green-700"><span>{t("{name} member: Free delivery", { name: memTier.name })}</span><span>{t("FREE")}</span></p>}
-      {gifts.map((g) => <p key={g.campaignId} className="flex justify-between text-sm text-green-700"><span>🎁 {g.name} × {g.qty}</span><span>{t("FREE")}</span></p>)}
-      {applied && <p className="flex justify-between text-sm text-green-700"><span>Discount ({applied.code})</span><span>−{money(discount)}</span></p>}
-      <p className="flex justify-between text-sm text-mute"><span>{t("Delivery")}</span><span className={freeShip || mem.freeShipping ? "font-semibold text-green-700" : ""}>{freeShip || mem.freeShipping ? t("FREE") : money(ship)}</span></p><p className="flex justify-between font-extrabold"><span>{t("Total")}</span><span>{money(totalC / 100)}</span></p>
-      {user && promotions.membership.length > 0 && (() => { const goods = Math.max(0, totalC - Math.round((freeShip || mem.freeShipping ? 0 : ship) * 100)), pts = pointsOf(memSpend + goods, promotions.membership, promotions.memberPointCents) - pointsOf(memSpend, promotions.membership, promotions.memberPointCents); return <p className="flex justify-between text-sm font-bold text-[#5B3FC8]"><span>{t("Points you earn with this order")}</span><span>+{pts} {t("pts")}</span></p>; })()}
-      {split && <><p className="flex justify-between text-sm font-bold text-[#A97A0B]"><span>{split.balanceCents > 0 ? `Deposit due now (${split.percent}%)` : "Full price due now"}</span><span>{money(split.depositCents / 100)}</span></p>{split.balanceCents > 0 && <p className="flex justify-between text-sm text-mute"><span>Balance at dispatch ({split.dispatch})</span><span>{money(split.balanceCents / 100)}</span></p>}</>}
-      <p className="text-xs text-mute">The server sets the final total.</p></aside>
-    <dialog ref={dlg} onClose={onClosePopup} className="max-w-sm rounded-xl2 p-6 backdrop:bg-black/40"><h2 className="text-lg font-extrabold">Please contact our admin</h2>
+    <aside className="h-fit space-y-4 rounded-3xl border border-white bg-white/90 p-5 shadow-soft lg:sticky lg:top-24"><h2 className={cardTitle}>{t("Order summary")}</h2>
+      <MemberPanel billCents={goodsC} />
+      <div className="border-t border-sky-border pt-3"><div className="flex items-center justify-between"><p className="font-display text-lg font-extrabold text-[#2B1A8F]">{t("Order Breakdown")}</p><span className="text-xs text-mute">{items.reduce((n, x) => n + x.l.qty, 0)} {t("items")}</span></div>
+        <SecHead>1. {t("Subtotal")}</SecHead>
+        {items.map(({ l, p }) => <Line key={`${l.id}|${l.opt ?? ""}`} label={`${p!.name}${l.opt ? ` (${l.opt})` : ""} × ${l.qty}`} value={money(Math.round((p!.salePrice ?? p!.price) * 100) * l.qty / 100)} />)}
+        {gifts.map((g) => <Line key={g.campaignId} label={`🎁 ${g.name} × ${g.qty}`} value={t("FREE")} cls="text-green-700" />)}
+        <Line label={t("Delivery") + (area === "PHNOM_PENH" ? ` (${t("Phnom Penh")})` : ` (${t("Province")})`)} value={freeShip || mem.freeShipping ? t("FREE") : money(ship)} cls={`text-mute ${freeShip || mem.freeShipping ? "text-green-700" : ""}`} />
+        <SecHead>2. {t("Applied loyalty discounts")}</SecHead>
+        {autos.length === 0 && !applied ? <Line label={t("No loyalty discounts applied")} value="$0.00" cls="text-mute" /> : <>{autos.map((a) => <Line key={a.id} label={a.name} value={`−${money(a.cents / 100)}`} cls="text-green-700" />)}{applied && <Line label={`Discount (${applied.code})`} value={`−${money(discount)}`} cls="text-green-700" />}</>}
+        {memTier && mem.freeShipping && !freeShip && <Line label={t("{name} member: Free delivery", { name: memTier.name })} value={t("FREE")} cls="text-green-700" />}
+        <p className="mt-3 flex items-baseline justify-between border-t border-sky-border pt-3"><span className="font-extrabold text-[#2B1A8F]">{t("Total due")}</span><span className="text-2xl font-extrabold text-[#2B1A8F]">{money(totalC / 100)}</span></p>
+        {split && <div className="mt-2 space-y-0.5"><Line label={split.balanceCents > 0 ? `Deposit due now (${split.percent}%)` : "Full price due now"} value={money(split.depositCents / 100)} cls="font-bold text-[#A97A0B]" />{split.balanceCents > 0 && <Line label={`Balance at dispatch (${split.dispatch})`} value={money(split.balanceCents / 100)} cls="text-mute" />}</div>}
+        {user && promotions.membership.length > 0 && <PointsBox goodsCents={goodsC} />}</div>
+      <button form="checkout-form" type="submit" disabled={busy || !!placed || !firstOn || (method === "QR_IMAGE" && !file)} className={`${bigBtn} disabled:opacity-60`}>{busy ? t("Sending…") : <>{method === "QR_IMAGE" ? t("I have paid") : method === "BAKONG" ? "Continue to KHQR" : t("Checkout")} · {money(payNow)} <span aria-hidden="true">→</span></>}</button>
+      <Link to="/cart" className="block text-center text-sm font-semibold text-mute hover:text-ink hover:underline">← {t("Back to cart")}</Link>
+      <p className="text-center text-xs text-mute">The server sets the final total.</p></aside>
+    <dialog ref={dlg} onClose={onClosePopup} className="max-w-sm rounded-3xl p-6 backdrop:bg-black/40"><h2 className="text-lg font-extrabold">Please contact our admin</h2>
       <p className="my-3 text-sm">Thank you! Your order and payment screenshot have been sent to our admin. To confirm your payment quickly, you can also message our admin with your order number <b>{placed}</b>.</p>
       <div className="space-y-2">{telegram && <a href={telegram} target="_blank" rel="noopener noreferrer" className={link}>Telegram</a>}{facebook && <a href={facebook} target="_blank" rel="noopener noreferrer" className={link}>Facebook page</a>}{!telegram && !facebook && <a href={`mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(`Payment ${placed}`)}`} className={link}>Email {ADMIN_EMAIL}</a>}</div>
       <form method="dialog" className="mt-4 text-center"><button className="rounded-full border border-sky-border px-6 py-2">Close</button></form></dialog></div>);

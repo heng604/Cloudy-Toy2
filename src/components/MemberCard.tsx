@@ -3,22 +3,39 @@ import { useMembership } from "@/lib/membership";
 import { useI18n } from "@/lib/i18n";
 import { perkName } from "@shared/membership";
 import TierBadge from "./TierBadge";
+import Avatar from "./Avatar";
+import ScaledBanner from "./ScaledBanner";
+import { useSettings } from "@/lib/store";
 import CloudMascot from "./CloudMascot";
 import { HAND } from "./OfferDeco";
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 const Star = ({ className = "" }: { className?: string }) => (<svg viewBox="0 0 24 24" aria-hidden="true" className={`pointer-events-none absolute ${className}`}><path d="M12 2.5l2.9 6 6.6.8-4.9 4.5 1.3 6.5L12 17l-5.9 3.3 1.3-6.5L2.5 9.3l6.6-.8z" fill="#FFE45C" stroke="#F5C518" strokeWidth="1.2" strokeLinejoin="round" /><circle cx="9.6" cy="11" r=".9" fill="#5B3A1E" /><circle cx="14.4" cy="11" r=".9" fill="#5B3A1E" /></svg>);
 const Heart = ({ className = "" }: { className?: string }) => (<svg viewBox="0 0 24 24" aria-hidden="true" className={`pointer-events-none absolute ${className}`}><path d="M12 21s-8-5.2-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.800-8 11-8 11z" fill="#FF8FB5" stroke="#fff" strokeWidth="1.5" /></svg>);
 
-/** Big sky-blue banner at the top of the Membership page. */
+/** Full-width cover (edge to edge, like a Facebook cover). Uses the picture the admin set on Admin > Settings; without one it shows the drawn sky banner. */
 export function MemberHero() {
-  const { t } = useI18n();
-  return (<div className="relative overflow-hidden rounded-3xl border border-white bg-gradient-to-b from-[#A9D6FF] via-[#C9E6FF] to-[#EAF5FF] px-5 py-6 shadow-soft sm:px-8 sm:py-8">
-    <span aria-hidden="true" className="pointer-events-none absolute -left-6 bottom-[-18px] h-20 w-48 rounded-full bg-white/80 blur-[2px]" /><span aria-hidden="true" className="pointer-events-none absolute left-1/3 top-3 h-12 w-32 rounded-full bg-white/70" /><span aria-hidden="true" className="pointer-events-none absolute right-24 bottom-[-14px] h-16 w-56 rounded-full bg-white/80" />
-    <Star className="left-3 top-3 h-8 w-8 rotate-[-12deg]" /><Star className="right-[34%] top-4 h-7 w-7 rotate-12" /><Star className="right-6 top-16 h-9 w-9 rotate-12" /><Heart className="right-[26%] top-3 h-6 w-6" /><Heart className="right-3 bottom-6 h-6 w-6" />
-    <div className="relative max-w-[70%] sm:max-w-[60%]">
-      <h1 className="font-display text-4xl font-extrabold leading-none text-[#2B1A8F] sm:text-6xl" style={{ WebkitTextStroke: "6px #fff", paintOrder: "stroke fill", textShadow: "0 4px 0 rgba(43,26,143,.12)" }}>{t("Membership")}</h1>
-      <p className={`${HAND} mt-2 inline-block border-b-[3px] border-[#FF7BA9] pb-0.5 text-lg font-bold text-[#2B1A8F] sm:text-2xl`}>{t("Shop, earn points, unlock cuter perks")} ♡</p></div>
-    <CloudMascot className="absolute -bottom-2 right-3 h-28 w-28 drop-shadow-lg sm:right-10 sm:h-44 sm:w-44" /></div>);
+  const { t } = useI18n(); const { settings } = useSettings(); const img = settings.membershipBannerImage, k = (settings.imageSizes?.["membership-banner"] ?? 100) / 100;
+  const bleed = "relative left-1/2 -mt-5 w-screen -translate-x-1/2 sm:-mt-8"; // break out of the page width: touches the left and right edge of the screen
+  if (img) return <div className={bleed}><ScaledBanner src={img} k={k} fetchPriority="high" className="max-h-[26rem] bg-[#CFE6FF]" /></div>;
+  return (<div className={`${bleed} overflow-hidden bg-gradient-to-b from-[#A9D6FF] via-[#C9E6FF] to-[#EAF5FF]`} style={{ minHeight: `${Math.round(11 * k)}rem` }}>
+    <div className="relative mx-auto h-full max-w-5xl px-5 py-6 sm:px-8 sm:py-9" style={{ minHeight: "inherit" }}>
+      <span aria-hidden="true" className="pointer-events-none absolute -left-6 bottom-[-18px] h-20 w-48 rounded-full bg-white/80" /><span aria-hidden="true" className="pointer-events-none absolute left-1/3 top-3 h-12 w-32 rounded-full bg-white/70" /><span aria-hidden="true" className="pointer-events-none absolute right-24 bottom-[-14px] h-16 w-56 rounded-full bg-white/80" />
+      <Star className="left-3 top-3 h-8 w-8 rotate-[-12deg]" /><Star className="right-[34%] top-4 h-7 w-7 rotate-12" /><Star className="right-6 top-16 h-9 w-9 rotate-12" /><Heart className="right-[26%] top-3 h-6 w-6" /><Heart className="right-3 bottom-6 h-6 w-6" />
+      <div className="relative max-w-[70%] sm:max-w-[60%]">
+        <h1 className="font-display text-4xl font-extrabold leading-none text-[#2B1A8F] sm:text-6xl" style={{ WebkitTextStroke: "6px #fff", paintOrder: "stroke fill", textShadow: "0 4px 0 rgba(43,26,143,.12)" }}>{t("Membership")}</h1>
+        <p className={`${HAND} mt-2 inline-block border-b-[3px] border-[#FF7BA9] pb-0.5 text-lg font-bold text-[#2B1A8F] sm:text-2xl`}>{t("Shop, earn points, unlock cuter perks")} ♡</p></div>
+      <CloudMascot className="absolute -bottom-2 right-3 h-28 w-28 drop-shadow-lg sm:right-10 sm:h-44 sm:w-44" /></div></div>);
+}
+
+/** Facebook-style profile row: big round picture overlapping the bottom of the cover (168px on desktop, 120px on phones, white ring), name 32px bold beside it, level and email under it. */
+export function ProfileHeader({ src, name, email }: { src?: string; name: string; email: string }) {
+  const { t } = useI18n(); const { tier } = useMembership();
+  return (<div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center gap-3 px-1 sm:flex-row sm:items-end sm:gap-5">
+    <Avatar src={src} name={name} size={168} className="!h-[120px] !w-[120px] -mt-[60px] border-4 !border-white bg-white shadow-soft sm:!h-[168px] sm:!w-[168px] sm:-mt-[84px] [&>span]:text-[3rem] sm:[&>span]:text-[4.2rem]" />
+    <div className="min-w-0 flex-1 pb-2 text-center sm:text-left"><h2 className="truncate font-display text-[1.75rem] font-extrabold leading-tight text-ink sm:text-[2rem]">{name}</h2>
+      <p className="truncate text-[15px] text-mute">{email}</p>
+      {tier && <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[#EAE6FF] px-3 py-0.5 text-xs font-extrabold text-[#5B3FC8]"><TierBadge tier={tier} size={18} className="!rounded-full bg-transparent" />{t("{name} member", { name: tier.name })}</span>}</div>
+    <Link to="/account/profile" className="mb-2 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#E6EEFF] px-4 text-sm font-extrabold text-[#2B3FA8] hover:bg-[#D5E3FF]">✎ {t("Edit profile")}</Link></div>);
 }
 
 /** "Hi, Bronze friend!" card with the progress bar to the next level, and this level's specials. */

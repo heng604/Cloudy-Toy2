@@ -9,8 +9,9 @@ import { usePromotions } from "@/lib/store";
 import { autoDiscounts, autoTotal, bogoGifts, freeShippingRule, fullPriceCents } from "@shared/promotions";
 import { memberBenefits } from "@shared/membership";
 import { useMembership } from "@/lib/membership";
+import { MemberPill, MemberPanel, PageHead, PointsBox, SecHead, Line, bigBtn, cardTitle } from "@/components/cartUi";
 
-const iconBtn = "grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-ink transition hover:bg-sky disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
+const iconBtn = "grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-[#2B1A8F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
 
 function CloudArt() {
   return (
@@ -44,24 +45,18 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
 
   if (!items.length) {
     return (
-      <section className="mx-auto max-w-lg rounded-xl2 border border-sky-border bg-white px-6 py-12 text-center shadow-soft">
+      <section className="mx-auto max-w-lg rounded-3xl border border-white bg-white/90 px-6 py-12 text-center shadow-soft">
         <CloudArt />
-        <h1 className="mt-4 text-2xl font-extrabold">{t("Your cart is empty")}</h1>
+        <h1 className="mt-4 font-display text-3xl font-extrabold text-[#2B1A8F]">{t("Your cart is empty")}</h1>
         <p className="mt-2 text-mute">No toys here yet. Let&apos;s find something that will make a little one smile.</p>
-        <Link to="/shop" className="mt-6 inline-block rounded-full bg-sky px-8 py-3 font-bold transition hover:bg-sky-hover hover:shadow-lift">{t("Browse toys")}</Link>
+        <Link to="/shop" className="btn-blue mt-6 inline-block rounded-full px-8 py-3 font-extrabold">{t("Browse toys")}</Link>
       </section>
     );
   }
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-extrabold sm:text-3xl">{t("Your cart")}</h1>
-          <p className="text-mute">{count} {count === 1 ? "toy" : "toys"} ready for a new home</p>
-        </div>
-        <button type="button" onClick={clear} className="rounded-full px-4 py-2 text-sm font-semibold text-mute hover:bg-sky-pale hover:text-ink">{t("Clear cart")}</button>
-      </div>
+      <PageHead title={t("Your cart")} sub={`${count} ${count === 1 ? "toy" : "toys"} ready for a new home ♡`}><MemberPill /><button type="button" onClick={clear} className="rounded-full px-4 py-2 text-sm font-semibold text-mute hover:bg-white hover:text-ink">{t("Clear cart")}</button></PageHead>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_22rem] xl:grid-cols-[1fr_26rem]">
         <ul className="space-y-4">
@@ -72,21 +67,22 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
             const atMax = totalQty(p.id) >= stock;
             const needOpt = optBad({ l, p });
             return (
-              <li key={`${l.id}|${l.opt ?? ""}`} className="flex gap-4 rounded-xl2 border border-sky-border bg-white p-3 shadow-soft sm:p-4">
-                <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="shrink-0 overflow-hidden rounded-xl bg-sky-pale">
+              <li key={`${l.id}|${l.opt ?? ""}`} className="flex gap-4 rounded-3xl border border-white bg-white/90 p-3 shadow-soft sm:p-5">
+                <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="shrink-0 overflow-hidden rounded-2xl bg-sky-pale">
                   <img src={optionImageOf(p.options ?? [], l.opt) ?? p.image ?? FALLBACK_IMG} alt={p.name} width={112} height={112} loading="lazy" className="h-24 w-24 object-cover sm:h-28 sm:w-28" />
                 </Link>
                 <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      {p.category && <p className="text-xs font-semibold uppercase tracking-wide text-mute">{p.category}</p>}
-                      <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="block font-extrabold leading-snug hover:underline">{p.name}</Link>
+                      {p.category && <p className="text-[11px] font-extrabold uppercase tracking-wide text-mute">{p.category}</p>}
+                      <Link to={p.slug ? `/product/${p.slug}` : "/shop"} className="block font-display text-lg font-extrabold leading-snug text-[#2B1A8F] hover:underline">{p.name}</Link>
                       {l.opt && <p className="mt-0.5 text-sm font-semibold text-[#2F5FA8]">{l.opt}</p>}
                       <p className="mt-1 text-sm text-mute">
                         {p.salePrice ? <><span className="font-semibold text-ink">{money(p.salePrice)}</span> <s>{money(p.price)}</s></> : money(p.price)} each
                       </p>
+                      {!p.salePrice && <p className="mt-0.5 text-xs font-bold text-[#5B3FC8]">{t("Full-price item (member eligible)")}</p>}
                     </div>
-                    <p className="shrink-0 text-lg font-extrabold">{money(unit(p) * l.qty)}</p>
+                    <p className="shrink-0 text-xl font-extrabold text-[#2B1A8F]">{money(unit(p) * l.qty)}</p>
                   </div>
 
                   {out && <p role="alert" className="text-sm font-semibold text-red-600">Sorry, this toy is out of stock. Please remove it.</p>}
@@ -97,12 +93,12 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
                   {!out && !over && stock <= 5 && <p className="text-sm font-semibold text-amber-600">Only {stock} left</p>}
 
                   <div className="flex items-center justify-between">
-                    <div className="inline-flex items-center rounded-full border border-sky-border bg-sky-pale p-1">
+                    <div className="inline-flex items-center rounded-full border border-sky-border bg-[#E6EEFF] p-1">
                       <button type="button" aria-label={`Decrease ${p.name}`} onClick={() => setQty(l.id, l.qty - 1, l.opt)} className={iconBtn}>−</button>
                       <span aria-live="polite" className="min-w-8 text-center font-bold">{l.qty}</span>
                       <button type="button" aria-label={`Increase ${p.name}`} disabled={atMax} onClick={() => setQty(l.id, l.qty + 1, l.opt)} className={iconBtn}>+</button>
                     </div>
-                    <button type="button" onClick={() => setQty(l.id, 0, l.opt)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-mute hover:bg-sky-pale hover:text-ink">
+                    <button type="button" onClick={() => setQty(l.id, 0, l.opt)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-mute hover:bg-white hover:text-[#E0456B]">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" /></svg>
                       {t("Remove")}
                     </button>
@@ -113,31 +109,31 @@ export default function CartView({ products, telegram = "" }: { products: CartPr
           })}
         </ul>
 
-        <aside aria-label="Order summary" className="space-y-4 rounded-xl2 border border-sky-border bg-white p-5 shadow-soft lg:sticky lg:top-24">
-          <h2 className="text-xl font-extrabold">{t("Order summary")}</h2>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-mute">Items ({count})</dt><dd className="font-semibold">{money(subtotal)}</dd></div>
-            {saved > 0 && <div className="flex justify-between text-green-700"><dt>{t("You save")}</dt><dd className="font-semibold">−{money(saved)}</dd></div>}
-            {autos.map((a) => <div key={a.id} className="flex justify-between text-green-700"><dt>{a.name}</dt><dd className="font-semibold">−{money(a.cents / 100)}</dd></div>)}
-            {memTier && (memAll.discounts.length > 0 || memAll.freeShipping) && <div className="rounded-xl bg-[#F6FAFF] p-2.5 text-xs font-bold text-[#7A4FD0]">{t("Your {name} member special is applied automatically. You can add a discount code at checkout on top of it.", { name: memTier.name })}</div>}
-            {memTier && mem.freeShipping && !freeAll && <div className="flex justify-between text-green-700"><dt>{t("{name} member: Free delivery", { name: memTier.name })}</dt><dd className="font-semibold">{t("FREE")}</dd></div>}
-            {gifts.map((g) => <div key={g.campaignId} className="flex justify-between text-green-700"><dt>🎁 {g.name} × {g.qty}</dt><dd className="font-semibold">{t("FREE")}</dd></div>)}
-            <div className="flex justify-between"><dt className="text-mute">{t("Delivery")}</dt><dd className={`font-semibold ${freePP || mem.freeShipping ? "text-green-700" : ""}`}>{freeAll || mem.freeShipping ? t("FREE") : freePP ? t("FREE in Phnom Penh") : t("Calculated at checkout")}</dd></div>
-          </dl>
-          <div className="flex items-baseline justify-between border-t border-sky-border pt-4">
-            <span className="font-bold">{t("Subtotal")}</span>
-            <span className="text-2xl font-extrabold">{money(subtotal - autoOff)}</span>
-          </div>
+        <aside aria-label="Order summary" className="space-y-4 rounded-3xl border border-white bg-white/90 p-5 shadow-soft lg:sticky lg:top-24">
+          <h2 className={cardTitle}>{t("Order summary")}</h2>
+          <MemberPanel billCents={Math.round((subtotal - autoOff) * 100)} />
+          <div className="border-t border-sky-border pt-3"><div className="flex items-center justify-between"><p className="font-display text-lg font-extrabold text-[#2B1A8F]">{t("Order Breakdown")}</p><span className="text-xs text-mute">{count} {t("items")}</span></div>
+            <SecHead>1. {t("Subtotal")}</SecHead>
+            <Line label={t("Product Subtotal")} value={money(subtotal)} cls="font-bold" />
+            {saved > 0 && <Line label={t("You save")} value={`−${money(saved)}`} cls="text-green-700" />}
+            {memTier && mem.freeShipping && !freeAll && <Line label={t("{name} member: Free delivery", { name: memTier.name })} value={t("FREE")} cls="text-green-700" />}
+            {gifts.map((g) => <Line key={g.campaignId} label={`🎁 ${g.name} × ${g.qty}`} value={t("FREE")} cls="text-green-700" />)}
+            <Line label={t("Delivery")} value={freeAll || mem.freeShipping ? t("FREE") : freePP ? t("FREE in Phnom Penh") : t("Calculated at checkout")} cls={`text-mute ${freePP || mem.freeShipping ? "text-green-700" : ""}`} />
+            <SecHead>2. {t("Applied loyalty discounts")}</SecHead>
+            {autos.length === 0 ? <Line label={t("No loyalty discounts applied")} value="$0.00" cls="text-mute" /> : autos.map((a) => <Line key={a.id} label={a.name} value={`−${money(a.cents / 100)}`} cls="text-green-700" />)}
+            {memTier && (memAll.discounts.length > 0 || memAll.freeShipping) && <p className="mt-2 rounded-xl bg-[#EEF4FF] p-2.5 text-xs font-bold text-[#5B3FC8]">{t("Your {name} member special is applied automatically. You can add a discount code at checkout on top of it.", { name: memTier.name })}</p>}
+            <p className="mt-3 flex items-baseline justify-between border-t border-sky-border pt-3"><span className="font-extrabold text-[#2B1A8F]">{t("Total due")}</span><span className="text-2xl font-extrabold text-[#2B1A8F]">{money(subtotal - autoOff)}</span></p>
+            <PointsBox goodsCents={Math.round((subtotal - autoOff) * 100)} /></div>
           {hasPre && <p className="rounded-xl bg-[#FFF6D8] p-3 text-xs">Your cart has a <b>pre-order</b> item: you pay a {promotions.preorder.depositPercent}% deposit at checkout (or the full price if you prefer) and any rest when it is dispatched ({promotions.preorder.dispatchText}).</p>}
           <p className="text-xs text-mute">Display only. Delivery and your discount code (10% to 50% off the subtotal) are applied at checkout.</p>
 
           {blocked
             ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Please fix the items marked above before checking out.</p>
-            : <Link to="/checkout" className="block rounded-full bg-sky px-6 py-3 text-center text-lg font-extrabold transition hover:bg-sky-hover hover:shadow-lift">{user ? t("Checkout") : "Sign in to checkout"}</Link>}
+            : <Link to="/checkout" className={bigBtn}>{user ? <>{t("Checkout")} · {money(subtotal - autoOff)} <span aria-hidden="true">→</span></> : "Sign in to checkout"}</Link>}
           <Link to="/shop" className="block text-center text-sm font-semibold text-mute hover:text-ink hover:underline">{t("← Continue shopping")}</Link>
 
           {telegram && (
-            <a href={telegram} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-xl bg-sky-pale px-4 py-3 text-sm font-semibold hover:bg-sky">
+            <a href={telegram} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl bg-[#E6EEFF] px-4 py-3 text-sm font-semibold text-[#2B3FA8] hover:bg-[#D5E3FF]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg>
               Questions? Chat with our admin
             </a>
