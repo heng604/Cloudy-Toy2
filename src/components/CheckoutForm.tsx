@@ -48,7 +48,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   if (!items.length) return <p className="rounded-3xl bg-white/90 p-8 text-center shadow-soft">Nothing to check out. <Link to="/shop" className="underline">Browse toys</Link></p>;
   async function applyCode() {
     if (!code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
-    const res = await fetch("/api/discount/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, lines: lines.map((l) => ({ productId: l.id, qty: l.qty })) }) });
+    const res = await api("/discount/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, lines: lines.map((l) => ({ productId: l.id, qty: l.qty })) }) });
     const d = await res.json().catch(() => ({})); setChecking(false);
     if (!res.ok) { setCodeMsg(t(d.error ?? "Could not check the code.")); return; }
     setApplied({ code: d.code, cents: d.discountCents }); setCodeMsg("");

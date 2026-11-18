@@ -105,14 +105,14 @@ const catalogOf = (products: Awaited<ReturnType<typeof listProducts>>) => new Ma
 
 /** The customer's level, worked out from what they have paid so far (always read fresh from the orders, so it is automatic). */
 const memberOf = async (email: string | undefined, tiers: Tier[]) => {
-  const none = { spendCents: 0, tier: null as Tier | null, used: {} as Record<string, number> };
+  const none = { spendCents: 0, isMember: false, bonus: 0, tier: null as Tier | null, used: {} as Record<string, number> };
   if (!email || tiers.length === 0) return none;
   const orders = await listOrdersByEmail(email); const spendCents = memberSpendOf(orders); const ov = (await getOverrides())[email.toLowerCase()];
   const forced = ov?.tierId ? tiers.find((t) => t.id === ov.tierId && t.active) ?? null : null; // the admin can fix a member's level
   const tier = ov?.blocked || ov?.removed ? null : forced ?? tierByOrders(orders, tiers); // blocked = no level specials at all
-  return { spendCents, tier, used: monthUsage(orders) };
+  return { spendCents, tier, isMember: !ov?.removed && (!!ov?.tierId || !!tierByOrders(orders, tiers)), bonus: ov?.bonus ?? 0, used: monthUsage(orders) }; // isMember stays true even when the admin switched the member's specials off
 };
-const noMember = { spendCents: 0, tier: null as Tier | null, used: {} as Record<string, number> };
+const noMember = { spendCents: 0, isMember: false, bonus: 0, tier: null as Tier | null, used: {} as Record<string, number> };
 /* ---------------- public: checkout ---------------- */
 const Body = z.object({
   customer: z.object({ name: z.string().trim().min(2).max(100), email: z.union([z.literal(""), z.string().trim().email().max(200)]).optional().transform((v) => v ?? ""), phone: z.string().trim().min(6).max(30), address: z.string().trim().min(5).max(400), notes: z.string().trim().max(300).optional(), facebook: z.string().trim().max(100).optional(), telegram: z.string().trim().max(100).optional() }),
@@ -154,7 +154,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const mb = memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, member.used); auto.push(...mb.discounts); const memberPerks = [...mb.perks, ...(memFree && !freeShip ? memShip.shipPerks : [])]; // the member's level specials stack after the shop's campaigns
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
-      if (member.tier) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
+      if (member.isMember) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
       const codeBase = Math.min(codeEligibleCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals), t0.subtotalCents - discount);
       if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Every product in your cart already has a sale, campaign or promotion." });
       const ev = await resolveDiscount(codeIn, [{ lineCents: codeBase }], true, acct?.email ?? undefined);
@@ -216,7 +216,7 @@ api.post("/discount/validate", wrap(async (req, res) => {
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
     /* codes are for non-members only, and only on products with no discount (same as checkout) */
     const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); const byId = new Map(products.map((p) => [p.id, p]));
-    if (mem.tier) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
+    if (mem.isMember) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
     const codeBase = Math.min(codeEligibleCents(t.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals), t.subtotalCents - autoTotal(auto));
     if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Every product in your cart already has a sale, campaign or promotion." });
     const ev = await resolveDiscount(code, [{ lineCents: codeBase }], false, who?.email ?? undefined);
@@ -374,8 +374,8 @@ api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = use
 /** The signed-in customer's membership: what they have paid so far, their level and the next one. Levels come from the admin's Membership page. */
 api.get("/membership/me", requireUser, wrap(async (req, res) => {
   const u = userOf(req); const promos = await getPromotions(); const m = await memberOf(u.email ?? undefined, promos.membership);
-  const reds = u.email ? await listRedemptions(u.email).catch(() => []) : []; const earned = m.tier ? pointsOf(m.spendCents, promos.membership, promos.memberPointCents) : 0, spent = [...redeemedPoints(reds).values()][0] ?? 0;
-  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: levelAfter(m.tier, promos.membership)?.id ?? null, points: Math.max(0, earned - spent), earned, spent, redemptions: reds.slice(0, 30) });
+  const reds = u.email ? await listRedemptions(u.email).catch(() => []) : []; const auto = m.isMember ? pointsOf(m.spendCents, promos.membership, promos.memberPointCents) : 0, earned = auto + (m.isMember ? m.bonus : 0), spent = [...redeemedPoints(reds).values()][0] ?? 0;
+  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: levelAfter(m.tier, promos.membership)?.id ?? null, points: Math.max(0, earned - spent), earned, bonus: m.isMember ? m.bonus : 0, spent, redemptions: reds.slice(0, 30) });
 }));
 
 /** Gifts members can exchange for points (only the active ones). */
@@ -384,8 +384,8 @@ api.get("/gifts", wrap(async (_req, res) => { res.json({ gifts: await listGifts(
 api.post("/membership/redeem", requireUser, wrap(async (req, res) => {
   const u = userOf(req); if (!u.email) return res.json({ error: "Please sign in with an email first" });
   if (tooMany(`redeem:${u.id}`, 10)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
-  const promos = await getPromotions(); const m = await memberOf(u.email, promos.membership); if (!m.tier) return res.json({ error: "Only members can exchange points. Keep shopping to become a member!" });
-  const earned = pointsOf(m.spendCents, promos.membership, promos.memberPointCents); const prof = await getProfile(u.id).catch(() => null);
+  const promos = await getPromotions(); const m = await memberOf(u.email, promos.membership); if (!m.isMember) return res.json({ error: "Only members can exchange points. Keep shopping to become a member!" });
+  const earned = pointsOf(m.spendCents, promos.membership, promos.memberPointCents) + m.bonus; const prof = await getProfile(u.id).catch(() => null);
   const r = await redeemGift(u.email, prof?.name || ((u.user_metadata ?? {}) as { full_name?: string }).full_name || u.email, String(req.body?.giftId ?? ""), earned);
   if ("error" in r) return res.json({ error: r.error }); res.json({ ok: true, redemption: r.ok });
 }));
@@ -659,7 +659,7 @@ admin.get("/members", wrap(async (_req, res) => {
     const pr = profiles.get(email); members.push({ email, name: pr?.name || o.name || email, phone: pr?.phone || o.phone || "", avatar: pr?.avatar ?? "", address: pr?.address ?? "", facebook: pr?.facebook ?? "", telegram: pr?.telegram ?? "", spendCents: 0, orders: 0, lastOrderAt: "", autoTierId: null, tierId: o.blocked || o.removed ? null : o.tierId ?? null, forcedTierId: o.tierId ?? null, blocked: !!o.blocked, removed: !!o.removed, used: {} });
   }
   const spent = redeemedPoints(await listRedemptions().catch(() => [])); // points each member has already spent on gifts
-  const withPoints = members.map((m) => ({ ...m, points: Math.max(0, pointsOf(m.spendCents, promos.membership, promos.memberPointCents) - (spent.get(m.email) ?? 0)), pointsSpent: spent.get(m.email) ?? 0 }));
+  const withPoints = members.map((m) => { const bonus = ov[m.email]?.bonus ?? 0, auto = pointsOf(m.spendCents, promos.membership, promos.memberPointCents); return { ...m, points: Math.max(0, auto + bonus - (spent.get(m.email) ?? 0)), pointsAuto: auto, pointsBonus: bonus, pointLog: (ov[m.email]?.log ?? []).slice(-10).reverse(), pointsSpent: spent.get(m.email) ?? 0 }; });
   withPoints.sort((a, b) => b.spendCents - a.spendCents); withPoints.length = Math.min(withPoints.length, 2000);
   res.json({ members: withPoints });
 }));
@@ -669,6 +669,18 @@ admin.post("/members/set", wrap(async (req, res) => {
   if (tierId && !promos.membership.some((t) => t.id === tierId)) return res.json({ error: "Level not found" });
   const prev = (await getOverrides())[email];
   await setOverride(email, { tierId: tierId || undefined, blocked: req.body?.blocked === true, removed: req.body?.removed === true, added: prev?.added, name: prev?.name, phone: prev?.phone }); res.json({ ok: true });
+}));
+// the admin adds points to a member (or takes some off) on top of the points earned automatically from paid orders
+admin.post("/members/points", wrap(async (req, res) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase(); const delta = Number(req.body?.points); const note = String(req.body?.note ?? "").trim().slice(0, 80);
+  if (!email || email.length > 200) return res.json({ error: "Member not found" });
+  if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 100_000) return res.json({ error: "Enter a whole number of points (not 0). Use a minus sign to take points off." });
+  const promos = await getPromotions(); const orders = await listOrdersByEmail(email); const o = (await getOverrides())[email];
+  if (!orders.length && !o) return res.json({ error: "Member not found" });
+  const auto = pointsOf(memberSpendOf(orders), promos.membership, promos.memberPointCents); const spent = redeemedPoints(await listRedemptions().catch(() => [])).get(email) ?? 0; const bonus = o?.bonus ?? 0;
+  if (auto + bonus + delta - spent < 0) return res.json({ error: `This member only has ${Math.max(0, auto + bonus - spent)} points. You cannot take off more than that.` });
+  await setOverride(email, { tierId: o?.tierId, blocked: o?.blocked, removed: o?.removed, added: o?.added, name: o?.name, phone: o?.phone, bonus: bonus + delta, log: [...(o?.log ?? []), { at: new Date().toISOString(), delta, note }] });
+  res.json({ ok: true });
 }));
 // add a person to membership by hand (they may have no account or order yet): email + level, name and phone optional
 admin.post("/members/add", wrap(async (req, res) => {
