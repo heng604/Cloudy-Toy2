@@ -9,6 +9,8 @@ import path from "path";
 import fs from "fs";
 import { z } from "zod";
 import { ProfileInput } from "../shared/profile";
+import { checkGift } from "../shared/gifts";
+import { listGifts, saveGift, deleteGift, listRedemptions, redeemedPoints, redeemGift, setRedemption } from "./lib/giftStore";
 import { getProfile, saveProfile, setAvatar, profilesByEmail } from "./lib/profileStore";
 import { requireAdmin, requireUser, userFromReq, adminOf, userOf, needs, roleOf } from "./lib/auth";
 import { roleFor, listStaff, addStaff, updateStaff, deleteStaff } from "./lib/staff";
@@ -39,7 +41,7 @@ import { validateImage, safeFileName } from "../shared/images";
 import { r2Enabled, r2Get } from "./lib/r2";
 import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
-import { tierByOrders, levelAfter, memberBenefits, memberSpendOf, monthUsage, checkTier, layoutTiers, isPointCents, MAX_TIERS, type Tier } from "../shared/membership";
+import { tierByOrders, levelAfter, memberBenefits, memberSpendOf, monthUsage, checkTier, layoutTiers, isPointCents, pointsOf, MAX_TIERS, type Tier } from "../shared/membership";
 import { getOverrides, setOverride } from "./lib/memberStore";
 import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule, fullPriceCents } from "../shared/promotions";
 import { isSlug, isBuiltin, MAX_CONTENT, MAX_TITLE, MAX_CUSTOM_PAGES, SLUG_RE, RESERVED_SLUGS, PAGE_DEFS, allDefs } from "../shared/pages";
@@ -367,9 +369,21 @@ api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = use
 /** The signed-in customer's membership: what they have paid so far, their level and the next one. Levels come from the admin's Membership page. */
 api.get("/membership/me", requireUser, wrap(async (req, res) => {
   const u = userOf(req); const promos = await getPromotions(); const m = await memberOf(u.email ?? undefined, promos.membership);
-  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: levelAfter(m.tier, promos.membership)?.id ?? null });
+  const reds = u.email ? await listRedemptions(u.email).catch(() => []) : []; const earned = m.tier ? pointsOf(m.spendCents, promos.membership, promos.memberPointCents) : 0, spent = [...redeemedPoints(reds).values()][0] ?? 0;
+  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: levelAfter(m.tier, promos.membership)?.id ?? null, points: Math.max(0, earned - spent), earned, spent, redemptions: reds.slice(0, 30) });
 }));
 
+/** Gifts members can exchange for points (only the active ones). */
+api.get("/gifts", wrap(async (_req, res) => { res.json({ gifts: await listGifts(true).catch(() => []) }); }));
+/** Exchange points for a gift. The server works out the points itself from the customer's paid orders; the browser never sends a points number. */
+api.post("/membership/redeem", requireUser, wrap(async (req, res) => {
+  const u = userOf(req); if (!u.email) return res.json({ error: "Please sign in with an email first" });
+  if (tooMany(`redeem:${u.id}`, 10)) return res.status(429).json({ error: "Too many tries. Please wait a minute." });
+  const promos = await getPromotions(); const m = await memberOf(u.email, promos.membership); if (!m.tier) return res.json({ error: "Only members can exchange points. Keep shopping to become a member!" });
+  const earned = pointsOf(m.spendCents, promos.membership, promos.memberPointCents); const prof = await getProfile(u.id).catch(() => null);
+  const r = await redeemGift(u.email, prof?.name || ((u.user_metadata ?? {}) as { full_name?: string }).full_name || u.email, String(req.body?.giftId ?? ""), earned);
+  if ("error" in r) return res.json({ error: r.error }); res.json({ ok: true, redemption: r.ok });
+}));
 /** The signed-in customer's own profile: name, phone, address, Facebook, Telegram and photo. Only these fields can be changed; role, totals and level never are. */
 api.get("/account/profile", requireUser, wrap(async (req, res) => { const u = userOf(req); const m = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
   res.json({ profile: await getProfile(u.id, m.full_name || m.name || ""), email: u.email ?? "" }); }));
@@ -616,6 +630,15 @@ admin.post("/discounts/update", wrap(async (req, res) => {
   if (!(await updateStoreDiscount(code, patch))) return res.json({ error: "Unknown code" });
   res.json({ ok: true });
 }));
+// gift exchange: the catalog and what members redeemed
+admin.get("/gifts", wrap(async (_req, res) => { const [gifts, redemptions] = await Promise.all([listGifts(false), listRedemptions()]); res.json({ gifts, redemptions }); }));
+admin.post("/gifts/save", wrap(async (req, res) => {
+  const c = checkGift(req.body ?? {}); if (!c.ok) return res.json({ error: c.error }); const id = String(req.body?.id ?? "") || undefined;
+  const old = id ? (await listGifts(false)).find((g) => g.id === id) : undefined; if (id && !old) return res.json({ error: "Gift not found" });
+  await saveGift(id, c.value); if (old?.image && old.image !== c.value.image) await dropImage(old.image); res.json({ ok: true });
+}));
+admin.post("/gifts/delete", wrap(async (req, res) => { const id = String(req.body?.id ?? ""); const old = (await listGifts(false)).find((g) => g.id === id); await deleteGift(id); await dropImage(old?.image); res.json({ ok: true }); }));
+admin.post("/gifts/redemption", wrap(async (req, res) => { const st = req.body?.status === "CANCELLED" ? "CANCELLED" : "CLAIMED"; const ok = await setRedemption(String(req.body?.id ?? ""), st); res.json(ok ? { ok: true } : { error: "This redemption was already handled" }); }));
 // members: every customer with an account or order, their level, spend and this month's use of each special. The admin can fix a member's level or switch their specials off.
 admin.get("/members", wrap(async (_req, res) => {
   const [orders, promos, ov, profiles] = await Promise.all([listAllOrders(), getPromotions(), getOverrides(), profilesByEmail()]); const by = new Map<string, typeof orders>();
@@ -630,8 +653,10 @@ admin.get("/members", wrap(async (_req, res) => {
     if (by.has(email) || !o.added) continue;
     const pr = profiles.get(email); members.push({ email, name: pr?.name || o.name || email, phone: pr?.phone || o.phone || "", avatar: pr?.avatar ?? "", address: pr?.address ?? "", facebook: pr?.facebook ?? "", telegram: pr?.telegram ?? "", spendCents: 0, orders: 0, lastOrderAt: "", autoTierId: null, tierId: o.blocked || o.removed ? null : o.tierId ?? null, forcedTierId: o.tierId ?? null, blocked: !!o.blocked, removed: !!o.removed, used: {} });
   }
-  members.sort((a, b) => b.spendCents - a.spendCents); members.length = Math.min(members.length, 2000);
-  res.json({ members });
+  const spent = redeemedPoints(await listRedemptions().catch(() => [])); // points each member has already spent on gifts
+  const withPoints = members.map((m) => ({ ...m, points: Math.max(0, pointsOf(m.spendCents, promos.membership, promos.memberPointCents) - (spent.get(m.email) ?? 0)), pointsSpent: spent.get(m.email) ?? 0 }));
+  withPoints.sort((a, b) => b.spendCents - a.spendCents); withPoints.length = Math.min(withPoints.length, 2000);
+  res.json({ members: withPoints });
 }));
 admin.post("/members/set", wrap(async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase(); const tierId = String(req.body?.tierId ?? ""); const promos = await getPromotions();

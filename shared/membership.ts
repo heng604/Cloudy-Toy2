@@ -17,19 +17,24 @@ export const DEFAULT_POINT_CENTS = 1000;
 export const isPointCents = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 100 && n <= 10_000_000;
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 /** Gives every level after the first its spend: previous level's spend + pointsMore x point price. The first level keeps its own spend and has pointsMore 0. */
-export const DEFAULT_UPGRADE_CENTS = [0, 20000, 30000, 40000];
+export const DEFAULT_UPGRADE_CENTS = [0, 4500, 10000, 15000];
 export function layoutTiers(tiers: Tier[], _pointCents: number = DEFAULT_POINT_CENTS): Tier[] {
   const out: Tier[] = [];
   tiers.forEach((t, i) => { const prev = out[i - 1]; const single = Math.max(1, Math.round(t.singleOrderCents || DEFAULT_UPGRADE_CENTS[i] || 10000 * (i + 1))); out.push(i === 0 || !prev ? { ...t, pointsMore: 0, singleOrderCents: 0 } : { ...t, pointsMore: 0, singleOrderCents: single, minSpendCents: prev.minSpendCents + single }); }); // minSpendCents of later levels only keeps the ladder in order
   return out;
 }
-/** Bronze at $30 paid in total, then ONE order of $200 for Silver, ONE order of $300 for Gold and ONE order of $400 for Platinum. */
+/** Starter → Bronze: $30 paid in total. Bronze → Silver: ONE paid bill of $45+. Silver → Gold: ONE bill of $100+. Gold → Platinum: ONE bill of $150+. Every level earns points for the gift exchange.
+ *  Silver 5% / Gold 10% off from a $10 order, Platinum 15% off, all for in-stock FULL-PRICE items only; Platinum also gets free delivery from $60. */
+const mk = (id: string, kind: PerkKind, o: Partial<Perk> = {}): Perk => ({ id, kind, title: "", percent: 0, amountCents: 0, minSpendCents: 0, active: true, monthlyLimit: 0, onPromo: false, detail: "", image: "", ...o });
+const earn = mk("pts", "custom", { title: "Earn points to redeem gifts!" });
 export const DEFAULT_TIERS: Tier[] = layoutTiers([
-  { id: "bronze", singleOrderCents: 0, name: "Bronze", emoji: "🥉", image: "", minSpendCents: 3000, pointsMore: 0, specialName: "", perks: [], active: true },
-  { id: "silver", singleOrderCents: 20000, name: "Silver", emoji: "🥈", image: "", minSpendCents: 0, pointsMore: 0, specialName: "", perks: [], active: true },
-  { id: "gold", singleOrderCents: 30000, name: "Gold", emoji: "🥇", image: "", minSpendCents: 0, pointsMore: 0, specialName: "", perks: [], active: true },
-  { id: "platinum", singleOrderCents: 40000, name: "Platinum", emoji: "💎", image: "", minSpendCents: 0, pointsMore: 0, specialName: "", perks: [], active: true },
+  { id: "bronze", singleOrderCents: 0, name: "Bronze", emoji: "🥉", image: "", minSpendCents: 3000, pointsMore: 0, specialName: "", perks: [earn], active: true },
+  { id: "silver", singleOrderCents: 4500, name: "Silver", emoji: "🥈", image: "", minSpendCents: 0, pointsMore: 0, specialName: "Silver", perks: [mk("disc", "percent", { title: "Silver", percent: 5, minSpendCents: 1000 }), earn], active: true },
+  { id: "gold", singleOrderCents: 10000, name: "Gold", emoji: "🥇", image: "", minSpendCents: 0, pointsMore: 0, specialName: "Gold", perks: [mk("disc", "percent", { title: "Gold", percent: 10, minSpendCents: 1000 }), earn], active: true },
+  { id: "platinum", singleOrderCents: 15000, name: "Platinum", emoji: "💎", image: "", minSpendCents: 0, pointsMore: 0, specialName: "Platinum", perks: [mk("disc", "percent", { title: "Platinum", percent: 15 }), mk("ship", "free_shipping", { title: "Platinum", minSpendCents: 6000 }), earn], active: true },
 ]);
+/** Points a customer has: 1 point per `pointCents` paid after the first level (the first level's entry spend gives none), minus the points already spent on gifts. */
+export const pointsBalance = (spendCents: number, tiers: Tier[] | undefined, redeemed: number, pointCents: number = DEFAULT_POINT_CENTS) => Math.max(0, pointsOf(spendCents, tiers, pointCents) - redeemed);
 type Checked<T> = { ok: true; value: T } | { ok: false; error: string };
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : NaN; };
 const idOk = (v: unknown) => typeof v === "string" && /^[a-z0-9-]{1,24}$/.test(v);
@@ -70,7 +75,7 @@ export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; im
 /** Reads whatever is stored (missing, old or hand-edited) and always returns valid levels in ladder order. Never saved = the four default levels (Bronze, Silver, Gold, Platinum); saved empty = no levels.
  *  Levels saved before points existed have no pointsMore: it is worked out from their old spend amounts, so nobody's level jumps. */
 export function normalizeTiers(v: unknown, pointCents: number = DEFAULT_POINT_CENTS): Tier[] {
-  if (!Array.isArray(v)) return layoutTiers(DEFAULT_TIERS.map((t) => ({ ...t, perks: [] })), pointCents);
+  if (!Array.isArray(v)) return layoutTiers(DEFAULT_TIERS, pointCents);
   const out: Tier[] = [];
   for (const x of v) {
     const t = (x ?? {}) as Partial<Tier>;

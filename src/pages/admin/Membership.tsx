@@ -5,6 +5,7 @@ import Skeleton from "@/components/Skeleton";
 import ImageUpload from "@/components/admin/ImageUpload";
 import TierBadge from "@/components/TierBadge";
 import Avatar from "@/components/Avatar";
+import GiftsSection from "./GiftsSection";
 import { post } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useTitle } from "@/lib/title";
@@ -70,7 +71,7 @@ function TierModal({ tier, tiers, onClose, onDone }: { tier?: Tier; tiers: Tier[
         <button disabled={busy} className="rounded-full bg-sky px-8 py-2.5 font-extrabold shadow-soft hover:bg-sky-hover disabled:opacity-50">{busy ? t("Saving…") : t("Save level")}</button></div></form>)}</Modal>);
 }
 
-type MemberRow = { email: string; name: string; phone: string; avatar: string; address: string; facebook: string; telegram: string; spendCents: number; orders: number; lastOrderAt: string; autoTierId: string | null; tierId: string | null; forcedTierId: string | null; blocked: boolean; removed: boolean; used: Record<string, number> };
+type MemberRow = { points: number; pointsSpent: number; email: string; name: string; phone: string; avatar: string; address: string; facebook: string; telegram: string; spendCents: number; orders: number; lastOrderAt: string; autoTierId: string | null; tierId: string | null; forcedTierId: string | null; blocked: boolean; removed: boolean; used: Record<string, number> };
 /** Every member: level, total paid, this month's use of each special; the admin can fix a level or switch a member's specials off. */
 function MembersSection({ tiers, onMsg }: { tiers: Tier[]; onMsg: (m: Msg) => void }) {
   const { t } = useI18n(); const { data } = useAdmin<{ members: MemberRow[] }>("/admin/members"); const [q, setQ] = useState(""); const [open, setOpen] = useState<string | null>(null); const [showGone, setShowGone] = useState(false);
@@ -93,7 +94,7 @@ function MembersSection({ tiers, onMsg }: { tiers: Tier[]; onMsg: (m: Msg) => vo
     {rows.length === 0 ? <p className="rounded-xl border border-dashed border-sky-border p-5 text-center text-sm text-mute">{t("No members yet.")}</p>
       : <ul className="space-y-2">{rows.slice(0, 200).map((m) => { const tier = tierOf(m.tierId); const perks = (tier?.perks ?? []).filter((p) => p.active); return (<li key={m.email} className={`rounded-2xl border border-sky-border p-3 ${m.blocked ? "bg-red-50" : ""} ${m.removed ? "opacity-60" : ""}`}>
         <div className="flex flex-wrap items-center gap-3"><Avatar src={m.avatar} name={m.name || m.email} size={48} /><TierBadge tier={tier} size={40} /><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{m.name} {m.removed && <span className="ml-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-extrabold text-slate-600">{t("REMOVED")}</span>}{m.blocked && <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-extrabold text-red-700">{t("SPECIALS OFF")}</span>}</p><p className="truncate text-xs text-mute">{m.email} · {m.phone}</p></div>
-          <div className="text-right text-sm"><p className="font-extrabold text-[#7A4FD0]">{tier ? tier.name : t("Not a member yet")}{m.forcedTierId && <span className="ml-1 text-xs font-semibold text-mute">({t("set by admin")})</span>}</p><p className="text-xs text-mute">{usd(m.spendCents)} · {t("{n} orders", { n: m.orders })}</p></div>
+          <div className="text-right text-sm"><p className="font-extrabold text-[#7A4FD0]">{tier ? tier.name : t("Not a member yet")}{m.forcedTierId && <span className="ml-1 text-xs font-semibold text-mute">({t("set by admin")})</span>}</p><p className="text-xs text-mute">{usd(m.spendCents)} · {t("{n} orders", { n: m.orders })} · <b className="text-[#5B3FC8]">{m.points} pts</b></p></div>
           <button type="button" onClick={() => setOpen(open === m.email ? null : m.email)} aria-expanded={open === m.email} className="text-sm font-extrabold text-sky-hover hover:underline">{open === m.email ? t("Close") : t("Manage")}</button></div>
         {open === m.email && <div className="mt-3 space-y-3 border-t border-sky-border pt-3">
           <div className="flex items-start gap-3 rounded-2xl bg-[#F6FAFF] p-3"><Avatar src={m.avatar} name={m.name || m.email} size={72} />
@@ -110,7 +111,7 @@ export default function Membership() {
   useTitle("Membership"); const { t } = useI18n(); const { data } = useAdmin<{ promotions: Promotions }>("/admin/promotions");
   const [edit, setEdit] = useState<Tier | "new" | null>(null); const [msg, setMsg] = useState<Msg>(null);
   if (!data) return <Skeleton />;
-  const tiers = data.promotions.membership; const act = async (path: string, body: object, ok: string) => setMsg(await send(path, body, ok));
+  const tiers = data.promotions.membership, pointCents = data.promotions.memberPointCents; const act = async (path: string, body: object, ok: string) => setMsg(await send(path, body, ok));
   return (<div className="space-y-5">
     {msg && <p role={msg.ok ? "status" : "alert"} className={`rounded-xl p-3 text-sm ${msg.ok ? "bg-green-100" : "bg-red-100"}`}>{t(msg.text)}</p>}
     <section className={card}><div className="mb-4 flex items-start justify-between gap-3"><div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#FFF1D6] text-[#C98A12]"><Icon name="users" size={22} /></span><div><h1 className="text-lg font-extrabold">{t("Membership")}</h1>
@@ -126,6 +127,11 @@ export default function Membership() {
             {tiers.indexOf(x) > 0 && <button type="button" onClick={() => void act("/admin/promotions/membership/move", { id: x.id, dir: "down" }, "Level moved")} className="text-mute hover:underline">← {t("Move down")}</button>}
             {tiers.indexOf(x) < tiers.length - 1 && <button type="button" onClick={() => void act("/admin/promotions/membership/move", { id: x.id, dir: "up" }, "Level moved")} className="text-mute hover:underline">{t("Move up")} →</button>}</div></li>))}</ul>}
 </section>
+    <section className={`${card} space-y-2`}><form onSubmit={async (e) => { e.preventDefault(); void act("/admin/promotions/membership/points", { pointDollars: new FormData(e.currentTarget).get("pointDollars") }, "Saved"); }} key={pointCents} className="flex flex-wrap items-end gap-3">
+      <label className={lab}>{t("Dollars paid for 1 point (USD)")}<input name="pointDollars" type="number" min="1" step="0.01" defaultValue={pointCents / 100} required className={`${field} mt-1 w-40`} /></label>
+      <button className="rounded-full bg-sky px-6 py-2.5 font-extrabold shadow-soft hover:bg-sky-hover">{t("Save")}</button></form>
+      <p className="text-xs text-mute">{t("Points start counting after a customer reaches the first level. The first {n} they pay to join does not give points. Delivery is not counted. Customers spend points on the gifts below.", { n: tiers[0] ? usd(tiers[0].minSpendCents) : "$30" })}</p></section>
+    <GiftsSection onMsg={setMsg} />
     <MembersSection tiers={tiers} onMsg={setMsg} />
     {edit && <TierModal key={edit === "new" ? "new" : edit.id} tiers={tiers} tier={edit === "new" ? undefined : edit} onClose={() => setEdit(null)} onDone={setMsg} />}
   </div>);
