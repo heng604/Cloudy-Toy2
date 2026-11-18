@@ -2,30 +2,27 @@ import { useState } from "react";
 import { post } from "@/lib/api";
 import { useMembership, useGifts } from "@/lib/membership";
 import { useI18n } from "@/lib/i18n";
-const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
-/** Points wallet + gift exchange + what the customer already redeemed. Points come from paid orders after the first level; the server checks every exchange. */
+import CloudMascot from "./CloudMascot";
+/** Exchange Gift: gift cards in a row (points pill on the picture), what the customer already redeemed. Points come from paid orders after the first level; the server checks every exchange. */
 export default function GiftExchange() {
-  const { t } = useI18n(); const { tier, points, pointCents, tiers, redemptions, refresh, loading } = useMembership(); const { gifts, refresh: refreshGifts } = useGifts();
+  const { t } = useI18n(); const { tier, points, redemptions, refresh } = useMembership(); const { gifts, refresh: refreshGifts } = useGifts();
   const [busy, setBusy] = useState(""); const [sure, setSure] = useState(""); const [msg, setMsg] = useState<{ ok?: boolean; text: string } | null>(null);
-  const first = tiers.find((x) => x.active);
   async function redeem(id: string) {
     if (busy) return; setBusy(id); setMsg(null);
     try { const j = await (await post("/membership/redeem", { giftId: id })).json().catch(() => ({})) as { ok?: boolean; error?: string }; if (j.ok) { setMsg({ ok: true, text: t("Done! We will contact you to hand over your gift.") }); refresh(); refreshGifts(); } else setMsg({ text: t(j.error ?? "Could not exchange. Please try again.") }); }
     catch { setMsg({ text: t("Could not reach the server. Please try again.") }); } finally { setBusy(""); setSure(""); }
   }
   const status = (s: string) => (s === "CLAIMED" ? t("Received") : s === "CANCELLED" ? t("Cancelled") : t("Waiting for hand-over"));
-  return (<section aria-label={t("Points and gifts")} className="space-y-4 rounded-xl2 border border-sky-border bg-white p-5 shadow-soft">
-    <div className="rounded-2xl bg-[#EAF3FF] p-4"><p className="text-xs font-extrabold uppercase tracking-wide text-[#2F7FC6]">{t("Points wallet")}</p>
-      <p className="text-4xl font-extrabold text-[#1F4E9C]">{loading ? "…" : points} <span className="text-lg">{t("pts")}</span></p>
-      <p className="mt-1 text-sm text-mute">{tier ? t("You get 1 point for every {amount} you pay after your first {first}. Delivery is not counted. Use your points to exchange gifts.", { amount: usd(pointCents), first: first ? usd(first.minSpendCents) : "" }) : t("Become a member to start earning points you can exchange for gifts.")}</p></div>
-    <div><h2 className="text-lg font-extrabold">{t("Exchange gift")}</h2><p className="text-sm text-mute">{t("Use your points to redeem exclusive gifts!")}</p>
-      {gifts.length === 0 ? <p className="mt-2 text-mute">{t("No gifts yet. Check back soon!")}</p> : <ul className="mt-3 grid gap-3 sm:grid-cols-2">{gifts.map((g) => { const out = g.stock <= 0, short = points < g.points; return (<li key={g.id} className="flex flex-col rounded-2xl border border-sky-border p-3">
-        <div className="flex gap-3">{g.image ? <img src={g.image} alt="" loading="lazy" className="h-20 w-20 shrink-0 rounded-xl border border-sky-border object-cover" /> : <span aria-hidden="true" className="grid h-20 w-20 shrink-0 place-items-center rounded-xl bg-sky-pale text-3xl">🎁</span>}
-          <div className="min-w-0"><p className="font-extrabold">{g.name}</p>{g.description && <p className="text-sm text-mute">{g.description}</p>}
-            <p className="mt-1 text-sm font-extrabold text-[#5B3FC8]">{g.points} {t("pts")}{g.wasPoints ? <s className="ml-1 font-semibold text-mute">{g.wasPoints}</s> : null} <span className="font-semibold text-mute">· {out ? t("Out of stock") : t("{n} in stock", { n: g.stock })}</span></p></div></div>
-        {sure === g.id ? <div className="mt-2 flex gap-2"><button disabled={!!busy} onClick={() => void redeem(g.id)} className="min-h-10 flex-1 rounded-full bg-sky px-3 font-bold hover:bg-sky-hover disabled:opacity-50">{busy === g.id ? t("Exchanging…") : t("Yes, exchange {n} pts", { n: g.points })}</button><button disabled={!!busy} onClick={() => setSure("")} className="min-h-10 rounded-full border border-sky-border px-3 font-bold">{t("Cancel")}</button></div>
-          : <button disabled={out || short || !tier} onClick={() => { setMsg(null); setSure(g.id); }} className="mt-2 min-h-10 rounded-full bg-sky px-3 font-bold hover:bg-sky-hover disabled:cursor-not-allowed disabled:opacity-50">{out ? t("Out of stock") : short || !tier ? t("Need {n} more pts", { n: Math.max(0, g.points - points) }) : t("Exchange gift")}</button>}</li>); })}</ul>}
-      {msg && <p role={msg.ok ? "status" : "alert"} className={`mt-2 font-bold ${msg.ok ? "text-green-700" : "text-red-700"}`}>{msg.text}</p>}</div>
-    {redemptions.length > 0 && <div><h3 className="text-sm font-extrabold">{t("My gifts")}</h3><ul className="mt-1 divide-y divide-sky-border text-sm">{redemptions.map((r) => <li key={r.id} className="flex items-center justify-between gap-2 py-1.5"><span className="min-w-0 truncate font-semibold">{r.giftName}</span><span className="shrink-0 text-mute">−{r.points} {t("pts")} · {status(r.status)}</span></li>)}</ul></div>}
+  return (<section aria-label={t("Points and gifts")} className="relative overflow-hidden rounded-3xl border border-white bg-gradient-to-b from-[#EEE9FF] to-[#E6F1FF] p-4 shadow-soft sm:p-5">
+    <div className="flex items-center gap-3"><span aria-hidden="true" className="text-5xl">🎁</span><div><h2 className="font-display text-2xl font-extrabold text-[#2B1A8F]">{t("Exchange gift")}</h2><p className="text-sm font-semibold text-[#3B4D73]">{t("Use your points to redeem exclusive gifts!")}</p></div></div>
+    {gifts.length === 0 ? <p className="mt-3 text-mute">{t("No gifts yet. Check back soon!")}</p> : <div className="mt-4 flex gap-3 lg:gap-4"><div className="hidden w-32 shrink-0 flex-col items-center justify-center lg:flex"><CloudMascot className="h-28 w-28" /></div>
+      <ul className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">{gifts.map((g) => { const out = g.stock <= 0, short = points < g.points; return (<li key={g.id} className="flex flex-col rounded-2xl border border-white bg-white p-2 shadow-soft">
+        <div className="relative">{g.image ? <img src={g.image} alt="" loading="lazy" className="aspect-[4/3] w-full rounded-xl object-cover" /> : <span aria-hidden="true" className="grid aspect-[4/3] w-full place-items-center rounded-xl bg-sky-pale text-4xl">🎁</span>}
+          <span className="absolute left-1.5 top-1.5 rounded-full bg-[#4B2FC0] px-2.5 py-0.5 text-xs font-extrabold text-white shadow">{g.points} {t("pts")}{g.wasPoints ? <s className="ml-1 font-semibold opacity-70">{g.wasPoints}</s> : null}</span></div>
+        <p className="mt-2 px-1 font-display text-sm font-extrabold leading-tight text-[#2B1A8F]">{g.name}</p>{g.description && <p className="px-1 text-xs text-mute">{g.description}</p>}<p className="px-1 text-[11px] font-semibold text-mute">{out ? t("Out of stock") : t("{n} in stock", { n: g.stock })}</p>
+        <div className="mt-auto pt-2">{sure === g.id ? <div className="flex gap-1.5"><button disabled={!!busy} onClick={() => void redeem(g.id)} className="btn-blue min-h-10 flex-1 rounded-full px-2 text-xs font-extrabold disabled:opacity-50">{busy === g.id ? t("Exchanging…") : t("Yes, exchange {n} pts", { n: g.points })}</button><button disabled={!!busy} onClick={() => setSure("")} className="min-h-10 rounded-full border border-sky-border px-3 text-xs font-bold">{t("Cancel")}</button></div>
+          : <button disabled={out || short || !tier} onClick={() => { setMsg(null); setSure(g.id); }} className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#E6EEFF] px-2 text-xs font-extrabold text-[#2B3FA8] hover:bg-[#D5E3FF] disabled:cursor-not-allowed disabled:opacity-50"><span aria-hidden="true">🎁</span>{out ? t("Out of stock") : short || !tier ? t("Need {n} more pts", { n: Math.max(0, g.points - points) }) : t("Exchange gift")}</button>}</div></li>); })}</ul></div>}
+    {msg && <p role={msg.ok ? "status" : "alert"} className={`mt-3 font-bold ${msg.ok ? "text-green-700" : "text-red-700"}`}>{msg.text}</p>}
+    {redemptions.length > 0 && <div className="mt-4 rounded-2xl bg-white/80 p-3"><h3 className="text-sm font-extrabold text-[#2B1A8F]">{t("My gifts")}</h3><ul className="mt-1 divide-y divide-sky-border text-sm">{redemptions.map((r) => <li key={r.id} className="flex items-center justify-between gap-2 py-1.5"><span className="min-w-0 truncate font-semibold">{r.giftName}</span><span className="shrink-0 text-mute">−{r.points} {t("pts")} · {status(r.status)}</span></li>)}</ul></div>}
   </section>);
 }
