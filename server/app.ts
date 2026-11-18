@@ -375,7 +375,7 @@ api.get("/account/orders", requireUser, wrap(async (req, res) => { const u = use
 api.get("/membership/me", requireUser, wrap(async (req, res) => {
   const u = userOf(req); const promos = await getPromotions(); const m = await memberOf(u.email ?? undefined, promos.membership);
   const reds = u.email ? await listRedemptions(u.email).catch(() => []) : []; const auto = m.isMember ? pointsOf(m.spendCents, promos.membership, promos.memberPointCents) : 0, earned = auto + (m.isMember ? m.bonus : 0), spent = [...redeemedPoints(reds).values()][0] ?? 0;
-  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, nextId: levelAfter(m.tier, promos.membership)?.id ?? null, points: Math.max(0, earned - spent), earned, bonus: m.isMember ? m.bonus : 0, spent, redemptions: reds.slice(0, 30) });
+  res.json({ spendCents: m.spendCents, used: m.used, tierId: m.tier?.id ?? null, isMember: m.isMember, nextId: levelAfter(m.tier, promos.membership)?.id ?? null, points: Math.max(0, earned - spent), earned, bonus: m.isMember ? m.bonus : 0, spent, redemptions: reds.slice(0, 30) });
 }));
 
 /** Gifts members can exchange for points (only the active ones). */
