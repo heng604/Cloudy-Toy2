@@ -43,7 +43,7 @@ import { canPay, payNowCents } from "../shared/orders";
 import { can } from "../shared/roles";
 import { tierByOrders, levelAfter, memberBenefits, memberSpendOf, monthUsage, checkTier, layoutTiers, isPointCents, pointsOf, MAX_TIERS, type Tier } from "../shared/membership";
 import { getOverrides, setOverride } from "./lib/memberStore";
-import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule, fullPriceCents } from "../shared/promotions";
+import { autoDiscounts, autoTotal, preorderSplit, checkPreorder, checkCampaign, checkFestival, MAX_CAMPAIGNS, MAX_FESTIVALS, bogoGifts, freeShippingRule, fullPriceCents, codeEligibleCents } from "../shared/promotions";
 import { isSlug, isBuiltin, MAX_CONTENT, MAX_TITLE, MAX_CUSTOM_PAGES, SLUG_RE, RESERVED_SLUGS, PAGE_DEFS, allDefs } from "../shared/pages";
 import { isPreorder, LABEL_IDS, checkPreorderDates, preorderPhase, dayShort, OPTION_LIMITS, isValidOption, parseOptions, serializeOptions, pruneOptionImages } from "../shared/products";
 
@@ -154,7 +154,10 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     const mb = memberBenefits(member.tier, { subtotalCents: t0.subtotalCents, leftCents: t0.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, member.used); auto.push(...mb.discounts); const memberPerks = [...mb.perks, ...(memFree && !freeShip ? memShip.shipPerks : [])]; // the member's level specials stack after the shop's campaigns
     let discount = autoTotal(auto);
     if (codeIn) { // admin-created codes only (% off the subtotal); checked on the server, never trusted from the browser
-      const ev = await resolveDiscount(codeIn, [{ lineCents: t0.subtotalCents - discount }], true, acct?.email ?? undefined);
+      if (member.tier) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
+      const codeBase = Math.min(codeEligibleCents(t0.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals), t0.subtotalCents - discount);
+      if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Every product in your cart already has a sale, campaign or promotion." });
+      const ev = await resolveDiscount(codeIn, [{ lineCents: codeBase }], true, acct?.email ?? undefined);
       if (!ev.ok) return res.status(400).json({ error: ev.error });
       usedCode = codeIn; discount += ev.discountCents;
     }
@@ -211,10 +214,12 @@ api.post("/discount/validate", wrap(async (req, res) => {
   try {
     const [products, promos, who] = await Promise.all([listProductsByIds(b.data.lines.map((l) => l.productId)), getPromotions(), userFromReq(req)]); const t = computeTotals(b.data.lines, catalogOf(products), 0);
     const auto = autoDiscounts(t.items.map((i) => ({ category: products.find((p) => p.id === i.productId)?.category ?? "", lineCents: i.lineCents, productId: i.productId, qty: i.qty })), promos.campaigns, promos.festivals);
-    /* a code stacks on the member specials: it takes its % off what is left after campaigns AND the member's level specials (same as checkout) */
+    /* codes are for non-members only, and only on products with no discount (same as checkout) */
     const mem = await memberOf(who?.email ?? undefined, promos.membership).catch(() => noMember); const byId = new Map(products.map((p) => [p.id, p]));
-    const mb = memberBenefits(mem.tier, { subtotalCents: t.subtotalCents, leftCents: t.subtotalCents - autoTotal(auto), fullPriceCents: fullPriceCents(t.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals) }, mem.used);
-    const ev = await resolveDiscount(code, [{ lineCents: t.subtotalCents - autoTotal(auto) - mb.discounts.reduce((s, d) => s + d.cents, 0) }], false, who?.email ?? undefined);
+    if (mem.tier) return res.status(400).json({ error: "Discount codes are for customers without a membership. Members get their level specials instead." });
+    const codeBase = Math.min(codeEligibleCents(t.items.flatMap((i) => { const p = byId.get(i.productId); return p ? [{ p, lineCents: i.lineCents }] : []; }), promos.campaigns, promos.festivals), t.subtotalCents - autoTotal(auto));
+    if (codeBase <= 0) return res.status(400).json({ error: "This code only works on products without a discount. Every product in your cart already has a sale, campaign or promotion." });
+    const ev = await resolveDiscount(code, [{ lineCents: codeBase }], false, who?.email ?? undefined);
     return ev.ok ? res.json({ code, discountCents: ev.discountCents }) : res.status(400).json({ error: ev.error });
   } catch { return res.status(400).json({ error: "Could not check the code right now." }); }
 }));

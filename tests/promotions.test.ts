@@ -131,3 +131,14 @@ describe("offer card picture", () => {
     expect(normalizePromotions({ festivals: [{ id: "f", name: "Bad", image: "javascript:x" }] }).festivals).toEqual([]);
   });
 });
+
+import { codeEligibleCents } from "../shared/promotions";
+describe("discount codes only on products without a discount", () => {
+  const full = { id: "p1", category: "Blocks", price: 20, salePrice: null, stock: 5 };
+  const sale = { id: "p2", category: "Blocks", price: 20, salePrice: 15, stock: 5 };
+  const plushie = { id: "p3", category: "Plushies", price: 20, salePrice: null, stock: 5 };
+  it("counts only full-price lines with no campaign", () => {
+    expect(codeEligibleCents([{ p: full, lineCents: 2000 }, { p: sale, lineCents: 1500 }, { p: plushie, lineCents: 2000 }], [plush])).toBe(2000);
+  });
+  it("is 0 when every line has a discount", () => { expect(codeEligibleCents([{ p: sale, lineCents: 1500 }], [])).toBe(0); });
+});
