@@ -9,7 +9,7 @@ const int = (v: unknown) => (v === "" || v === null || v === undefined ? NaN : N
 export function checkGift(i: { id?: unknown; name?: unknown; description?: unknown; points?: unknown; wasPoints?: unknown; stock?: unknown; image?: unknown; active?: unknown }): Checked<Omit<Gift, "id">> {
   const name = String(i.name ?? "").trim(), description = String(i.description ?? "").trim(), image = String(i.image ?? "").trim();
   if (name.length < 2 || name.length > 80) return { ok: false, error: "Gift name needs 2 to 80 characters" };
-  if (description.length > 200) return { ok: false, error: "Description is too long (200 characters at most)" };
+  if (description.length > 500) return { ok: false, error: "Description is too long (500 characters at most)" };
   const points = int(i.points); if (!Number.isInteger(points) || points < 1 || points > MAX_GIFT_POINTS) return { ok: false, error: "Points must be a whole number of 1 or more" };
   const noWas = i.wasPoints === "" || i.wasPoints === null || i.wasPoints === undefined; const was = noWas ? null : int(i.wasPoints);
   if (was !== null && (!Number.isInteger(was) || was <= points || was > MAX_GIFT_POINTS)) return { ok: false, error: "The old points must be more than the points now (or leave it empty)" };

@@ -14,7 +14,7 @@ export default function CategoriesModal({ onClose }: { onClose: () => void }) {
   async function run(path: string, body: object, ok: string) {
     if (busy) return false; setBusy(true); setMsg(null);
     try { const j = await (await post(path, body)).json().catch(() => ({})) as { ok?: boolean; error?: string }; if (j.ok) { refreshAdmin(); setMsg({ ok: true, text: ok }); return true; } setMsg({ ok: false, text: j.error ?? "Could not save. Please try again." }); }
-    catch { setMsg({ ok: false, text: "Could not reach the server. Please try again." }); } finally { setBusy(false); } return false;
+    catch { setMsg({ ok: false, text: "Oops, we couldn't connect. Please try again in a moment." }); } finally { setBusy(false); } return false;
   }
   const add = async (e: FormEvent) => { e.preventDefault(); if (await run("/admin/categories/add", { name }, t("Category added"))) setName(""); };
   const inp = "min-w-0 flex-1 rounded-xl border border-sky-border bg-[#F3F9FE] px-3.5 py-2.5 outline-none";

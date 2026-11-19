@@ -46,9 +46,10 @@ export function TierCard() {
   return (<section aria-label={t("My membership")} className="rounded-3xl border border-white bg-white/90 p-4 shadow-soft sm:p-5">
     <div className="flex items-center gap-3"><TierBadge tier={tier} size={72} className="rounded-3xl border-2 border-white bg-gradient-to-b from-[#FFF4D6] to-[#FFE2A8] shadow-soft" />
       <div className="min-w-0"><span className="inline-block rounded-full bg-[#EAE6FF] px-3 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#5B3FC8]">{loading ? "…" : tier ? t("{name} member", { name: tier.name }) : t("Not a member yet")}</span>
-        <p className="font-display text-2xl font-extrabold leading-tight text-[#2B1A8F]">{tier ? t("Hi, {name} friend!", { name: tier.name }) : t("Hi, friend!")}</p>
+        <p className="font-display text-2xl font-extrabold leading-tight text-[#2B1A8F]">{tier ? t("Hi, {name} friend!", { name: tier.name }) : t("Hi there, friend!")}</p>
         <p className="text-sm text-mute">{t("{n} points total", { n: points })}</p></div></div>
-    <div className="mt-4"><p className="text-sm font-extrabold text-[#2B1A8F]">{next ? (tier ? t("Pay {amount} or more in ONE order to unlock {name}", { amount: usd(next.singleOrderCents), name: next.name.toUpperCase() }) : t("Spend {amount} more to unlock {name}", { amount: usd(Math.max(0, next.minSpendCents - spendCents)), name: next.name.toUpperCase() })) : t("You are at our top level. Thank you!")}</p>
+    {tier?.description && <p className="mt-3 whitespace-pre-line rounded-2xl bg-[#F3F8FF] p-3 text-sm text-[#3B4D73]">{tier.description}</p>}
+    <div className="mt-4"><p className="text-sm font-extrabold text-[#2B1A8F]">{next ? (tier ? t("Pay {amount} or more in ONE order to unlock {name}", { amount: usd(next.singleOrderCents), name: next.name.toUpperCase() }) : t("Spend {amount} more to unlock {name}", { amount: usd(Math.max(0, next.minSpendCents - spendCents)), name: next.name.toUpperCase() })) : t("You're at our top level. Thank you so much for being with us! 💙")}</p>
       <div className="mt-2 flex items-center gap-3"><span className="rounded-full bg-[#DCE8FF] px-2.5 py-0.5 text-xs font-extrabold text-[#3D58C8]">{pct}%</span><div className="h-3 flex-1 overflow-hidden rounded-full bg-[#E3EEFB]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className="h-full rounded-full bg-gradient-to-r from-[#7FB5FF] to-[#5B8DF0]" style={{ width: `${pct}%` }} /></div></div>
       <p className="mt-1 text-sm text-mute">{next && !tier ? `${usd(spendCents)} / ${usd(next.minSpendCents)} ${t("paid")}` : `${t("Total paid")} ${usd(spendCents)}`}</p></div>
     {tier && (perks.length > 0 ? <ul className="mt-3 space-y-1.5 border-t border-sky-border pt-3 text-sm">{perks.map((p) => { const n = used[p.id] ?? 0, left = p.monthlyLimit > 0 ? Math.max(0, p.monthlyLimit - n) : null; return (<li key={p.id} className="flex items-start gap-2">{p.kind === "custom" && p.image ? <img src={p.image} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-xl border border-sky-border object-cover" /> : <span aria-hidden="true" className="text-[#FF7BA9]">♡</span>}<span><b>{perkName(p, t)}</b>{p.kind === "custom" && p.detail && <span className="block text-xs text-mute">{p.detail}</span>}{left !== null && <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${left === 0 ? "bg-red-100 text-red-700" : "bg-[#EAE6FF] text-[#5B3FC8]"}`}>{left === 0 ? t("Used up this month") : t("{n} left this month", { n: left })}</span>}</span></li>); })}</ul>
@@ -63,7 +64,7 @@ export function PointsWallet() {
     <Star className="right-4 top-3 h-7 w-7 rotate-12" /><Star className="right-12 top-10 h-4 w-4" />
     <p className="text-xs font-extrabold uppercase tracking-wide text-[#3D58C8]">{t("Points wallet")}</p>
     <p className="font-display text-5xl font-extrabold text-[#2B1A8F]">{loading ? "…" : points} <span className="text-2xl">{t("pts")}</span></p>
-    <p className="mt-1 max-w-sm text-sm text-[#3B4D73]">{tier ? t("You get 1 point for every {amount} you pay after your first {first}. Delivery is not counted. Use your points to exchange gifts.", { amount: usd(pointCents), first: first ? usd(first.minSpendCents) : "" }) : t("Become a member to start earning points you can exchange for gifts.")}</p>
+    <p className="mt-1 max-w-sm text-sm text-[#3B4D73]">{tier ? t("You earn 1 point for every {amount} you spend after your first {first}. Delivery doesn't count. Save them up and swap them for gifts!", { amount: usd(pointCents), first: first ? usd(first.minSpendCents) : "" }) : t("Join us as a member and start collecting points you can swap for lovely gifts!")}</p>
     <Link to="/shop" className="btn-blue mt-4 inline-flex min-h-11 items-center gap-2 rounded-full px-6 font-extrabold">🛍 {t("Keep shopping")}</Link></section>);
 }
 
@@ -72,12 +73,12 @@ export function LevelsGrid() {
   const { t } = useI18n(); const { tier, tiers } = useMembership(); const ladder = tiers.filter((x) => x.active); const at = ladder.findIndex((x) => x.id === tier?.id);
   if (ladder.length === 0) return null;
   return (<section aria-label={t("Membership Levels")} className="rounded-3xl border border-white bg-white/80 p-4 shadow-soft sm:p-5">
-    <h2 className="flex items-center gap-2 font-display text-2xl font-extrabold text-[#2B1A8F]"><span aria-hidden="true">⭐</span>{t("Membership Levels")}</h2><p className="text-sm text-mute">{t("You move up automatically as you shop.")}</p>
+    <h2 className="flex items-center gap-2 font-display text-2xl font-extrabold text-[#2B1A8F]"><span aria-hidden="true">⭐</span>{t("Membership Levels")}</h2><p className="text-sm text-mute">{t("You'll level up on your own as you shop with us.")}</p>
     <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{ladder.map((x, i) => { const ps = x.perks.filter((p) => p.active); const mine = i === at, locked = i > at; return (
       <li key={x.id} className={`relative rounded-2xl border p-3 ${mine ? "border-[#5B8DF0] bg-[#EEF4FF] shadow-soft" : "border-sky-border bg-white"}`}>
         <span aria-hidden="true" className="absolute right-3 top-3 text-lg text-slate-400">{locked ? "🔒" : mine ? "💙" : "✓"}</span>
         <TierBadge tier={x} size={52} className="rounded-2xl bg-gradient-to-b from-[#FFF4D6] to-[#FFE2A8]" />
-        <p className="mt-1 font-display text-xl font-extrabold text-[#2B1A8F]">{x.name}</p>
+        <p className="mt-1 font-display text-xl font-extrabold text-[#2B1A8F]">{x.name}</p>{x.description && <p className="mt-1 whitespace-pre-line text-sm text-[#3B4D73]">{x.description}</p>}
         <p className="text-xs text-mute">{i === 0 ? t("After paying {amount}", { amount: usd(x.minSpendCents) }) : t("one order of {amount}", { amount: usd(x.singleOrderCents) })}</p>
         <div className="mt-2 space-y-1.5">{ps.length > 0 ? ps.map((p) => <p key={p.id} className="rounded-xl bg-[#E4EFFD] px-2.5 py-1.5 text-xs font-semibold text-[#2B3F6B]">{perkName(p, t)}{p.kind !== "custom" ? "" : p.monthlyLimit > 0 ? ` (${t("max {n} a month", { n: p.monthlyLimit })})` : ""}</p>) : <p className="text-xs text-mute">{t("Specials coming soon.")}</p>}</div></li>); })}</ul></section>);
 }

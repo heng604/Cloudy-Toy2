@@ -11,15 +11,16 @@ const lab = "block text-sm font-bold";
 const card = "rounded-3xl border border-sky-border bg-white p-5 shadow-soft sm:p-6";
 async function send(path: string, body: object, ok: string): Promise<{ ok: boolean; text: string }> {
   try { const j = await (await post(path, body)).json().catch(() => ({})) as { ok?: boolean; error?: string }; if (j.ok) { refreshAdmin(); return { ok: true, text: ok }; } return { ok: false, text: j.error ?? "Could not save. Please try again." }; }
-  catch { return { ok: false, text: "Could not reach the server. Please try again." }; }
+  catch { return { ok: false, text: "Oops, we couldn't connect. Please try again in a moment." }; }
 }
 type Form = { id?: string; name: string; description: string; points: string; wasPoints: string; stock: string; image: string; active: boolean };
 const blank = (): Form => ({ name: "", description: "", points: "", wasPoints: "", stock: "10", image: "", active: true });
 const toForm = (g: Gift): Form => ({ id: g.id, name: g.name, description: g.description, points: String(g.points), wasPoints: g.wasPoints ? String(g.wasPoints) : "", stock: String(g.stock), image: g.image, active: g.active });
 /** Admin > Membership: the gifts members can exchange for points, and the list of exchanges to hand over. */
 export default function GiftsSection({ onMsg }: { onMsg: (m: Msg) => void }) {
-  const { t } = useI18n(); const { data } = useAdmin<{ gifts: Gift[]; redemptions: Redemption[] }>("/admin/gifts"); const [f, setF] = useState<Form>(blank()); const [busy, setBusy] = useState(false); const [showDone, setShowDone] = useState(false);
+  const { t } = useI18n(); const { data } = useAdmin<{ gifts: Gift[]; redemptions: Redemption[] }>("/admin/gifts"); const shop = useAdmin<{ products: { id: string; name: string; sku: string; image: string; active: boolean }[] }>("/admin/promotions"); const [f, setF] = useState<Form>(blank()); const [busy, setBusy] = useState(false); const [showDone, setShowDone] = useState(false);
   if (!data) return <Skeleton />;
+  const fromProduct = (id: string) => { const p = shop.data?.products.find((x) => x.id === id); if (p) setF((x) => ({ ...x, name: p.name.slice(0, 80), image: p.image || x.image, description: x.description || `Shop product ${p.sku}` })); };
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   async function save(e: FormEvent) { e.preventDefault(); if (busy) return; setBusy(true); const r = await send("/admin/gifts/save", f, f.id ? "Gift saved" : "Gift added"); setBusy(false); onMsg(r); if (r.ok) setF(blank()); }
   const waiting = data.redemptions.filter((r) => r.status === "PENDING"), done = data.redemptions.filter((r) => r.status !== "PENDING");
@@ -28,8 +29,9 @@ export default function GiftsSection({ onMsg }: { onMsg: (m: Msg) => void }) {
     <div className="flex items-start justify-between gap-3"><div><h2 className="flex items-center gap-2 text-xl font-extrabold text-[#3A3FA8]"><span aria-hidden="true" className="text-[#E0456B]">🎁</span>{t("Points Gift Exchange Catalog")}</h2><p className="text-sm text-mute">{t("Gifts members can redeem with their saved points. Mark each one as received when you hand it over.")}</p></div><p className="shrink-0 text-sm font-bold text-mute">{t("{g} gifts · {r} redemptions", { g: data.gifts.length, r: waiting.length })}</p></div>
     <form onSubmit={save} className="space-y-3 rounded-2xl border border-sky-border bg-[#F3F9FF] p-4">
       <p className="text-sm font-extrabold">{f.id ? t("Edit gift") : t("Add a gift")}</p>
+      {(shop.data?.products.length ?? 0) > 0 && !f.id && <label className={lab}>{t("Give a shop product as the gift (optional)")}<select value="" onChange={(e) => fromProduct(e.target.value)} className={`${field} mt-1`}><option value="">{t("Choose a product to fill the name and photo...")}</option>{shop.data!.products.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}</select></label>}
       <div className="grid gap-3 sm:grid-cols-2"><label className={lab}>{t("Gift name")}<input value={f.name} onChange={set("name")} required maxLength={80} placeholder="e.g. Cloudie Mini Tote Bag" className={`${field} mt-1`} /></label>
-        <label className={lab}>{t("Description")}<input value={f.description} onChange={set("description")} maxLength={200} placeholder={t("Short gift description")} className={`${field} mt-1`} /></label></div>
+        <label className={lab}>{t("Description")}<input value={f.description} onChange={set("description")} maxLength={500} placeholder={t("Short gift description")} className={`${field} mt-1`} /></label></div>
       <div className="grid grid-cols-3 gap-3"><label className={lab}>{t("Points")}<input type="number" min="1" step="1" value={f.points} onChange={set("points")} required className={`${field} mt-1`} /></label>
         <label className={lab}>{t("Was (points, optional)")}<input type="number" min="1" step="1" value={f.wasPoints} onChange={set("wasPoints")} placeholder={t("Sale")} className={`${field} mt-1`} /></label>
         <label className={lab}>{t("Stock")}<input type="number" min="0" step="1" value={f.stock} onChange={set("stock")} required className={`${field} mt-1`} /></label></div>

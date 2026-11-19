@@ -22,7 +22,7 @@ function StaffModal({ s, me, onClose, onDone }: { s?: Staff; me: string; onClose
     const body = s ? { email: s.email, name: f.get("name"), ...(f.get("role") ? { role: f.get("role"), active: f.get("active") === "on" } : {}) } : { email: f.get("email"), name: f.get("name"), role: f.get("role") };
     try { const j = await (await post(s ? "/admin/staff/update" : "/admin/staff/add", body)).json().catch(() => ({})) as { ok?: boolean; error?: string };
       if (j.ok) { refreshAdmin(); onDone({ ok: true, text: s ? t("Saved") : t("Admin added") }); close(); return; } setErr(j.error ?? "Could not save. Please try again.");
-    } catch { setErr("Could not reach the server. Please try again."); } finally { setBusy(false); }
+    } catch { setErr("Oops, we couldn't connect. Please try again in a moment."); } finally { setBusy(false); }
   }
   return (<Modal icon="users" title={s ? t("Edit Admin") : t("Add New Admin")} onClose={onClose}>{(close) => (<form onSubmit={(e) => submit(e, close)} className="space-y-4 p-5 sm:p-7">
     {err && <p role="alert" className="rounded-xl bg-red-100 p-3 text-sm font-semibold text-red-800">{err}</p>}
@@ -41,7 +41,7 @@ export default function StaffPage() {
   if (!data) return <Skeleton />;
   const del = async (s: Staff) => {
     try { const j = await (await post("/admin/staff/delete", { email: s.email })).json().catch(() => ({})) as { ok?: boolean; error?: string }; refreshAdmin(); setMsg(j.ok ? { ok: true, text: t("Admin removed") } : { ok: false, text: j.error ?? "Could not remove. Please try again." }); }
-    catch { setMsg({ ok: false, text: "Could not reach the server. Please try again." }); }
+    catch { setMsg({ ok: false, text: "Oops, we couldn't connect. Please try again in a moment." }); }
   };
   const th = "px-4 py-3 text-xs font-bold uppercase tracking-wide text-mute";
   return (<div className="space-y-4">

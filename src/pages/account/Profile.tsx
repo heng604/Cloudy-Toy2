@@ -19,7 +19,7 @@ function Form({ user, profile, refresh }: { user: User; profile: ProfileInfo; re
     const p = ProfileInput.safeParse(f); if (!p.success) return setS({ error: t(p.error.issues[0]?.message ?? "Invalid input") });
     setBusy(true);
     try { const j = await (await post("/account/profile", p.data)).json().catch(() => ({})) as { ok?: boolean; error?: string }; if (j.ok) { setS({ ok: true }); refresh(); } else setS({ error: t(j.error ?? "Could not save. Please try again.") }); }
-    catch { setS({ error: t("Could not reach the server. Please try again.") }); } finally { setBusy(false); }
+    catch { setS({ error: t("Oops, we couldn't connect. Please try again in a moment.") }); } finally { setBusy(false); }
   }
   return (<form onSubmit={save} className="space-y-3">
     <div className="flex items-center gap-4 rounded-xl2 border border-sky-border bg-white p-4"><Avatar src={avatar} name={f.display_name || user.email || ""} size={72} />

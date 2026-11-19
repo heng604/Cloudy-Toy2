@@ -10,8 +10,8 @@ export type Perk = { id: string; kind: PerkKind; title: string; percent: number;
   /** custom specials only: a few words of detail the member reads (e.g. "Pick 1 free toy from the gift shelf") and an optional picture (e.g. the free product) */ detail: string; image: string };
 /** A level. The FIRST level (lowest) is reached by paying `minSpendCents` in total. After that the customer earns points (1 point per `memberPointCents` paid, default $10).
  *  Every later level needs `pointsMore` MORE points than the level before it; its `minSpendCents` is worked out from that (see layoutTiers), so the rest of the shop keeps using plain spend. */
-export type Tier = { id: string; name: string; emoji: string; image: string; minSpendCents: number; pointsMore: number; /** every level AFTER the first: the customer upgrades to it by paying this much in ONE order (goods only, delivery not counted) once they hold the level before it. The first level has 0. */ singleOrderCents: number; /** the one name shown to customers for ALL this level's money / delivery specials (empty = the level name) */ specialName: string; perks: Perk[]; active: boolean };
-export const MAX_TIERS = 10, MAX_PERKS = 12, MAX_MONTHLY_LIMIT = 999, MAX_POINTS_MORE = 100_000;
+export type Tier = { id: string; name: string; emoji: string; image: string; minSpendCents: number; pointsMore: number; /** every level AFTER the first: the customer upgrades to it by paying this much in ONE order (goods only, delivery not counted) once they hold the level before it. The first level has 0. */ singleOrderCents: number; /** the one name shown to customers for ALL this level's money / delivery specials (empty = the level name) */ specialName: string; /** a longer text the admin writes about this level (who it is for, what the member enjoys); shown to customers */ description: string; perks: Perk[]; active: boolean };
+export const MAX_LEVEL_DESCRIPTION = 1000, MAX_TIERS = 10, MAX_PERKS = 12, MAX_MONTHLY_LIMIT = 999, MAX_POINTS_MORE = 100_000;
 /** Dollars paid for 1 point (default $10, in cents). The admin can change it on Admin > Membership. */
 export const DEFAULT_POINT_CENTS = 1000;
 export const isPointCents = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 100 && n <= 10_000_000;
@@ -28,10 +28,10 @@ export function layoutTiers(tiers: Tier[], _pointCents: number = DEFAULT_POINT_C
 const mk = (id: string, kind: PerkKind, o: Partial<Perk> = {}): Perk => ({ id, kind, title: "", percent: 0, amountCents: 0, minSpendCents: 0, active: true, monthlyLimit: 0, onPromo: false, detail: "", image: "", ...o });
 const earn = mk("pts", "custom", { title: "Earn points to redeem gifts!" });
 export const DEFAULT_TIERS: Tier[] = layoutTiers([
-  { id: "bronze", singleOrderCents: 0, name: "Bronze", emoji: "🥉", image: "", minSpendCents: 3000, pointsMore: 0, specialName: "", perks: [earn], active: true },
-  { id: "silver", singleOrderCents: 4500, name: "Silver", emoji: "🥈", image: "", minSpendCents: 0, pointsMore: 0, specialName: "Silver", perks: [mk("disc", "percent", { title: "Silver", percent: 5, minSpendCents: 1000 }), earn], active: true },
-  { id: "gold", singleOrderCents: 10000, name: "Gold", emoji: "🥇", image: "", minSpendCents: 0, pointsMore: 0, specialName: "Gold", perks: [mk("disc", "percent", { title: "Gold", percent: 10, minSpendCents: 1000 }), earn], active: true },
-  { id: "platinum", singleOrderCents: 15000, name: "Platinum", emoji: "💎", image: "", minSpendCents: 0, pointsMore: 0, specialName: "Platinum", perks: [mk("disc", "percent", { title: "Platinum", percent: 15 }), mk("ship", "free_shipping", { title: "Platinum", minSpendCents: 6000 }), earn], active: true },
+  { id: "bronze", singleOrderCents: 0, name: "Bronze", emoji: "🥉", image: "", description: "", minSpendCents: 3000, pointsMore: 0, specialName: "", perks: [earn], active: true },
+  { id: "silver", singleOrderCents: 4500, name: "Silver", emoji: "🥈", image: "", description: "", minSpendCents: 0, pointsMore: 0, specialName: "Silver", perks: [mk("disc", "percent", { title: "Silver", percent: 5, minSpendCents: 1000 }), earn], active: true },
+  { id: "gold", singleOrderCents: 10000, name: "Gold", emoji: "🥇", image: "", description: "", minSpendCents: 0, pointsMore: 0, specialName: "Gold", perks: [mk("disc", "percent", { title: "Gold", percent: 10, minSpendCents: 1000 }), earn], active: true },
+  { id: "platinum", singleOrderCents: 15000, name: "Platinum", emoji: "💎", image: "", description: "", minSpendCents: 0, pointsMore: 0, specialName: "Platinum", perks: [mk("disc", "percent", { title: "Platinum", percent: 15 }), mk("ship", "free_shipping", { title: "Platinum", minSpendCents: 6000 }), earn], active: true },
 ]);
 /** Points a customer has: 1 point per `pointCents` paid after the first level (the first level's entry spend gives none), minus the points already spent on gifts. */
 export const pointsBalance = (spendCents: number, tiers: Tier[] | undefined, redeemed: number, pointCents: number = DEFAULT_POINT_CENTS) => Math.max(0, pointsOf(spendCents, tiers, pointCents) - redeemed);
@@ -49,7 +49,7 @@ export function checkPerk(i: { id?: unknown; kind?: unknown; title?: unknown; pe
   if (!Number.isFinite(minSpendCents) || minSpendCents < 0 || minSpendCents > 10_000_000) return { ok: false, error: "Minimum order must be $0 or more" };
   const monthlyLimit = i.monthlyLimit === undefined || i.monthlyLimit === "" || i.monthlyLimit === null ? 0 : num(i.monthlyLimit);
   if (!Number.isInteger(monthlyLimit) || monthlyLimit < 0 || monthlyLimit > MAX_MONTHLY_LIMIT) return { ok: false, error: `Monthly limit must be a whole number from 0 to ${MAX_MONTHLY_LIMIT} (0 = no limit)` };
-  const detail = kind === "custom" ? String(i.detail ?? "").trim() : ""; if (detail.length > 300) return { ok: false, error: "Special detail is too long (300 characters at most)" };
+  const detail = kind === "custom" ? String(i.detail ?? "").trim() : ""; if (detail.length > 500) return { ok: false, error: "Special detail is too long (500 characters at most)" };
   const image = kind === "custom" ? String(i.image ?? "").trim() : ""; if (image.length > 600 || (image && !/^(\/|https?:\/\/)/.test(image))) return { ok: false, error: "Special picture is not valid" };
   const base = { id: idOk(i.id) ? String(i.id) : newId(), kind, title, percent: 0, amountCents: 0, minSpendCents, active: i.active !== false, monthlyLimit, onPromo: i.onPromo !== false && i.onPromo !== "false", detail, image };
   if (kind === "percent") { const percent = num(i.percent); if (!Number.isInteger(percent) || percent < 1 || percent > 90) return { ok: false, error: "Discount % must be a whole number from 1 to 90" }; return { ok: true, value: { ...base, percent } }; }
@@ -57,7 +57,7 @@ export function checkPerk(i: { id?: unknown; kind?: unknown; title?: unknown; pe
   return { ok: true, value: base };
 }
 /** Validates one level (dollars in, cents out). */
-export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; image?: unknown; minSpend?: unknown; singleOrder?: unknown; pointsMore?: unknown; specialName?: unknown; perks?: unknown; active?: unknown }): Checked<Tier> {
+export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; image?: unknown; minSpend?: unknown; singleOrder?: unknown; pointsMore?: unknown; specialName?: unknown; description?: unknown; perks?: unknown; active?: unknown }): Checked<Tier> {
   const name = String(i.name ?? "").trim(), emoji = String(i.emoji ?? "").trim();
   const noSpend = i.minSpend === undefined || i.minSpend === null || i.minSpend === "", minSpendCents = noSpend ? 0 : Math.round(num(i.minSpend) * 100);
   const noSingle = i.singleOrder === undefined || i.singleOrder === null || i.singleOrder === "", singleOrderCents = noSingle ? 0 : Math.round(num(i.singleOrder) * 100);
@@ -67,10 +67,11 @@ export function checkTier(i: { id?: unknown; name?: unknown; emoji?: unknown; im
   if (!noSpend && (!Number.isFinite(minSpendCents) || minSpendCents < 1 || minSpendCents > 100_000_000)) return { ok: false, error: "Spend to reach this level must be more than $0" };
   if (!noSingle && (!Number.isFinite(singleOrderCents) || singleOrderCents < 1 || singleOrderCents > 100_000_000)) return { ok: false, error: "The one-order amount to upgrade must be more than $0" };
   const specialName = String(i.specialName ?? "").trim(); if (specialName.length > 60) return { ok: false, error: "Name shown to the customer is too long (60 characters at most)" };
+  const description = String(i.description ?? "").replace(/\r\n/g, "\n").trim(); if (description.length > MAX_LEVEL_DESCRIPTION) return { ok: false, error: `The level description is too long (${MAX_LEVEL_DESCRIPTION} characters at most)` };
   const raw = Array.isArray(i.perks) ? i.perks : []; if (raw.length > MAX_PERKS) return { ok: false, error: `At most ${MAX_PERKS} specials per level` };
   const perks: Perk[] = [];
   for (const p of raw) { const c = checkPerk((p ?? {}) as Record<string, unknown>, specialName || name); if (!c.ok) return c; perks.push(c.value); }
-  return { ok: true, value: { id: idOk(i.id) ? String(i.id) : newId(), name, emoji, image, minSpendCents, pointsMore: 0, singleOrderCents, specialName, perks, active: i.active !== false } };
+  return { ok: true, value: { id: idOk(i.id) ? String(i.id) : newId(), name, emoji, image, minSpendCents, pointsMore: 0, singleOrderCents, specialName, description, perks, active: i.active !== false } };
 }
 /** Reads whatever is stored (missing, old or hand-edited) and always returns valid levels in ladder order. Never saved = the four default levels (Bronze, Silver, Gold, Platinum); saved empty = no levels.
  *  Levels saved before points existed have no pointsMore: it is worked out from their old spend amounts, so nobody's level jumps. */
@@ -79,7 +80,7 @@ export function normalizeTiers(v: unknown, pointCents: number = DEFAULT_POINT_CE
   const out: Tier[] = [];
   for (const x of v) {
     const t = (x ?? {}) as Partial<Tier>;
-    const c = checkTier({ id: t.id, name: t.name, emoji: t.emoji, image: t.image, minSpend: (t.minSpendCents ?? 0) / 100 || undefined, singleOrder: (t.singleOrderCents ?? 0) / 100 || undefined, specialName: t.specialName ?? (Array.isArray(t.perks) ? (t.perks as Partial<Perk>[]).find((p) => p && p.kind !== "custom" && typeof p.title === "string")?.title : undefined), active: t.active, perks: (Array.isArray(t.perks) ? t.perks : []).map((p) => { const q = (p ?? {}) as Partial<Perk>; return { id: q.id, kind: q.kind, title: q.title, percent: q.percent, amount: (q.amountCents ?? 0) / 100, minSpend: (q.minSpendCents ?? 0) / 100, active: q.active, monthlyLimit: q.monthlyLimit, onPromo: q.onPromo, detail: q.detail, image: q.image }; }) });
+    const c = checkTier({ id: t.id, description: t.description, name: t.name, emoji: t.emoji, image: t.image, minSpend: (t.minSpendCents ?? 0) / 100 || undefined, singleOrder: (t.singleOrderCents ?? 0) / 100 || undefined, specialName: t.specialName ?? (Array.isArray(t.perks) ? (t.perks as Partial<Perk>[]).find((p) => p && p.kind !== "custom" && typeof p.title === "string")?.title : undefined), active: t.active, perks: (Array.isArray(t.perks) ? t.perks : []).map((p) => { const q = (p ?? {}) as Partial<Perk>; return { id: q.id, kind: q.kind, title: q.title, percent: q.percent, amount: (q.amountCents ?? 0) / 100, minSpend: (q.minSpendCents ?? 0) / 100, active: q.active, monthlyLimit: q.monthlyLimit, onPromo: q.onPromo, detail: q.detail, image: q.image }; }) });
     if (c.ok && !out.some((o) => o.id === c.value.id)) out.push(c.value);
   }
   const kept = out.slice(0, MAX_TIERS); if (kept[0] && kept[0].minSpendCents < 1) kept[0].minSpendCents = DEFAULT_TIERS[0].minSpendCents; // the first level always needs a spend

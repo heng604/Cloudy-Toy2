@@ -30,7 +30,7 @@ export default function AdminProducts() {
   const dropLabel = async (p: Product, id: string, name: string) => {
     if (!confirm(`Remove the "${name}" label from "${p.name}"? It disappears from the shop card until you tick it again.`)) return;
     try { const j = await (await post(`/admin/products/${p.id}/labels`, { labels: (p.labels ?? []).filter((x) => x !== id) })).json().catch(() => ({})) as { ok?: boolean; error?: string }; refreshAdmin(); setMsg(j.ok ? { ok: true, text: t("Label removed") } : { ok: false, text: j.error ?? "Could not remove the label." }); }
-    catch { setMsg({ ok: false, text: "Could not reach the server. Please try again." }); }
+    catch { setMsg({ ok: false, text: "Oops, we couldn't connect. Please try again in a moment." }); }
   };
   const categories = (cats?.categories ?? []).map((c) => c.name);
   const th = "px-4 py-3 text-xs font-bold uppercase tracking-wide text-mute";

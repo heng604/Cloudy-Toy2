@@ -29,12 +29,16 @@ export const Line = ({ label, value, cls = "" }: { label: ReactNode; value: Reac
 
 /** Points this order would give: how many more points the customer's paid total gives after adding this order's goods (delivery not counted). */
 export function usePointsPreview(goodsCents: number) {
-  const { tiers, spendCents, points, pointCents } = useMembership(); const { user } = useAuth(); const show = !!user && tiers.length > 0;
-  const pts = show ? Math.max(0, pointsOf(spendCents + Math.max(0, goodsCents), tiers, pointCents) - pointsOf(spendCents, tiers, pointCents)) : 0;
-  return { show, pts, balance: points + pts, pointCents };
+  const { tiers, spendCents, points, pointCents, isMember } = useMembership(); const { user } = useAuth(); const show = !!user && tiers.length > 0;
+  const fresh = !isMember && spendCents <= 0 && points <= 0; // has not paid anything yet: points are 0 and stay 0 until a payment is confirmed
+  const pts = show && !fresh ? Math.max(0, pointsOf(spendCents + Math.max(0, goodsCents), tiers, pointCents) - pointsOf(spendCents, tiers, pointCents)) : 0;
+  return { show, pts, balance: points + pts, pointCents, fresh };
 }
 export function PointsBox({ goodsCents }: { goodsCents: number }) {
-  const { t } = useI18n(); const { show, pts, balance, pointCents } = usePointsPreview(goodsCents); if (!show) return null;
+  const { t } = useI18n(); const { show, pts, balance, pointCents, fresh } = usePointsPreview(goodsCents); if (!show) return null;
+  if (fresh) return (<div className="mt-4 rounded-2xl border border-[#D6E6FB] bg-[#EEF4FF] p-3.5"><p className="text-[11px] font-extrabold uppercase tracking-wide text-[#5B3FC8]">3. {t("Your points")}</p>
+    <p className="mt-1 flex justify-between font-extrabold text-[#2B1A8F]"><span>{t("Your points right now")}</span><span className="font-mono">0 {t("pts")}</span></p>
+    <p className="mt-0.5 text-xs text-mute">{t("Your points start after your first payment is confirmed. Then every order helps you grow!")}</p></div>);
   return (<div className="mt-4 rounded-2xl border border-[#D6E6FB] bg-[#EEF4FF] p-3.5"><p className="text-[11px] font-extrabold uppercase tracking-wide text-[#5B3FC8]">3. {t("Resulting points earned")}</p>
     <p className="mt-1 flex justify-between font-extrabold text-[#2B1A8F]"><span>{t("Points Earned (This Order)")}</span><span className="font-mono">+{pts} {t("pts")}</span></p>
     <p className="mt-0.5 flex flex-wrap justify-between gap-x-3 text-xs text-mute"><span>{t("On {amount} product spend (@ {rate}/pt)", { amount: usd(Math.max(0, goodsCents)), rate: usd(pointCents) })}</span><b className="text-ink">{t("New balance")}: {balance} {t("pts")}</b></p></div>);
@@ -45,7 +49,7 @@ export function MemberPanel({ billCents }: { billCents: number }) {
   const { t } = useI18n(); const { user } = useAuth(); const { profile } = useProfile(); const { tier, next, tiers, spendCents, points } = useMembership();
   const first = tiers.find((x) => x.active); const perks = tier?.perks.filter((p) => p.active) ?? []; const nextPerks = next?.perks.filter((p) => p.active) ?? [];
   const name = profile?.name || (user?.email ?? "").split("@")[0] || t("Guest");
-  let need = t("You are at our top level. Thank you!"), pct = 100, right = "";
+  let need = t("You're at our top level. Thank you so much for being with us! 💙"), pct = 100, right = "";
   if (next && tier) { const target = next.singleOrderCents; pct = Math.min(100, Math.round((billCents / Math.max(1, target)) * 100)); need = t("Spend {amount} / bill to unlock {name}", { amount: usd(target), name: next.name.toUpperCase() }); right = `${usd(Math.min(Math.max(0, billCents), target))} / ${usd(target)} ${t("this bill")}`; }
   else if (next) { const target = next.minSpendCents; pct = Math.min(100, Math.round((spendCents / Math.max(1, target)) * 100)); need = t("Spend {amount} more to unlock {name}", { amount: usd(Math.max(0, target - spendCents)), name: next.name.toUpperCase() }); right = `${usd(Math.min(spendCents, target))} / ${usd(target)} ${t("paid")}`; }
   if (tiers.filter((x) => x.active).length === 0) return null;
@@ -54,7 +58,7 @@ export function MemberPanel({ billCents }: { billCents: number }) {
     <div className="flex items-center gap-3"><TierBadge tier={tier} size={44} className="rounded-2xl border-2 border-white bg-white" />
       <div className="min-w-0"><span className="inline-block rounded-full border border-sky-border bg-white px-2.5 py-0.5 text-[11px] font-extrabold uppercase text-[#2B1A8F]">{pill}</span><p className="truncate text-sm text-mute">{name}</p></div>
       {user && <Link to="/account" className="ml-auto shrink-0 text-xs font-extrabold text-[#5B3FC8] underline">{t("View benefits")}</Link>}</div>
-    {!user ? <p className="mt-3 text-sm text-[#3B4D73]">{t("Sign in with your email to track spend toward {name} Membership and earn gift points.", { name: first?.name ?? "Bronze" })}</p> : <>
+    {!user ? <p className="mt-3 text-sm text-[#3B4D73]">{t("Sign in with your email and we'll cheer you on toward {name} Membership and your gift points!", { name: first?.name ?? "Bronze" })}</p> : <>
       <p className="mt-3 text-sm font-extrabold text-[#2B1A8F]">{need}</p>
       {next && <><div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className="h-full rounded-full bg-gradient-to-r from-[#7FB5FF] to-[#5B8DF0]" style={{ width: `${pct}%` }} /></div>
         <p className="mt-1 flex justify-between text-xs text-mute"><b className="text-[#3D58C8]">{pct}%</b><span>{right}</span></p></>}

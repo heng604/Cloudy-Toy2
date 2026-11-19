@@ -69,9 +69,10 @@ const validEmail = (v: string | undefined) => !!v && /^[^\s@<>]+@[^\s@<>]+\.[^\s
 /** Phone notification text for the admin: Gmail shows the sender + the start of the subject, so the emoji, amount and customer come first. One order = one separate mail (the subject holds the order number, so Gmail never merges two orders into one conversation). */
 const alertSubject = (emoji: string, o: StoredOrder, subject: string) => `${emoji} ${usd(payNowCents(o))} ${o.customer.name.replace(/\s+/g, " ").trim().slice(0, 24)} | ${subject}`;
 /** Hidden first line of the mail: Gmail shows it as the preview text under the subject (name, phone, items). */
-const preheader = (o: StoredOrder) => `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#ffffff">${esc(`${o.customer.name} · ${o.customer.phone} · ${o.items.map((i) => `${i.name} x${i.qty}`).join(", ")}`.slice(0, 140))}</div>`;
-const withPreheader = (html: string, o: StoredOrder) => (/<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, (m) => m + preheader(o)) : preheader(o) + html);
-async function deliver(subject: string, html: string, o: StoredOrder, customerTo?: string): Promise<SendResult> {
+type MailRef = Pick<StoredOrder, "orderNumber" | "customer" | "items">;
+const preheader = (o: MailRef) => `<div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#ffffff">${esc(`${o.customer.name} · ${o.customer.phone} · ${o.items.map((i) => `${i.name} x${i.qty}`).join(", ")}`.slice(0, 140))}</div>`;
+const withPreheader = (html: string, o: MailRef) => (/<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, (m) => m + preheader(o)) : preheader(o) + html);
+export async function deliver(subject: string, html: string, o: MailRef, customerTo?: string): Promise<SendResult> {
   try {
     const key = process.env.RESEND_API_KEY?.trim();
     if (!key) return { status: "SKIPPED", detail: "Set RESEND_API_KEY in your environment variables" };

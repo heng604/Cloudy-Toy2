@@ -50,7 +50,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
     if (noCode || !code.trim() || checking) return; setChecking(true); setCodeMsg(""); setApplied(null);
     const res = await api("/discount/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, lines: lines.map((l) => ({ productId: l.id, qty: l.qty })) }) });
     const d = await res.json().catch(() => ({})); setChecking(false);
-    if (!res.ok) { setCodeMsg(t(d.error ?? "Could not check the code.")); return; }
+    if (!res.ok) { setCodeMsg(t(d.error ?? "Oops, we couldn't check that code. Please try again.")); return; }
     setApplied({ code: d.code, cents: d.discountCents }); setCodeMsg("");
   }
   const discount = applied && !noCode ? applied.cents / 100 : 0;
@@ -66,14 +66,14 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
       customer: { name: v("name"), email: v("email"), phone: v("phone"), address: v("address"), notes: v("notes") || undefined, facebook: v("facebook") || undefined, telegram: v("telegram") || undefined }, area, ...(area === "PROVINCE" ? { province } : {}), method,
       lines: lines.map((l) => ({ productId: l.id, qty: l.qty, ...(l.opt ? { option: l.opt } : {}) })), code: noCode ? undefined : code.trim() || undefined, ...(hasPre ? { preorderPay: payFull ? "full" : "deposit" } : {}) }) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setErr(t(data.error ?? "Something went wrong.")); setBusy(false); return; }
+    if (!res.ok) { setErr(t(data.error ?? "Oops, something went wrong. Please try again.")); setBusy(false); return; }
     if (method === "QR_IMAGE" && file) { // send the payment screenshot to the admin, then show the notification popup
       const fd = new FormData(); fd.set("orderNumber", data.orderNumber); fd.set("proof", file);
       const up = await fetch("/api/payment/proof", { method: "POST", body: await compressFormData(fd) }).catch(() => null);
       if (!up || !up.ok) { clear(); router.push(`/payment/${data.orderNumber}`); return; } // order is saved; the payment page lets the customer retry the upload
       setPlaced(data.orderNumber); setBusy(false); dlg.current?.showModal(); return;
     }
-    clear(); router.push(`/payment/${data.orderNumber}`);
+    clear(); navigate(`/payment/${data.orderNumber}`, { state: { placed: true } }); // pay-with-delivery shows a thank-you popup, then goes home
   }
   const onClosePopup = async () => { // popup closed: email the order to the admin, then go home
     if (!placed || closing.current) return; closing.current = true;
@@ -82,7 +82,7 @@ export default function CheckoutForm({ fees, products, telegram = "", facebook =
   };
   const link = "block rounded-full bg-sky px-4 py-2 text-center font-bold hover:bg-sky-hover";
   const cls = field, opt = radioCard;
-  return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form id="checkout-form" ref={formRef} onSubmit={submit} className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="font-display text-3xl font-extrabold text-[#2B1A8F] sm:text-4xl">{t("Checkout")}</h1><p className="text-mute">{t("One more step to a happy delivery")} ♡</p></div><MemberPill /></div>
+  return (<div className="grid gap-6 lg:grid-cols-[1fr_22rem] lg:gap-8 xl:grid-cols-[1fr_26rem]"><form id="checkout-form" ref={formRef} onSubmit={submit} className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="font-display text-3xl font-extrabold text-[#2B1A8F] sm:text-4xl">{t("Checkout")}</h1><p className="text-mute">{t("Almost there! One more step to your happy delivery")} ♡</p></div><MemberPill /></div>
     <section className={`${card} space-y-3`}><div className="flex items-start justify-between gap-3"><div><h2 className={cardTitle}>{t("Contact & Delivery Information")}</h2><p className="text-sm text-mute">{t("Name and email are filled automatically from your logged-in account.")}</p></div><span className="shrink-0 rounded-full border border-[#D6E6FB] bg-[#EEF4FF] px-3 py-1 text-xs font-extrabold text-[#5B3FC8]">{t("From your login")}</span></div>
     <label className="block">{t("Full name")}<input name="name" required minLength={2} autoComplete="name" placeholder="Example: Sok Dara" className={cls} /></label>
     <label className="block">{t("Email")}<input name="email" type="email" autoComplete="email" defaultValue={user?.email ?? ""} readOnly={!!user?.email} title={user?.email ? t("From your login") : undefined} placeholder="Example: sokdara@gmail.com" className={cls} /></label>

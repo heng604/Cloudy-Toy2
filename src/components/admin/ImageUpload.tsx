@@ -12,7 +12,7 @@ export default function ImageUpload({ value, path, fields = {}, removeFields, on
       const fd = new FormData(); for (const [k, v] of Object.entries({ ...fields, ...extra })) fd.set(k, v); if (file) fd.set("image", file);
       const j = await (await api(path, { method: "POST", body: await compressFormData(fd) })).json().catch(() => ({})) as { ok?: boolean; url?: string; error?: string };
       if (j.ok) onChange(j.url ?? ""); else setErr(j.error ?? t("Could not save. Please try again."));
-    } catch { setErr(t("Could not reach the server. Please try again.")); } finally { setBusy(false); if (ref.current) ref.current.value = ""; }
+    } catch { setErr(t("Oops, we couldn't connect. Please try again in a moment.")); } finally { setBusy(false); if (ref.current) ref.current.value = ""; }
   }
   const box = `grid shrink-0 place-items-center overflow-hidden border border-sky-border bg-[#F3F9FE] text-2xl ${round ? "h-14 w-14 rounded-full" : "h-16 w-24 rounded-xl"}`;
   return (<div className="flex items-start gap-3">

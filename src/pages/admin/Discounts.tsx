@@ -19,7 +19,7 @@ const PRESETS = [10, 20, 30, 40, 50];
 /** Sends one admin action and returns the server's answer as a tidy message. */
 async function send(path: string, body: object, ok: string): Promise<{ ok: boolean; text: string }> {
   try { const j = await (await post(path, body)).json().catch(() => ({})) as { ok?: boolean; error?: string }; if (j.ok) { refreshAdmin(); return { ok: true, text: ok }; } return { ok: false, text: j.error ?? "Could not save. Please try again." }; }
-  catch { return { ok: false, text: "Could not reach the server. Please try again." }; }
+  catch { return { ok: false, text: "Oops, we couldn't connect. Please try again in a moment." }; }
 }
 const addDays = (day: string, n: number) => new Date(new Date(`${day}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 /** "Campaign Dateline": start / end date with 7D / 30D / 90D shortcuts (starting today, shop time). Both empty = always on. */

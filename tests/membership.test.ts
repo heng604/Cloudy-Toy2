@@ -135,7 +135,7 @@ describe("custom special with detail and picture", () => {
   });
   it("rejects a bad picture address or a too-long detail", () => {
     expect(checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "custom", title: "Gift", image: "javascript:alert(1)" }] }).ok).toBe(false);
-    expect(checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "custom", title: "Gift", detail: "a".repeat(301) }] }).ok).toBe(false);
+    expect(checkTier({ name: "Gold", minSpend: 30, perks: [{ kind: "custom", title: "Gift", detail: "a".repeat(501) }] }).ok).toBe(false);
   });
   it("default specials: Silver 5% / Gold 10% from $10, Platinum 15% + free delivery from $60, all FULL-PRICE only, every level earns points", () => {
     const by = (id: string) => DEFAULT_TIERS.find((t) => t.id === id)!;
@@ -153,5 +153,15 @@ describe("custom special with detail and picture", () => {
   });
   it("points: 1 per $10 after the first $30, minus what was spent on gifts", () => {
     expect(pointsBalance(3000, DEFAULT_TIERS, 0)).toBe(0); expect(pointsBalance(13000, DEFAULT_TIERS, 0)).toBe(10); expect(pointsBalance(13000, DEFAULT_TIERS, 4)).toBe(6); expect(pointsBalance(13000, DEFAULT_TIERS, 99)).toBe(0);
+  });
+});
+
+describe("level description", () => {
+  it("is kept, trimmed, and limited", () => {
+    const ok = checkTier({ name: "Gold", minSpend: 30, description: "  Welcome!\nEnjoy.  " });
+    expect(ok.ok && ok.value.description).toBe("Welcome!\nEnjoy.");
+    expect(checkTier({ name: "Gold", minSpend: 30, description: "a".repeat(1001) }).ok).toBe(false);
+    expect(normalizeTiers([{ id: "g", name: "Gold", minSpendCents: 3000, description: "Hello", perks: [], active: true }])[0].description).toBe("Hello");
+    expect(normalizeTiers(undefined)[0].description).toBe("");
   });
 });

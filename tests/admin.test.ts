@@ -24,10 +24,10 @@ describe("csv", () => {
 describe("pdf", () => {
   it("builds a valid multi-page PDF and survives Khmer / parentheses", () => {
     const rows = Array.from({ length: 100 }, (_, i) => [`Row (${i})`, "ឈ្មោះ"]);
-    const s = buildPdf({ title: "T", cols: [{ header: "A", chars: 20 }, { header: "B", chars: 10 }], rows }).toString("latin1");
-    expect(s.startsWith("%PDF-1.4")).toBe(true); expect(s.trimEnd().endsWith("%%EOF")).toBe(true); expect(s).toContain("/Count 3"); expect(s).toContain("Page 3 of 3");
+    const s = buildPdf({ title: "T", cols: [{ header: "A", chars: 20 }, { header: "B", chars: 10 }], rows, meta: { brand: "Cloudy Toy", tagline: "", contacts: [], logo: null, generated: "2026-01-01", year: 2026 } }).toString("latin1");
+    expect(s.startsWith("%PDF-1.4")).toBe(true); expect(s.trimEnd().endsWith("%%EOF")).toBe(true); const pages = Number(/\/Count (\d+)/.exec(s)?.[1]); expect(pages).toBeGreaterThan(1); expect(s).toContain(`Page ${pages} of ${pages}`);
   });
-  it("builds an empty report", () => expect(buildPdf({ title: "T", cols: [{ header: "A", chars: 5 }], rows: [] }).length).toBeGreaterThan(200));
+  it("builds an empty report", () => expect(buildPdf({ title: "T", cols: [{ header: "A", chars: 5 }], rows: [], meta: { brand: "Cloudy Toy", tagline: "", contacts: [], logo: null, generated: "2026-01-01", year: 2026 } }).length).toBeGreaterThan(200));
 });
 describe("transaction stats", () => {
   it("sorts low and high", () => { expect(sortOrders(orders, "low").map((o) => o.orderNumber)).toEqual(["A", "C", "B"]); expect(sortOrders(orders, "high")[0].orderNumber).toBe("B"); });

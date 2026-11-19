@@ -36,8 +36,8 @@ export function redeemGift(email: string, name: string, giftId: string, earned: 
   return serial(em, async () => {
     const gift = await getGift(giftId); if (!gift || !gift.active) return { error: "This gift is not available" };
     const spent = redeemedPoints(await listRedemptions(em)).get(em) ?? 0;
-    if (earned - spent < gift.points) return { error: "You do not have enough points for this gift yet" };
-    if (!(await takeStock(gift))) return { error: "Sorry, this gift is out of stock" };
+    if (earned - spent < gift.points) return { error: "You don't have enough points for this gift yet. Keep collecting!" };
+    if (!(await takeStock(gift))) return { error: "Oh no, this gift just ran out of stock. Please pick another one!" };
     try {
       const row = { id: newId(), email: em, customer_name: name.slice(0, 100), gift_id: gift.id, gift_name: gift.name, gift_image: gift.image, points: gift.points, status: "PENDING" };
       return { ok: toRed(must(await db().from("gift_redemptions").insert(row).select("*").single()) as RRow) };

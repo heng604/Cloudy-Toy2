@@ -23,7 +23,7 @@ const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
 const KIND_NAME: Record<PerkKind, string> = { percent: "% off every order", amount: "$ off every order", free_shipping: "Free delivery", custom: "Other special (written by you)" };
 async function send(path: string, body: object, ok: string): Promise<{ ok: boolean; text: string }> {
   try { const j = await (await post(path, body)).json().catch(() => ({})) as { ok?: boolean; error?: string }; if (j.ok) { refreshAdmin(); return { ok: true, text: ok }; } return { ok: false, text: j.error ?? "Could not save. Please try again." }; }
-  catch { return { ok: false, text: "Could not reach the server. Please try again." }; }
+  catch { return { ok: false, text: "Oops, we couldn't connect. Please try again in a moment." }; }
 }
 type PerkForm = { id?: string; kind: PerkKind; title: string; percent: string; amount: string; minSpend: string; active: boolean; monthlyLimit: string; onPromo: boolean; detail: string; image: string };
 const toForm = (p: Perk): PerkForm => ({ id: p.id, kind: p.kind, title: p.title, percent: p.percent ? String(p.percent) : "", amount: p.amountCents ? String(p.amountCents / 100) : "", minSpend: p.minSpendCents ? String(p.minSpendCents / 100) : "", active: p.active, monthlyLimit: p.monthlyLimit ? String(p.monthlyLimit) : "", onPromo: p.onPromo, detail: p.detail ?? "", image: p.image ?? "" });
@@ -31,13 +31,13 @@ const blankPerk = (): PerkForm => ({ kind: "percent", title: "", percent: "5", a
 
 function TierModal({ tier, tiers, onClose, onDone }: { tier?: Tier; tiers: Tier[]; onClose: () => void; onDone: (m: Msg) => void }) {
   const { t } = useI18n(); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
-  const [name, setName] = useState(tier?.name ?? ""), [emoji, setEmoji] = useState(tier?.emoji ?? "⭐"), [image, setImage] = useState(tier?.image ?? ""), [spend, setSpend] = useState(tier ? String(tier.minSpendCents / 100) : ""), [single, setSingle] = useState(tier && tier.singleOrderCents ? String(tier.singleOrderCents / 100) : ""), [specialName, setSpecialName] = useState(tier?.specialName ?? "");
+  const [name, setName] = useState(tier?.name ?? ""), [emoji, setEmoji] = useState(tier?.emoji ?? "⭐"), [image, setImage] = useState(tier?.image ?? ""), [spend, setSpend] = useState(tier ? String(tier.minSpendCents / 100) : ""), [single, setSingle] = useState(tier && tier.singleOrderCents ? String(tier.singleOrderCents / 100) : ""), [specialName, setSpecialName] = useState(tier?.specialName ?? ""), [description, setDescription] = useState(tier?.description ?? "");
   const at = tier ? tiers.findIndex((x) => x.id === tier.id) : tiers.length; const first = at === 0; const before = at > 0 ? tiers[at - 1] : null; // the first level is reached by spend, the others by ONE big order
   const [perks, setPerks] = useState<PerkForm[]>(tier ? tier.perks.map(toForm) : []);
   const setPerk = (i: number, patch: Partial<PerkForm>) => setPerks((l) => l.map((p, j) => (j === i ? { ...p, ...patch } : p)));
   async function submit(e: FormEvent, close: () => void) {
     e.preventDefault(); if (busy) return; setBusy(true); setErr("");
-    const r = await send("/admin/promotions/membership/save", { id: tier?.id, active: tier?.active ?? true, name, emoji, image, minSpend: first ? spend : undefined, singleOrder: first ? undefined : single, specialName, perks }, tier ? "Level saved" : "Level added");
+    const r = await send("/admin/promotions/membership/save", { id: tier?.id, active: tier?.active ?? true, name, emoji, image, minSpend: first ? spend : undefined, singleOrder: first ? undefined : single, specialName, description, perks }, tier ? "Level saved" : "Level added");
     setBusy(false); if (!r.ok) { setErr(r.text); return; } onDone(r); close();
   }
   return (<Modal wide title={tier ? t("Edit membership level") : t("Add membership level")} icon="users" onClose={onClose}>{(close) => (
@@ -47,6 +47,7 @@ function TierModal({ tier, tiers, onClose, onDone }: { tier?: Tier; tiers: Tier[
         <label className={lab}>{t("Icon")}<input value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={8} className={`${field} mt-1 text-center text-xl`} /></label>
         {first ? <label className={lab}>{t("Customer reaches it after paying (USD)")}<input type="number" min="1" step="0.01" value={spend} onChange={(e) => setSpend(e.target.value)} required placeholder="e.g. 30" className={`${field} mt-1`} /></label>
           : <label className={lab}>{t("One order of at least (USD), after {name}", { name: before?.name ?? "" })}<input type="number" min="1" step="0.01" value={single} onChange={(e) => setSingle(e.target.value)} required placeholder="e.g. 200" className={`${field} mt-1`} /></label>}</div>
+      <label className={lab}>{t("Level description (optional)")}<textarea value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} rows={5} placeholder={t("Tell your customers about this level: who it is for, what they enjoy, any extra notes...")} className={`${field} mt-1 min-h-[7rem] resize-y`} /><span className="mt-1 flex justify-between text-xs font-normal text-mute"><span>{t("Customers read this on their membership page. You can write several lines.")}</span><span>{description.length}/1000</span></span></label>
       <div className="rounded-2xl border border-sky-border bg-[#F6FAFF] p-3.5"><p className="mb-2 text-sm font-bold">{t("Level picture (optional)")}</p><ImageUpload value={image} path="/admin/promotions/image" onChange={setImage} hint={t("Shown to customers instead of the icon. Leave it empty to use the icon.")} /></div>
       <p className="text-xs text-mute">{first ? t("A customer gets this level automatically when the total of their paid orders (delivery not counted) reaches this amount.") : t("To upgrade to this level the customer must pay this amount in ONE order (delivery not counted), after they already have the level before it.")}</p>
       <div className="space-y-3"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-extrabold uppercase tracking-wide text-mute">{t("Specials for this level")}</h3>

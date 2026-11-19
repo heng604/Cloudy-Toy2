@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useCart } from "@/components/CartProvider";
 import { FALLBACK_IMG, isValidOption, optionImageOf, money, preorderPhase, windowText, dayShort } from "@shared/products";
 import type { CartProduct } from "@shared/cartTypes";
-import type { Line } from "@/components/CartProvider";
+import type { Line as CartLine } from "@/components/CartProvider";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { usePromotions } from "@/lib/store";
@@ -26,9 +26,9 @@ function CloudArt() {
 
 export default function CartView({ products, telegram = "" }: { products: CartProduct[]; telegram?: string }) {
   const { lines, setQty, clear, ready } = useCart(); const { t } = useI18n(); const { user } = useAuth(); const { promotions } = usePromotions();
-  const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x): x is { l: Line; p: CartProduct } => !!x.p);
+  const items = lines.map((l) => ({ l, p: products.find((p) => p.id === l.id) })).filter((x): x is { l: CartLine; p: CartProduct } => !!x.p);
   const totalQty = (id: string) => items.reduce((n, x) => n + (x.p.id === id ? x.l.qty : 0), 0); // the same toy in two options shares ONE stock
-  const optBad = (x: { l: Line; p: CartProduct }) => !isValidOption(x.p.options ?? [], x.l.opt); // option missing, or the admin changed the choices since it was added
+  const optBad = (x: { l: CartLine; p: CartProduct }) => !isValidOption(x.p.options ?? [], x.l.opt); // option missing, or the admin changed the choices since it was added
   const unit = (p: CartProduct) => p.salePrice ?? p.price;
   const subtotal = items.reduce((s, x) => s + unit(x.p) * x.l.qty, 0);
   const saved = items.reduce((s, x) => s + (x.p.salePrice ? (x.p.price - x.p.salePrice) * x.l.qty : 0), 0);

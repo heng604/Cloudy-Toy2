@@ -29,7 +29,7 @@ export default function ProductModal({ p, categories, onClose, onSaved, onManage
       const j = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
       if (j.ok) { onSaved(); close(); return; }
       setError(j.error ?? "Could not save. Please try again.");
-    } catch { setError("Could not reach the server. Please try again."); } finally { setBusy(false); }
+    } catch { setError("Oops, we couldn't connect. Please try again in a moment."); } finally { setBusy(false); }
   }
   return (<Modal wide icon="products" title={p ? t("Edit Product Details") : t("Add Product")} onClose={onClose}>{(close) => (
     <form onSubmit={(e) => submit(e, close)} className="p-5 sm:p-7">

@@ -10,6 +10,7 @@ import fs from "fs";
 import { z } from "zod";
 import { ProfileInput } from "../shared/profile";
 import { checkGift } from "../shared/gifts";
+import { sendGiftAdminEmail, sendGiftCustomerEmail } from "./lib/giftEmail";
 import { listGifts, saveGift, deleteGift, listRedemptions, redeemedPoints, redeemGift, setRedemption } from "./lib/giftStore";
 import { getProfile, saveProfile, setAvatar, profilesByEmail } from "./lib/profileStore";
 import { requireAdmin, requireUser, userFromReq, adminOf, userOf, needs, roleOf } from "./lib/auth";
@@ -145,7 +146,8 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
   }
   const catalog = catalogOf(products.filter((p) => ids.includes(p.id))); let usedCode: string | undefined;
   try {
-    const t00 = computeTotals(lines, catalog, 0); const preOf = (its: { productId: string; lineCents: number }[]) => its.reduce((n, i) => { const p = products.find((x) => x.id === i.productId); return p && isPreorder(p) ? n + i.lineCents : n; }, 0); // pre-order lines: no member discount, no member free delivery, no code const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
+    const t00 = computeTotals(lines, catalog, 0); const preOf = (its: { productId: string; lineCents: number }[]) => its.reduce((n, i) => { const p = products.find((x) => x.id === i.productId); return p && isPreorder(p) ? n + i.lineCents : n; }, 0); // pre-order lines: no member discount, no member free delivery, no code
+    const freeShip = freeShippingRule({ subtotalCents: t00.subtotalCents, qty: t00.items.reduce((n, i) => n + i.qty, 0), area }, promos.campaigns);
     const memShip = memberBenefits(member.tier, { subtotalCents: t00.subtotalCents, leftCents: 0, preorderCents: preOf(t00.items) }, member.used); const memFree = memShip.freeShipping; // a member special can waive delivery too
     const ship = freeShip || memFree ? 0 : shippingFor(area, settings); // a live "Free Shipping" rule waives the delivery fee
     const t0 = computeTotals(lines, catalog, ship); const byId = new Map(products.map((p) => [p.id, p]));
@@ -200,7 +202,7 @@ api.post("/checkout", requireUser, wrap(async (req, res) => {
     return res.json({ orderNumber });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
-    return res.status(409).json({ error: msg === "INSUFFICIENT_STOCK" ? "An item is out of stock or exceeds available stock." : "Could not place the order." });
+    return res.status(409).json({ error: msg === "INSUFFICIENT_STOCK" ? "An item is out of stock or exceeds available stock." : "Oops, we couldn't place your order. Please try again." });
   }
 }));
 
@@ -309,7 +311,7 @@ api.get("/payment/bakong/status/:n", wrap(async (req, res) => {
   if (hash) { await finalizeBakongPaid(n, hash); return res.json({ paid: true }); }
   if (watcherOn) { // tell the page whether anything can confirm the payment right now
     const seen = await watcherSeenAt(), online = !!seen && Date.now() - seen < 40_000, directDown = skipDirect || directErr;
-    return res.json({ paid: false, problem: false, watcher: online || !directDown ? "online" : "offline", ...(false ? { debug: [directDown ? "direct check from the website: BLOCKED (normal outside Cambodia)" : "direct check from the website: working", online ? "watcher: online" : `watcher: OFFLINE (last seen ${seen ? Math.round((Date.now() - seen) / 1000) + " s ago" : "never"}); start start-bakong-watcher.bat on a computer in Cambodia, check BAKONG_WATCHER_SECRET is identical in Vercel and .env.local`, ...results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`))] } : {}) });
+    return res.json({ paid: false, problem: false, watcher: online || !directDown ? "online" : "offline", ...(false ? { debug: [directDown ? "direct check from the website: BLOCKED (normal outside Cambodia)" : "direct check from the website: working", online ? "watcher: online" : `watcher: OFFLINE (last seen ${seen ? Math.round((Date.now() - (seen ?? 0)) / 1000) + " s ago" : "never"}); start start-bakong-watcher.bat on a computer in Cambodia, check BAKONG_WATCHER_SECRET is identical in Vercel and .env.local`, ...results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`))] } : {}) });
   }
   res.json({ paid: false, problem, ...(false ? { debug: results.map(({ r }) => (r.ok ? "ok" : `${r.reason}${r.detail ? `: ${r.detail}` : ""}`)) } : {}) }); // ?debug=1 on the payment page shows what Bakong answered
 }));
@@ -387,7 +389,16 @@ api.post("/membership/redeem", requireUser, wrap(async (req, res) => {
   const promos = await getPromotions(); const m = await memberOf(u.email, promos.membership); if (!m.isMember) return res.json({ error: "Only members can exchange points. Keep shopping to become a member!" });
   const earned = pointsOf(m.spendCents, promos.membership, promos.memberPointCents) + m.bonus; const prof = await getProfile(u.id).catch(() => null);
   const r = await redeemGift(u.email, prof?.name || ((u.user_metadata ?? {}) as { full_name?: string }).full_name || u.email, String(req.body?.giftId ?? ""), earned);
-  if ("error" in r) return res.json({ error: r.error }); res.json({ ok: true, redemption: r.ok });
+  if ("error" in r) return res.json({ error: r.error });
+  // receipts: one e-mail to the admin and one to the customer. They never block or break the exchange (the gift is already saved).
+  try {
+    const all = await listRedemptions(u.email).catch(() => [r.ok]); const left = Math.max(0, earned - (redeemedPoints(all).get(u.email.toLowerCase()) ?? 0));
+    const info = { redemption: r.ok, email: u.email, name: prof?.name || r.ok.customerName || u.email, phone: prof?.phone ?? "", address: prof?.address ?? "", facebook: prof?.facebook ?? "", telegram: prof?.telegram ?? "", balanceAfter: left, tierName: m.tier?.name };
+    const [a, c] = await Promise.allSettled([sendGiftAdminEmail(info), sendGiftCustomerEmail(info)]);
+    if (a.status === "rejected" || (a.status === "fulfilled" && a.value.status !== "SENT")) console.error("[gift admin email]", r.ok.id, a.status === "rejected" ? a.reason : a.value.detail);
+    if (c.status === "rejected" || (c.status === "fulfilled" && c.value.status === "FAILED")) console.error("[gift customer email]", r.ok.id, c.status === "rejected" ? c.reason : c.value.detail);
+  } catch (e) { console.error("[gift receipt]", r.ok.id, e); }
+  res.json({ ok: true, redemption: r.ok });
 }));
 /** The signed-in customer's own profile: name, phone, address, Facebook, Telegram and photo. Only these fields can be changed; role, totals and level never are. */
 api.get("/account/profile", requireUser, wrap(async (req, res) => { const u = userOf(req); const m = (u.user_metadata ?? {}) as { full_name?: string; name?: string };
@@ -717,7 +728,7 @@ admin.post("/promotions/campaigns/delete", wrap(async (req, res) => { const cur 
 /** Picture for a special offer card (rule or festival): uploaded first, then its address is saved with the offer. */
 // membership levels: add / edit (including their specials) / delete / reorder. The FIRST level starts at its own "spend" amount (e.g. $30). Every later level needs
 // "singleOrderCents": the customer must pay that much in ONE order (after holding the level before it).
-const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, singleOrder: b?.singleOrder, specialName: b?.specialName, perks: b?.perks, active: b?.active });
+const tierFields = (b: Record<string, unknown>) => checkTier({ id: b?.id, name: b?.name, emoji: b?.emoji, image: b?.image, minSpend: b?.minSpend, singleOrder: b?.singleOrder, specialName: b?.specialName, description: b?.description, perks: b?.perks, active: b?.active });
 admin.post("/promotions/membership/save", wrap(async (req, res) => {
   const c = tierFields(req.body); if (!c.ok) return res.json({ error: c.error });
   const cur = await getPromotions(); const id = String(req.body?.id ?? ""); const at = cur.membership.findIndex((t) => t.id === id); const exists = at >= 0;

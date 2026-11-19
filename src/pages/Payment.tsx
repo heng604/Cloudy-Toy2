@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { areaLabel } from "@shared/delivery";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import PayQr from "@/components/PayQr";
 import BakongPay from "@/components/BakongPay";
 import NotFound from "@/components/NotFound";
@@ -13,7 +13,10 @@ export default function Payment() {
   useTitle("Payment", true); const { orderNumber } = useParams(); const { settings: s } = useSettings();
   const [o, setO] = useState<StoredOrder | null | undefined>(undefined); const [justPaid, setJustPaid] = useState(false);
   useEffect(() => { let live = true; setO(undefined); fetch(`/api/orders/${encodeURIComponent(orderNumber ?? "")}`).then((r) => (r.ok ? r.json() : null)).then((j) => live && setO(j?.order ?? null)).catch(() => live && setO(null)); return () => { live = false; }; }, [orderNumber]);
-  const navigate = useNavigate();
+  const navigate = useNavigate(); const placed = !!(useLocation().state as { placed?: boolean } | null)?.placed; const [thanks, setThanks] = useState(true); const [secs, setSecs] = useState(8);
+  const showThanks = placed && thanks && !!o && o.method === "COD" && o.paymentStatus === "PENDING";
+  useEffect(() => { if (!showThanks) return; const id = setInterval(() => setSecs((n) => n - 1), 1000); return () => clearInterval(id); }, [showThanks]);
+  useEffect(() => { if (showThanks && secs <= 0) navigate("/", { replace: true }); }, [showThanks, secs, navigate]);
   useEffect(() => { if (o && o.method === "BAKONG" && (o.paymentStatus === "FAILED" || o.paymentStatus === "EXPIRED")) { const id = setTimeout(() => navigate("/"), 3500); return () => clearTimeout(id); } }, [o, navigate]); // a cancelled or expired Bakong order goes back to the home page
   if (o === undefined) return <div className="mx-auto max-w-xl animate-pulse space-y-4" aria-busy="true"><div className="h-9 w-64 rounded-full bg-sky-pale" /><div className="h-14 rounded-xl2 bg-sky-pale" /><div className="h-40 rounded-xl2 bg-sky-pale" /></div>;
   if (!o) return <NotFound />;
@@ -21,10 +24,19 @@ export default function Payment() {
   const status = paid ? "Paid" : o.paymentStatus === "FAILED" ? "Cancelled" : o.paymentStatus === "EXPIRED" ? "Expired (no payment received)" : o.method === "COD" ? "Pay with delivery" : o.method === "BAKONG" ? "Waiting for your Bakong payment" : "Waiting for payment verification";
   const how = o.method === "BAKONG" ? "Bakong KHQR" : o.method === "COD" ? `Pay with Delivery (${areaLabel(o)})` : "QR image payment";
   const row = "flex justify-between gap-3 text-sm"; const sec = "mt-3 text-[11px] font-extrabold uppercase tracking-wide text-mute";
-  return (<div className="mx-auto max-w-3xl space-y-4"><div><h1 className="font-display text-3xl font-extrabold text-[#2B1A8F] sm:text-4xl">Your order</h1><p className="text-mute">Thank you for shopping with Cloudy Toys ♡</p></div>
+  return (<div className="mx-auto max-w-3xl space-y-4">
+    {showThanks && o && <div className="fixed inset-0 z-[100] grid place-items-center p-4" role="dialog" aria-modal="true" aria-labelledby="cod-title"><div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+      <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl"><div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-green-500 text-4xl text-white shadow-lg" aria-hidden="true">✓</div>
+        <h2 id="cod-title" className="mt-4 font-display text-2xl font-extrabold text-green-700">Yay, your order is placed!</h2>
+        <p className="mt-1 text-sm text-mute">Thank you, {o.customer.name.split(" ")[0]}! We have sent your order to our team and a copy to your email. Please have <b>{usd(o.totalCents)}</b> ready when we deliver.</p>
+        <p className="mt-2 rounded-xl bg-sky-pale px-3 py-2 text-sm">Order number <b>{o.orderNumber}</b></p>
+        <button type="button" onClick={() => navigate("/", { replace: true })} className="btn-blue mt-4 min-h-11 w-full rounded-full px-6 font-extrabold">Back to home</button>
+        <button type="button" onClick={() => setThanks(false)} className="mt-2 text-sm underline">See my order</button>
+        <p className="mt-2 text-xs text-mute">Taking you home in {Math.max(0, secs)}s</p></div></div>}
+<div><h1 className="font-display text-3xl font-extrabold text-[#2B1A8F] sm:text-4xl">Your order</h1><p className="text-mute">Thank you for shopping with Cloudy Toys ♡</p></div>
     <section className={`rounded-3xl border bg-white/90 p-4 shadow-soft sm:p-6 ${dead ? "border-slate-200" : "border-[#BFEBD8]"}`}>
       <div className="flex items-center gap-3"><span aria-hidden="true" className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-2xl ${dead ? "bg-slate-100" : paid ? "bg-[#DDF6EA] text-green-700" : "bg-[#EEF4FF] text-[#5B3FC8]"}`}>{dead ? "✕" : paid ? "✓" : "⏳"}</span>
-        <div className="min-w-0"><h2 role="status" className="font-display text-xl font-extrabold text-[#2B1A8F] sm:text-2xl">{paid ? "Payment Confirmed" : dead ? "Order closed" : "Order received"} — Order {o.orderNumber}</h2><p className="text-sm text-mute">Status: {status}{paid && o.memberTier ? " · Your Cloudy Toys loyalty points and membership have been updated automatically." : ""}</p></div></div>
+        <div className="min-w-0"><h2 role="status" className="font-display text-xl font-extrabold text-[#2B1A8F] sm:text-2xl">{paid ? "Payment received. Thank you!" : dead ? "Order closed" : "We got your order!"} — Order {o.orderNumber}</h2><p className="text-sm text-mute">Status: {status}{paid && o.memberTier ? " · Your Cloudy Toys loyalty points and membership have been updated automatically." : ""}</p></div></div>
       <div className="mt-4 rounded-2xl border border-[#D6E6FB] bg-[#F3F8FF] p-4"><div className="flex items-center justify-between"><p className="font-display text-lg font-extrabold text-[#2B1A8F]">Order Breakdown</p><span className="font-mono text-xs text-mute">{o.orderNumber}</span></div>
         <p className={sec}>1. Subtotal &amp; delivery</p>
         {o.items.map((i) => <p key={`${i.productId}-${i.option ?? ""}`} className={row}><span>{i.name}{i.option ? ` (${i.option})` : ""} × {i.qty}</span><span className="font-semibold">{usd(i.lineCents)}</span></p>)}
