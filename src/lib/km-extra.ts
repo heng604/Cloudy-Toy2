@@ -454,4 +454,6 @@ export const KM_EXTRA: Record<string, string> = {
   "Email to our team": "អ៊ីមែលទៅក្រុមការងារយើង",
   "will be sent as soon as your payment is confirmed": "នឹងត្រូវផ្ញើភ្លាមៗពេលការបង់ប្រាក់របស់អ្នកត្រូវបានបញ្ជាក់",
   "will be sent when you press “I have paid”": "នឹងត្រូវផ្ញើពេលអ្នកចុច «ខ្ញុំបានបង់ប្រាក់ហើយ»",
+  "You have {n} pts": "អ្នកមាន {n} ពិន្ទុ",
+  "Gifts you've swapped so far ♡": "អំណោយដែលអ្នកបានប្តូររហូតមកដល់ឥឡូវ ♡",
 };

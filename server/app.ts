@@ -857,7 +857,7 @@ admin.post("/settings/banners/delete", wrap(async (req, res) => {
   await deleteProductImages([url]); res.json({ ok: true });
 }));
 /** Special Offer page pictures: top banner background, mascot, bottom banner background; plus whether the title text shows on the top banner. The countdown and "UP TO %" badge are drawn by the page on top of whatever is uploaded. */
-const OFFER_SLOTS = { hero: { key: "offerHeroImage", prefix: "offer-hero", w: 2400, h: 1200 }, mascot: { key: "offerMascotImage", prefix: "offer-mascot", w: 900, h: 900 }, footer: { key: "offerFooterImage", prefix: "offer-footer", w: 2400, h: 600 }, detail: { key: "offerDetailImage", prefix: "offer-detail", w: 2400, h: 1000 }, full: { key: "offerFullImage", prefix: "offer-full", w: 2400, h: 1000 }, products: { key: "productsBannerImage", prefix: "offer-products", w: 2400, h: 900 }, membership: { key: "membershipBannerImage", prefix: "banner-membership", w: 2400, h: 900 }, newarrival: { key: "newArrivalBannerImage", prefix: "banner-newarrival", w: 2400, h: 900 }, preorder: { key: "preorderBannerImage", prefix: "banner-preorder", w: 2400, h: 900 } } as const;
+const OFFER_SLOTS = { hero: { key: "offerHeroImage", prefix: "offer-hero", w: 2400, h: 1200 }, mascot: { key: "offerMascotImage", prefix: "offer-mascot", w: 900, h: 900 }, footer: { key: "offerFooterImage", prefix: "offer-footer", w: 2400, h: 600 }, detail: { key: "offerDetailImage", prefix: "offer-detail", w: 2400, h: 1000 }, full: { key: "offerFullImage", prefix: "offer-full", w: 2400, h: 1000 }, products: { key: "productsBannerImage", prefix: "offer-products", w: 2400, h: 900 }, membership: { key: "membershipBannerImage", prefix: "banner-membership", w: 2400, h: 900 }, giftbg: { key: "giftBackgroundImage", prefix: "banner-giftbg", w: 2400, h: 1600 }, newarrival: { key: "newArrivalBannerImage", prefix: "banner-newarrival", w: 2400, h: 900 }, preorder: { key: "preorderBannerImage", prefix: "banner-preorder", w: 2400, h: 900 } } as const;
 admin.post("/settings/offer-page", upload.any(), wrap(async (req, res) => {
   const slot = fld(req, "slot");
   if (slot === "text") { try { await saveSettings({ offerHeroText: fld(req, "value") === "on" }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true }); }
@@ -865,6 +865,10 @@ admin.post("/settings/offer-page", upload.any(), wrap(async (req, res) => {
   if (slot === "size") { // size slider of any banner / logo / mascot: stored as a percent per picture id
     const id = fld(req, "key"), n = Math.round(Number(fld(req, "value"))); if (!/^[a-z][a-z-]{0,30}$/.test(id) || !Number.isFinite(n)) return res.json({ error: "Invalid size" });
     const cur = (await getSettings()).imageSizes ?? {}; try { await saveSettings({ imageSizes: { ...cur, [id]: Math.min(250, Math.max(50, n)) } }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true });
+  }
+  if (slot === "giftcolor") { // background colour of the Exchange gift section ("" = back to the default soft purple-blue)
+    const c = fld(req, "value").trim(); if (c && !/^#[0-9a-fA-F]{6}$/.test(c)) return res.json({ error: "Choose a colour" });
+    try { await saveSettings({ giftBackgroundColor: c.toLowerCase() }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true });
   }
   if (slot === "mascotsize") { const n = Math.round(Number(fld(req, "value"))); if (!Number.isFinite(n)) return res.json({ error: "Invalid size" }); try { await saveSettings({ offerMascotScale: Math.min(250, Math.max(50, n)) }); } catch { return res.json({ error: "Could not save. Please try again." }); } return res.json({ ok: true }); }
   if (!(slot in OFFER_SLOTS)) return res.json({ error: "Unknown picture" });
