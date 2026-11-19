@@ -5,7 +5,7 @@
       "destination": "/api"
     },
     {
-      "source": "/((?!assets/|img/).*)",
+      "source": "/((?!assets/|img/|robots\\.txt|sitemap\\.xml|fonts\\.js).*)",
       "destination": "/index.html"
     }
   ],

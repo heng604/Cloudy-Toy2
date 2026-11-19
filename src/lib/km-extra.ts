@@ -456,4 +456,5 @@ export const KM_EXTRA: Record<string, string> = {
   "will be sent when you press “I have paid”": "នឹងត្រូវផ្ញើពេលអ្នកចុច «ខ្ញុំបានបង់ប្រាក់ហើយ»",
   "You have {n} pts": "អ្នកមាន {n} ពិន្ទុ",
   "Gifts you've swapped so far ♡": "អំណោយដែលអ្នកបានប្តូររហូតមកដល់ឥឡូវ ♡",
+  "Cloudy Toys: Little Toys, Big Happiness": "Cloudy Toys៖ ក្មេងលេងតូចៗ សុភមង្គលធំៗ",
 };

@@ -36,7 +36,7 @@ export default function Home() {
   const banner = Array.isArray(banners) ? banners : [];
   // The big banner under the header is the picture(s) the admin uploads in Settings (it fades from one to the next). The full-width sky hero only shows while no banner has been uploaded; both carry the "Shopping with Cloudy Toys now!" button.
   return (<>
-    {banner.length > 0 ? <BannerSlider images={banner} first /> : <section className="relative left-1/2 -mt-5 mb-8 w-screen -translate-x-1/2 overflow-hidden bg-gradient-to-b from-[#BFDFFF] via-[#DCEEFF] to-[#EEF7FF] px-5 pb-24 pt-14 sm:-mt-8 sm:px-10 lg:pb-28 lg:pt-20">
+    {banner.length > 0 ? <><h1 className="sr-only">{t("Cloudy Toys: Little Toys, Big Happiness")}</h1><BannerSlider images={banner} first /></> : <section className="relative left-1/2 -mt-5 mb-8 w-screen -translate-x-1/2 overflow-hidden bg-gradient-to-b from-[#BFDFFF] via-[#DCEEFF] to-[#EEF7FF] px-5 pb-24 pt-14 sm:-mt-8 sm:px-10 lg:pb-28 lg:pt-20">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 22% 18% at 10% 92%,#fff,transparent 70%),radial-gradient(ellipse 26% 20% at 36% 100%,#fff,transparent 70%),radial-gradient(ellipse 24% 18% at 66% 96%,#fff,transparent 70%),radial-gradient(ellipse 22% 20% at 92% 100%,#fff,transparent 70%)" }} />
       <span aria-hidden="true" className="absolute left-[6%] top-10 text-3xl text-[#FFC93C]">✦</span><span aria-hidden="true" className="absolute right-[8%] top-8 text-2xl text-[#FF8FB1]">♥</span><span aria-hidden="true" className="absolute left-[46%] top-6 text-xl text-white">✦</span>
       <div className="relative mx-auto grid max-w-5xl items-center gap-6 lg:grid-cols-[1.1fr_1fr]">

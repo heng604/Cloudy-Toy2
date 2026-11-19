@@ -79,7 +79,7 @@ export function LevelsGrid() {
     <h2 className="flex items-center gap-2 font-display text-2xl font-extrabold text-[#2B1A8F]"><span aria-hidden="true">⭐</span>{t("Membership Levels")}</h2><p className="text-sm text-mute">{t("You'll level up on your own as you shop with us.")}</p>
     <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{ladder.map((x, i) => { const ps = x.perks.filter((p) => p.active); const mine = i === at, locked = i > at; return (
       <li key={x.id} className={`relative rounded-2xl border p-3 ${mine ? "border-[#5B8DF0] bg-[#EEF4FF] shadow-soft" : "border-sky-border bg-white"}`}>
-        <span aria-hidden="true" className="absolute right-3 top-3 text-lg text-slate-400">{locked ? "🔒" : mine ? "💙" : "✓"}</span>
+        <span aria-hidden="true" className="absolute right-3 top-3 text-lg text-slate-500">{locked ? "🔒" : mine ? "💙" : "✓"}</span>
         <TierBadge tier={x} size={52} className="rounded-2xl bg-gradient-to-b from-[#FFF4D6] to-[#FFE2A8]" />
         <p className="mt-1 font-display text-xl font-extrabold text-[#2B1A8F]">{x.name}</p>{x.description && <p className="mt-1 whitespace-pre-line text-sm text-[#3B4D73]">{x.description}</p>}
         <p className="text-xs text-mute">{i === 0 ? t("After paying {amount}", { amount: usd(x.minSpendCents) }) : t("one order of {amount}", { amount: usd(x.singleOrderCents) })}</p>
