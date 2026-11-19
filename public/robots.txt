@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /cart
+Disallow: /checkout
+Disallow: /payment/
+Disallow: /api/
+
+Sitemap: https://cloudy-toy2.vercel.app/sitemap.xml

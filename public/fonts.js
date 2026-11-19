@@ -1,0 +1,2 @@
+// Loads the shop fonts without blocking the first paint.
+(function () { var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Khmer:wght@400;600;800&family=Dangrek&family=Fredoka:wght@400;500;600;700&family=Caveat:wght@600&family=Nunito:wght@400;700;900&family=Nokora:wght@100..900&display=swap'; document.head.appendChild(l); })();
