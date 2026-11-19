@@ -27,7 +27,7 @@ import { sendAdminEmail, sendPaidOrderEmail, sendCustomerEmail, sendCustomerItem
 import { methodOn } from "../shared/payOptions";
 import { bakongEnabled, makeKhqr, checkPaid, bakongName, bakongDiagnose, matchPaid, watcherSecret, QR_MAX, QR_GRACE_MS } from "./lib/bakong";
 import { uploadProof, deleteProofs, proofUrls } from "./lib/proofStore";
-import { ordersDataset, transactionsDataset, deliveryDataset, productsDataset, stockDataset } from "./lib/exports";
+import { ordersDataset, transactionsDataset, deliveryDataset, productsDataset, stockDataset, membersDataset, promotionRows, promotionsDataset, staffDataset } from "./lib/exports";
 import { toCsv } from "../shared/csv";
 import { buildPdf } from "./lib/pdf";
 import { buildXlsx } from "./lib/xlsx";
@@ -468,6 +468,9 @@ admin.get("/export", wrap(async (req, res) => {
   const u = req.query as Record<string, string | undefined>;
   const type = u.type ?? "orders", format = u.format === "pdf" ? "pdf" : u.format === "xlsx" ? "xlsx" : u.format === "sheet" ? "sheet" : "csv";
   if ((type === "orders" || type === "transactions" || type === "delivery") && !can(roleOf(req), "orders")) return res.status(403).send("Your role cannot export orders");
+  if (type === "membership" && !can(roleOf(req), "promotions")) return res.status(403).send("Your role cannot export membership");
+  if (type === "promotions" && !can(roleOf(req), "promotions")) return res.status(403).send("Your role cannot export promotions");
+  if (type === "admin-permissions" && !can(roleOf(req), "staff")) return res.status(403).send("Only an owner can export admin permissions");
   const f = { status: u.status, from: u.from, to: u.to, q: u.q };
   let ds;
   if (type === "orders") ds = ordersDataset(sortOrders(filterOrders(await listAdminOrders(), f), u.sort ?? "new"));
@@ -475,6 +478,9 @@ admin.get("/export", wrap(async (req, res) => {
   else if (type === "delivery") ds = deliveryDataset(sortOrders(filterOrders(await listAdminOrders(), f), u.sort ?? "new"));
   else if (type === "products") ds = productsDataset(await listAllProducts());
   else if (type === "stock") ds = stockDataset([...(await listAllProducts())].sort((a, b) => a.stock - b.stock));
+  else if (type === "membership") ds = membersDataset(await membersList(), (await getPromotions()).membership);
+  else if (type === "promotions") { const [promos, codes, prods] = await Promise.all([getPromotions(), listStoreDiscounts(), listAllProducts()]); const names = new Map(prods.map((p) => [p.id, p.name])); ds = promotionsDataset(promotionRows(promos, codes, (id) => names.get(id) ?? "the free gift")); }
+  else if (type === "admin-permissions") ds = staffDataset((await listStaff()).staff);
   else return res.status(400).send("Unknown export type");
   const date = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
   if (format === "sheet") return res.set({ "Cache-Control": "no-store" }).json(buildSheetHtml({ title: ds.title, cols: ds.pdf, rows: ds.rows.map(ds.pdfRow), logoUrl: /^https:\/\/[\w.-]+(:\d+)?$/.test(u.origin ?? "") && !/^https:\/\/(localhost|127\.)/.test(u.origin ?? "") ? `${u.origin}${INVOICE_LOGO}` : undefined, meta: makeMeta(await getSettings(), date, { intro: ds.intro, summary: ds.summary }) }));
@@ -656,7 +662,7 @@ admin.post("/gifts/save", wrap(async (req, res) => {
 admin.post("/gifts/delete", wrap(async (req, res) => { const id = String(req.body?.id ?? ""); const old = (await listGifts(false)).find((g) => g.id === id); await deleteGift(id); await dropImage(old?.image); res.json({ ok: true }); }));
 admin.post("/gifts/redemption", wrap(async (req, res) => { const st = req.body?.status === "CANCELLED" ? "CANCELLED" : "CLAIMED"; const ok = await setRedemption(String(req.body?.id ?? ""), st); res.json(ok ? { ok: true } : { error: "This redemption was already handled" }); }));
 // members: every customer with an account or order, their level, spend and this month's use of each special. The admin can fix a member's level or switch their specials off.
-admin.get("/members", wrap(async (_req, res) => {
+const membersList = async () => {
   const [orders, promos, ov, profiles] = await Promise.all([listAllOrders(), getPromotions(), getOverrides(), profilesByEmail()]); const by = new Map<string, typeof orders>();
   for (const o of orders) { const e = (o.accountEmail || o.customer.email || "").toLowerCase(); if (!e) continue; (by.get(e) ?? by.set(e, []).get(e)!).push(o); }
   const members = [...by.entries()].map(([email, os]) => {
@@ -672,8 +678,9 @@ admin.get("/members", wrap(async (_req, res) => {
   const spent = redeemedPoints(await listRedemptions().catch(() => [])); // points each member has already spent on gifts
   const withPoints = members.map((m) => { const bonus = ov[m.email]?.bonus ?? 0, auto = pointsOf(m.spendCents, promos.membership, promos.memberPointCents); return { ...m, points: Math.max(0, auto + bonus - (spent.get(m.email) ?? 0)), pointsAuto: auto, pointsBonus: bonus, pointLog: (ov[m.email]?.log ?? []).slice(-10).reverse(), pointsSpent: spent.get(m.email) ?? 0 }; });
   withPoints.sort((a, b) => b.spendCents - a.spendCents); withPoints.length = Math.min(withPoints.length, 2000);
-  res.json({ members: withPoints });
-}));
+  return withPoints;
+};
+admin.get("/members", wrap(async (_req, res) => res.json({ members: await membersList() })));
 admin.post("/members/set", wrap(async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase(); const tierId = String(req.body?.tierId ?? ""); const promos = await getPromotions();
   if (!email || email.length > 200) return res.json({ error: "Member not found" });

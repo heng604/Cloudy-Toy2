@@ -7,6 +7,7 @@ import ImageUpload from "@/components/admin/ImageUpload";
 import TierBadge from "@/components/TierBadge";
 import Avatar from "@/components/Avatar";
 import GiftsSection from "./GiftsSection";
+import ExportButtons from "@/components/admin/ExportButtons";
 import { post } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useTitle } from "@/lib/title";
@@ -143,7 +144,7 @@ export default function Membership() {
       <div className="min-w-0 max-w-2xl"><h1 className="flex items-center gap-2 text-xl font-extrabold text-[#3A3FA8]"><span aria-hidden="true">✨</span>{t("Automatic Membership & Loyalty Rules")}</h1>
         <p className="mt-1 text-sm text-mute">{t("Customers move up automatically as their paid orders add up. Each level has its own specials. You can edit or delete anything here.")}</p>
         <Link to="/admin/settings#membership-banner" className="mt-2 inline-block text-sm font-extrabold text-[#4A86D8] hover:underline">🖼 {t("Membership page banner (cover picture)")} · {t("Change picture")} →</Link></div>
-      <button type="button" onClick={() => setEdit("new")} className="btn-blue shrink-0 rounded-full px-6 py-3 font-extrabold">+ {t("Add Membership Level")}</button></section>
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2"><ExportButtons type="membership" /><button type="button" onClick={() => setEdit("new")} className="btn-blue shrink-0 rounded-full px-6 py-3 font-extrabold">+ {t("Add Membership Level")}</button></div></section>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{stats.map(([label, value, ico, bg, fg]) => (<div key={label} className={statBox}><span aria-hidden="true" style={{ background: bg, color: fg }} className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-xl">{ico}</span><div className="min-w-0"><p className="truncate text-xs font-semibold text-mute">{label}</p><p className="truncate text-2xl font-extrabold">{value}</p></div></div>))}</div>
     {tiers.length === 0 ? <p className="rounded-3xl border border-dashed border-sky-border bg-white p-6 text-center text-sm text-mute">{t("No membership levels. Add one and customers reach it automatically.")}</p>
       : <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{tiers.map((x, i) => { const specials = x.perks.filter((p) => p.active); return (<li key={x.id} className={`flex flex-col rounded-3xl border border-sky-border bg-white p-5 shadow-soft ${x.active ? "" : "opacity-70"}`}>

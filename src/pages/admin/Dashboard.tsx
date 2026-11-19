@@ -10,12 +10,15 @@ import Skeleton from "@/components/Skeleton";
 import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { can } from "@shared/roles";
 import { useAdmin, displayName } from "./hooks";
+
+const EXPORT_LABEL = { orders: "Orders", transactions: "Sales Transaction Report", delivery: "Delivery Report", products: "Products", stock: "Stock", membership: "Membership", promotions: "Promotions", "admin-permissions": "Admin Permissions" } as const;
 const card = "rounded-3xl bg-white p-4 shadow-soft sm:p-5";
 const Title = ({ children, to, more }: { children: React.ReactNode; to?: string; more?: string }) => <div className="mb-3 flex items-center justify-between gap-2"><h2 className="font-extrabold">{children}</h2>{to && <Link to={to} className="text-sm font-semibold text-sky-hover hover:underline">{more}</Link>}</div>;
 export default function Dashboard() {
   const { t, locale } = useI18n(); useTitle(t("Dashboard"), true);
-  const { user } = useAuth(); const [range, setRange] = useState<7 | 14>(7);
+  const { user, role } = useAuth(); const [range, setRange] = useState<7 | 14>(7);
   const { data } = useAdmin<{ orders: StoredOrder[]; products: Product[] }>("/admin/dashboard");
   if (!data) return <Skeleton />;
   const { orders, products } = data;
@@ -97,6 +100,6 @@ export default function Dashboard() {
       <section className={card}><Title to="/admin/transactions?sort=high" more={t("See all")}>{t("Highest transactions")}</Title>{highest.length ? <ul>{highest.map((o) => <Row key={o.orderNumber} o={o} />)}</ul> : <p className="text-mute">{t("No orders yet.")}</p>}</section>
       <section className={card}><Title to="/admin/transactions?sort=low" more={t("See all")}>{t("Lowest transactions")}</Title>{lowest.length ? <ul>{lowest.map((o) => <Row key={o.orderNumber} o={o} />)}</ul> : <p className="text-mute">{t("No orders yet.")}</p>}</section></div>
     <section className={card}><Title>{t("Export all data")}</Title><div className="grid gap-3 sm:grid-cols-2">
-      {(["orders", "transactions", "delivery", "products", "stock"] as const).map((k) => <div key={k} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-sky-pale p-3"><span className="font-semibold capitalize">{t(k === "orders" ? "Orders" : k === "transactions" ? "Sales Transaction Report" : k === "delivery" ? "Delivery Report" : k === "products" ? "Products" : "Stock")}</span><ExportButtons type={k} /></div>)}</div>
+      {(["orders", "transactions", "delivery", "products", "stock", "membership", "promotions", "admin-permissions"] as const).filter((k) => k === "membership" || k === "promotions" ? can(role, "promotions") : k === "admin-permissions" ? can(role, "staff") : true).map((k) => <div key={k} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-sky-pale p-3"><span className="font-semibold capitalize">{t(EXPORT_LABEL[k])}</span><ExportButtons type={k} /></div>)}</div>
       <p className="mt-2 text-xs text-mute">PDF shows Latin letters only (Khmer prints as ?). Use CSV when you need Khmer names.</p></section></div>);
 }

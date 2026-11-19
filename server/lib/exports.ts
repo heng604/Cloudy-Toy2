@@ -5,6 +5,12 @@ import { stockStatus } from "../../shared/products";
 import { stamp, usd } from "../../shared/stats";
 import type { CsvCol } from "../../shared/csv";
 import type { PdfCol } from "./pdf";
+import type { Tier } from "../../shared/membership";
+import { campaignLabel, campaignDetail, festivalPhase, festivalDetail, type Promotions } from "../../shared/promotions";
+import { shopToday } from "../../shared/products";
+import { can, ROLE_NAME, type Perm } from "../../shared/roles";
+import type { Staff } from "./staff";
+import type { StoreDiscount } from "./discountStore";
 export type Dataset = { name: string; title: string; csv: CsvCol<any>[]; pdf: PdfCol[]; pdfRow: (r: any) => string[]; rows: any[]; intro: string; summary: [string, string][] };
 const n0 = (n: number) => n.toLocaleString("en-US");
 const area = (o: StoredOrder) => areaLabel(o);
@@ -74,4 +80,63 @@ export function stockDataset(rows: Product[]): Dataset {
     summary: [["Toys listed", n0(rows.length)], ["Units in stock", n0(rows.reduce((t, p) => t + p.stock, 0))], ["Stock value", `$${n0(Math.round(rows.reduce((t, p) => t + price(p) * p.stock, 0) * 100) / 100)}`], ["Need restocking", n0(rows.filter((p) => stockStatus(p.stock) !== "OK").length)]],
     pdf: [{ header: "SKU", chars: 12 }, { header: "Name", chars: 40 }, { header: "Category", chars: 12 }, { header: "Stock", chars: 6, right: true }, { header: "Level", chars: 6 }, { header: "Unit", chars: 9, right: true }, { header: "Value", chars: 11, right: true }],
     pdfRow: (p: Product) => [p.sku, p.name, p.category, String(p.stock), stockStatus(p.stock), `$${price(p).toFixed(2)}`, `$${(price(p) * p.stock).toFixed(2)}`] };
+}
+
+// ---------- Membership, Promotions and Admin permissions ----------
+// Same template as every other report: the PDF and the Google Sheet (.xlsx) are both built from these columns.
+const day = (iso?: string | null) => (iso ? stamp(iso).slice(0, 10) : "");
+/** One row of Admin > Membership > members (what GET /admin/members returns). */
+export type MemberRow = { email: string; name: string; phone: string; address: string; facebook: string; telegram: string; spendCents: number; orders: number; lastOrderAt: string; tierId: string | null; blocked: boolean; removed: boolean; points: number; pointsSpent: number };
+const memberStatus = (m: MemberRow) => (m.removed ? "Removed" : m.blocked ? "Specials off" : m.tierId ? "Member" : "Not a member yet");
+export function membersDataset(rows: MemberRow[], tiers: Tier[]): Dataset {
+  const level = (m: MemberRow) => (m.tierId ? tiers.find((t) => t.id === m.tierId)?.name ?? "" : ""); // "" in CSV: a cell starting with "-" would be read as a formula
+  const csv: CsvCol<MemberRow>[] = [
+    { header: "Name", get: (m) => m.name }, { header: "Email", get: (m) => m.email }, { header: "Phone", get: (m) => m.phone }, { header: "Level", get: level }, { header: "Status", get: memberStatus },
+    { header: "Orders", get: (m) => m.orders }, { header: "Total spend USD", get: (m) => (m.spendCents / 100).toFixed(2) }, { header: "Points", get: (m) => m.points }, { header: "Points used", get: (m) => m.pointsSpent },
+    { header: "Last order", get: (m) => day(m.lastOrderAt) }, { header: "Address", get: (m) => m.address }, { header: "Telegram", get: (m) => m.telegram }, { header: "Facebook", get: (m) => m.facebook },
+  ];
+  const live = rows.filter((m) => !m.removed && m.tierId);
+  return { name: "membership", title: "Membership", csv, rows, intro: "Hello Cloudy Toys team! Here are your members: their level, what they have spent and the points they can still exchange for gifts.",
+    summary: [["Members", n0(live.length)], ["Total spend", usd(rows.reduce((t, m) => t + m.spendCents, 0))], ["Points held", n0(rows.reduce((t, m) => t + m.points, 0))], ["Specials switched off", n0(rows.filter((m) => m.blocked && !m.removed).length)]],
+    pdf: [{ header: "Name", chars: 20 }, { header: "Email", chars: 28 }, { header: "Phone", chars: 14 }, { header: "Level", chars: 10 }, { header: "Status", chars: 14 }, { header: "Orders", chars: 7, right: true }, { header: "Spend", chars: 11, right: true }, { header: "Points", chars: 7, right: true }, { header: "Last order", chars: 12 }],
+    pdfRow: (m: MemberRow) => [m.name, m.email, m.phone, level(m) || "-", memberStatus(m), String(m.orders), usd(m.spendCents), String(m.points), day(m.lastOrderAt)] };
+}
+export type PromoRow = { type: string; name: string; code: string; offer: string; start: string; end: string; status: string; used: number | null };
+/** Every promotion in one list: the pre-order rule, automatic campaigns, festival offers and typed discount codes. */
+export function promotionRows(promos: Promotions, codes: StoreDiscount[], productName: (id: string) => string = () => "the free gift"): PromoRow[] {
+  const today = shopToday(); const out: PromoRow[] = [];
+  const pre = promos.preorder; out.push({ type: "Pre-order rule", name: "Pre-order global rules", code: "", offer: `${pre.depositPercent}% deposit, dispatch ${pre.dispatchText}, ${pre.capSlots} slots`, start: "", end: "", status: "Always on", used: null });
+  for (const c of promos.campaigns) {
+    const status = !c.active ? "Paused" : !c.startDate || !c.endDate ? "Live now" : today < c.startDate ? "Scheduled" : today > c.endDate ? "Ended" : "Live now";
+    out.push({ type: "Campaign", name: c.name, code: "", offer: `${campaignLabel(c)}: ${campaignDetail(c, productName)}`, start: c.startDate ?? "", end: c.endDate ?? "", status, used: null });
+  }
+  const PHASE = { live: "Live now", upcoming: "Scheduled", ended: "Ended", paused: "Paused" } as const;
+  for (const f of promos.festivals) out.push({ type: "Festival offer", name: f.name, code: f.code ?? "", offer: festivalDetail(f), start: f.startDate, end: f.endDate, status: PHASE[festivalPhase(f)], used: null });
+  for (const d of codes) out.push({ type: "Discount code", name: d.code, code: d.code, offer: `${d.percent}% off the cart${d.perCustomer != null ? `, ${d.perCustomer} per customer` : ""}${d.maxUses != null ? `, max ${d.maxUses} uses` : ""}`, start: "", end: "", status: d.maxUses != null && d.used >= d.maxUses ? "Used up" : "Active", used: d.used });
+  return out;
+}
+export function promotionsDataset(rows: PromoRow[]): Dataset {
+  const csv: CsvCol<PromoRow>[] = [
+    { header: "Type", get: (r) => r.type }, { header: "Name", get: (r) => r.name }, { header: "Code", get: (r) => r.code }, { header: "Offer", get: (r) => r.offer },
+    { header: "Start", get: (r) => r.start }, { header: "End", get: (r) => r.end }, { header: "Status", get: (r) => r.status }, { header: "Used", get: (r) => r.used ?? "" },
+  ];
+  const live = (r: PromoRow) => r.status === "Live now" || r.status === "Active" || r.status === "Always on";
+  return { name: "promotions", title: "Promotions", csv, rows, intro: "Hello Cloudy Toys team! Here is every promotion in one list: campaigns, festival offers, discount codes and the pre-order rule.",
+    summary: [["Promotions", n0(rows.length)], ["Live now", n0(rows.filter(live).length)], ["Scheduled", n0(rows.filter((r) => r.status === "Scheduled").length)], ["Code uses", n0(rows.reduce((t, r) => t + (r.used ?? 0), 0))]],
+    pdf: [{ header: "Type", chars: 12 }, { header: "Name", chars: 20 }, { header: "Code", chars: 10 }, { header: "Offer", chars: 62 }, { header: "Start", chars: 11 }, { header: "End", chars: 11 }, { header: "Status", chars: 11 }, { header: "Used", chars: 6, right: true }],
+    pdfRow: (r: PromoRow) => [r.type, r.name, r.code, r.offer, r.start, r.end, r.status, r.used == null ? "" : String(r.used)] };
+}
+const AREAS: [Perm, string][] = [["orders", "Orders"], ["products", "Products & stock"], ["pages", "Pages"], ["promotions", "Promotions & membership"], ["settings", "Settings"], ["staff", "Admin permissions"]];
+export function staffDataset(rows: Staff[]): Dataset {
+  const who = (s: Staff) => s.name || s.email.split("@")[0];
+  const access = (s: Staff) => { const a = AREAS.filter(([p]) => can(s.role, p)); return a.length === AREAS.length ? "Everything" : a.map(([, l]) => l).join("; "); };
+  const status = (s: Staff) => (s.active ? "Active" : "Paused");
+  const csv: CsvCol<Staff>[] = [
+    { header: "Name", get: who }, { header: "Email", get: (s) => s.email }, { header: "Role", get: (s) => ROLE_NAME[s.role] }, { header: "Can manage", get: access },
+    { header: "Status", get: status }, { header: "Last active", get: (s) => (s.lastActiveAt ? stamp(s.lastActiveAt) : "Never") }, { header: "Added", get: (s) => (s.createdAt ? day(s.createdAt) : "Built-in owner") },
+  ];
+  return { name: "admin-permissions", title: "Admin Permissions", csv, rows, intro: "Hello Cloudy Toys team! Here is everyone with access to the admin area, their role and what each role may manage.",
+    summary: [["Team members", n0(rows.length)], ["Active", n0(rows.filter((s) => s.active).length)], ["Owners", n0(rows.filter((s) => s.role === "owner").length)], ["Admins & editors", n0(rows.filter((s) => s.role !== "owner").length)]],
+    pdf: [{ header: "Name", chars: 16 }, { header: "Email", chars: 26 }, { header: "Role", chars: 8 }, { header: "Can manage", chars: 60 }, { header: "Status", chars: 8 }, { header: "Last active", chars: 15 }],
+    pdfRow: (s: Staff) => [who(s), s.email, ROLE_NAME[s.role], access(s), status(s), s.lastActiveAt ? stamp(s.lastActiveAt) : "Never"] };
 }

@@ -3,6 +3,7 @@ import Icon from "@/components/admin/Icons";
 import Modal from "@/components/admin/Modal";
 import Skeleton from "@/components/Skeleton";
 import ImageUpload from "@/components/admin/ImageUpload";
+import ExportButtons from "@/components/admin/ExportButtons";
 import { Link } from "react-router-dom";
 import { post } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
@@ -156,7 +157,7 @@ export default function Promotions() {
   const createCode = async (e: FormEvent) => { e.preventDefault(); if (busy) return; setBusy(true); const r = await send("/admin/discounts/create", { code, percent, maxUses, perCustomer }, `Code ${code.trim().toUpperCase()} created`); setMsg(r); if (r.ok) { setCode(""); setMaxUses(""); setPerCustomer(""); } setBusy(false); };
   return (<div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Promotions & Pre-Order Rules")}</h1>
-      <Link to="/admin/settings#offer-banner" className="inline-flex items-center gap-2 rounded-full border border-sky-border bg-white px-4 py-2 text-sm font-bold hover:bg-sky-pale">🖼️ {t("Change Special Offer banners & pictures")}</Link></div>
+      <div className="flex flex-wrap items-center gap-2"><ExportButtons type="promotions" /><Link to="/admin/settings#offer-banner" className="inline-flex items-center gap-2 rounded-full border border-sky-border bg-white px-4 py-2 text-sm font-bold hover:bg-sky-pale">🖼️ {t("Change Special Offer banners & pictures")}</Link></div></div>
     {msg && <p role={msg.ok ? "status" : "alert"} className={`rounded-xl p-3 font-semibold ${msg.ok ? "bg-green-100 text-green-900" : "bg-red-100 text-red-800"}`}>{t(msg.text)}</p>}
     <div className="grid gap-4 lg:grid-cols-2">
       <section className={card}><div className="mb-4 flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#FFF1C9] text-[#C98F0B]"><Icon name="orders" size={22} /></span><div><h2 className="text-lg font-extrabold">{t("Pre-Order Global Rules")}</h2><p className="text-sm text-mute">{t("Configure down payment rates and dispatch estimates.")}</p></div></div>

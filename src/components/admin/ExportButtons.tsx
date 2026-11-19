@@ -3,7 +3,7 @@ import { useState } from "react";
 import { download } from "@/lib/api";
 /** Buttons that download from the admin-only export route. `params` carries the current filters.
  *  "Export Google Sheet" downloads the report as a .xlsx file (same template as the PDF) that Google Sheets opens. */
-export default function ExportButtons({ type, params = {} }: { type: "orders" | "transactions" | "delivery" | "products" | "stock"; params?: Record<string, string | undefined> }) {
+export default function ExportButtons({ type, params = {} }: { type: "orders" | "transactions" | "delivery" | "products" | "stock" | "membership" | "promotions" | "admin-permissions"; params?: Record<string, string | undefined> }) {
   const [busy, setBusy] = useState(false); const [hint, setHint] = useState<"" | "file">(""); const { t } = useI18n();
   const qs = (format: string) => new URLSearchParams(Object.entries({ type, format, ...params }).filter(([, v]) => v) as [string, string][]).toString();
   const go = async (f: string) => { setBusy(true); try { await download(`/admin/export?${qs(f)}`); if (f === "xlsx") setHint("file"); } catch { alert("Could not export. Please try again."); } finally { setBusy(false); } };

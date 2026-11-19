@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import Icon from "@/components/admin/Icons";
 import Modal from "@/components/admin/Modal";
 import Skeleton from "@/components/Skeleton";
+import ExportButtons from "@/components/admin/ExportButtons";
 import { post } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { useTitle } from "@/lib/title";
@@ -46,7 +47,7 @@ export default function StaffPage() {
   const th = "px-4 py-3 text-xs font-bold uppercase tracking-wide text-mute";
   return (<div className="space-y-4">
     <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-extrabold sm:text-3xl">{t("Admin Staff & Permissions")}</h1><p className="text-sm text-mute">{t("Manage portal access, roles, and administrative staff accounts.")}</p></div>
-      <button type="button" onClick={() => setEdit("new")} className="inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-2.5 font-extrabold shadow-soft hover:bg-sky-hover"><Icon name="plus" size={18} />{t("Add New Admin")}</button></div>
+      <div className="flex flex-wrap items-center gap-2"><ExportButtons type="admin-permissions" /><button type="button" onClick={() => setEdit("new")} className="inline-flex items-center gap-2 rounded-xl bg-sky px-5 py-2.5 font-extrabold shadow-soft hover:bg-sky-hover"><Icon name="plus" size={18} />{t("Add New Admin")}</button></div></div>
     {data.ready === false && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm font-semibold text-amber-900">The staff table is not in your database yet, so only the owners are shown and adding staff is off. Open Supabase &gt; SQL Editor, paste <code>supabase/setup_all.sql</code>, click Run (safe to run again), then reload this page.</p>}
     {msg && <p role={msg.ok ? "status" : "alert"} className={`rounded-xl p-3 font-semibold ${msg.ok ? "bg-green-100 text-green-900" : "bg-red-100 text-red-800"}`}>{msg.text}</p>}
     <div className="overflow-x-auto rounded-3xl bg-white shadow-soft"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b border-sky-border">{["User details", "Email", "Role", "Status", "Last active", ""].map((h, i) => <th key={i} className={`${th} ${i === 5 ? "text-right" : ""}`}>{h && t(h)}</th>)}</tr></thead>

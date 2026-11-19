@@ -61,8 +61,8 @@ function zip(files: { name: string; data: Buffer; store?: boolean }[]): Buffer {
 }
 // ---- sheet ----
 // Columns are the same as the PDF report. Money / quantity columns hold real numbers (so Excel can add them up); everything else is text.
-export const SUMMED = new Set(["Total", "Total USD", "Value", "Stock value USD", "Qty", "Item count", "Stock", "Sold QTY", "Sub Amount", "Invoice Discount", "Discount", "Delivery Fee", "Total Sale"]);
-export const kindOf = (h: string): "usd" | "int" | "text" => (/^(Total|Price|Sale|Unit|Value)$|( USD|Amount|Discount|Fee|Total Sale)$/.test(h) ? "usd" : /^(Stock|Qty|Item count|Sold QTY)$/.test(h) ? "int" : "text");
+export const SUMMED = new Set(["Total", "Total USD", "Value", "Stock value USD", "Qty", "Item count", "Stock", "Sold QTY", "Sub Amount", "Invoice Discount", "Discount", "Delivery Fee", "Total Sale", "Spend", "Orders", "Points", "Used"]);
+export const kindOf = (h: string): "usd" | "int" | "text" => (/^(Total|Price|Sale|Unit|Value|Spend)$|( USD|Amount|Discount|Fee|Total Sale)$/.test(h) ? "usd" : /^(Stock|Qty|Item count|Sold QTY|Orders|Points|Points used|Used)$/.test(h) ? "int" : "text");
 /** "$1,234.50" -> 1234.5 ; "-" or "" -> NaN (left empty). */
 export const toNum = (v: unknown): number => { if (typeof v === "number") return v; const t = String(v ?? "").replace(/[$,\s]/g, ""); return t === "" || t === "-" ? NaN : Number(t); };
 export function buildXlsx(o: { title: string; sheet: string; cols: XlsxCol[]; rows: Cell[][]; meta: ReportMeta }): Buffer {
@@ -93,7 +93,7 @@ export function buildXlsx(o: { title: string; sheet: string; cols: XlsxCol[]; ro
       else { const n = toNum(v); m.set(i + 1, Number.isFinite(n) ? num(r, i + 1, k === "usd" ? (z ? S.usdZ : S.usd) : z ? S.intZ : S.int, n) : str(r, i + 1, z ? S.textZ : S.text, "")); } });
     row(r, 20, m); r++; });
   const lastData = r - 1;
-  if (o.rows.length) { // totals row (follows the filter: SUBTOTAL ignores hidden rows)
+  if (o.rows.length && o.cols.some((c, i) => SUMMED.has(c.header) && kinds[i] !== "text")) { // totals row (only when the sheet has a column that can be added up) (follows the filter: SUBTOTAL ignores hidden rows)
     const m = new Map<number, string>([[1, str(r, 1, S.totLabel, "Total of the rows shown")]]);
     o.cols.forEach((c, i) => { if (!SUMMED.has(c.header) || kinds[i] === "text") return; const col = colName(i + 1), sum = o.rows.reduce((s, v) => s + (toNum(v[i]) || 0), 0);
       m.set(i + 1, `<c r="${col}${r}" s="${kinds[i] === "usd" ? S.totUsd : S.totInt}"><f>SUBTOTAL(109,${col}${first}:${col}${lastData})</f><v>${Math.round(sum * 100) / 100}</v></c>`); });
