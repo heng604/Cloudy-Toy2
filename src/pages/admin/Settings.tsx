@@ -20,11 +20,11 @@ function SizeSlider({ id, label, hint, value, max = 200 }: { id: string; label: 
 }
 /** Background colour of the customer "Exchange gift" section: pick a colour (saved as soon as you choose it) or go back to the default. */
 function GiftColor({ value }: { value?: string }) {
-  const [v, setV] = useState(value || "#efe9ff"); useEffect(() => { setV(value || "#efe9ff"); }, [value]);
+  const [v, setV] = useState(value || "#dcefff"); useEffect(() => { setV(value || "#dcefff"); }, [value]);
   const save = async (c: string) => { const f = new FormData(); f.set("slot", "giftcolor"); f.set("value", c); await api("/admin/settings/offer-page", { method: "POST", body: f }); refreshAdmin(); };
   return (<div className="flex flex-wrap items-center gap-3 rounded-xl border border-sky-border bg-sky-pale p-3 text-sm"><label htmlFor="gift-color" className="font-semibold">Background colour</label>
     <input id="gift-color" type="color" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => void save(v)} className="h-9 w-14 cursor-pointer rounded border border-sky-border bg-white" />
-    {value ? <button type="button" onClick={() => { setV("#efe9ff"); void save(""); }} className="text-xs font-bold text-[#E0456B] hover:underline">Back to default</button> : <span className="text-xs text-mute">Default soft purple-blue</span>}
+    {value ? <button type="button" onClick={() => { setV("#dcefff"); void save(""); }} className="text-xs font-bold text-[#E0456B] hover:underline">Back to default</button> : <span className="text-xs text-mute">Default sky blue</span>}
     <span className="basis-full text-xs text-mute">Shows behind the gifts when there is no background picture (a picture, if you add one, covers the colour).</span></div>);
 }
 export default function Settings() {
@@ -86,7 +86,7 @@ export default function Settings() {
       <ImageUpload label="Membership page banner" hint="Wide picture, about 1920 × 600. Leave empty for the default sky banner." value={s.membershipBannerImage} path="/admin/settings/offer-page" fields={{ slot: "membership" }} removeFields={{ slot: "membership", remove: "on" }} onChange={() => refreshAdmin()} />
       <SizeSlider id="membership-banner" label="Membership banner height" hint="Drag to make the cover taller or shorter (100% = the whole picture). The picture is trimmed, never stretched." value={s.imageSizes?.["membership-banner"]} max={200} /></section>
     <section id="gift-background" className="scroll-mt-24 space-y-4 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">Exchange gift background (customer account page)</p>
-      <p className="text-sm text-mute">The background behind the "Exchange gift" and "My gifts" part on the customer's membership page. Choose a picture, a colour, or both (the picture covers the colour). It is saved as soon as you choose it. A soft white layer keeps the gift cards easy to read. Best size 1600 × 1000 (JPG, PNG or WebP, max 5 MB). Remove it to go back to the default soft purple-blue.</p>
+      <p className="text-sm text-mute">The background behind the "Exchange gift" and "My gifts" part on the customer's membership page. Choose a picture, a colour, or both (the picture covers the colour). It is saved as soon as you choose it. A soft white layer keeps the gift cards easy to read. Best size 1600 × 1000 (JPG, PNG or WebP, max 5 MB). Remove it to go back to the default sky blue.</p>
       <ImageUpload label="Exchange gift background picture" hint="Any soft picture or pattern, about 1600 × 1000. Leave empty for the default." value={s.giftBackgroundImage} path="/admin/settings/offer-page" fields={{ slot: "giftbg" }} removeFields={{ slot: "giftbg", remove: "on" }} onChange={() => refreshAdmin()} />
       <GiftColor value={s.giftBackgroundColor} /></section>
     <section id="newarrival-banner" className="scroll-mt-24 space-y-4 rounded-xl2 border border-sky-border bg-white p-4"><p className="font-semibold">New Arrival banner</p>
