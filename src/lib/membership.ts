@@ -12,7 +12,7 @@ export function useMembership() {
   const spendCents = user ? r.data?.spendCents ?? 0 : 0, tiers = promotions.membership;
   const tier = user && r.data ? tiers.find((x) => x.id === r.data!.tierId) ?? null : null;
   const next = user && r.data ? levelAfter(tier, tiers) : null;
-  return { signedIn: !!user, isMember: !!(user && (r.data?.isMember || tier)), loading: !!user && r.loading, spendCents, used: (user ? r.data?.used : undefined) ?? {}, tiers, tier, next, points: user ? r.data?.points ?? 0 : 0, pointCents: promotions.memberPointCents, redemptions: (user ? r.data?.redemptions : undefined) ?? [], refresh: r.refresh };
+  return { signedIn: !!user, isMember: !!(user && (r.data?.isMember || tier)), loading: !!user && r.loading, spendCents, used: (user ? r.data?.used : undefined) ?? {}, tiers, tier, next, points: user && (r.data?.isMember || tier) ? Math.max(0, r.data?.points ?? 0) : 0, /* a new account that has not paid for anything is not a member yet: always 0 points */ pointCents: promotions.memberPointCents, redemptions: (user ? r.data?.redemptions : undefined) ?? [], refresh: r.refresh };
 }
 /** The gifts members can exchange points for. */
 export function useGifts() { const r = useResource<{ gifts: Gift[] }>("gifts", () => apiJson("/gifts"), { staleMs: 20_000 }); return { gifts: r.data?.gifts ?? [], loading: r.loading, refresh: r.refresh }; }

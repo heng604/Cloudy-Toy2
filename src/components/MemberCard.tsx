@@ -41,7 +41,7 @@ export function ProfileHeader({ src, name, email }: { src?: string; name: string
 /** "Hi, Bronze friend!" card with the progress bar to the next level, and this level's specials. */
 export function TierCard() {
   const { t } = useI18n(); const { tier, next, spendCents, used, loading, points } = useMembership();
-  const pct = next ? (tier ? 3 : Math.min(100, Math.max(3, Math.round((spendCents / next.minSpendCents) * 100)))) : 100; // before the first level the bar fills with what they paid; after that an upgrade is ONE order
+  const pct = next ? (tier ? 0 : Math.min(100, Math.max(0, Math.round((spendCents / next.minSpendCents) * 100)))) : 100; // before the first level the bar fills with what they paid (a brand-new account that has paid nothing is a true 0%, no fake head start); after that an upgrade is ONE order
   const perks = tier?.perks.filter((p) => p.active) ?? [];
   return (<section aria-label={t("My membership")} className="rounded-3xl border border-white bg-white/90 p-4 shadow-soft sm:p-5">
     <div className="flex items-center gap-3"><TierBadge tier={tier} size={72} className="rounded-3xl border-2 border-white bg-gradient-to-b from-[#FFF4D6] to-[#FFE2A8] shadow-soft" />
@@ -50,12 +50,15 @@ export function TierCard() {
         <p className="text-sm text-mute">{t("{n} points total", { n: points })}</p></div></div>
     {tier?.description && <p className="mt-3 whitespace-pre-line rounded-2xl bg-[#F3F8FF] p-3 text-sm text-[#3B4D73]">{tier.description}</p>}
     <div className="mt-4"><p className="text-sm font-extrabold text-[#2B1A8F]">{next ? (tier ? t("Pay {amount} or more in ONE order to unlock {name}", { amount: usd(next.singleOrderCents), name: next.name.toUpperCase() }) : t("Spend {amount} more to unlock {name}", { amount: usd(Math.max(0, next.minSpendCents - spendCents)), name: next.name.toUpperCase() })) : t("You're at our top level. Thank you so much for being with us! 💙")}</p>
-      <div className="mt-2 flex items-center gap-3"><span className="rounded-full bg-[#DCE8FF] px-2.5 py-0.5 text-xs font-extrabold text-[#3D58C8]">{pct}%</span><div className="h-3 flex-1 overflow-hidden rounded-full bg-[#E3EEFB]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className="h-full rounded-full bg-gradient-to-r from-[#7FB5FF] to-[#5B8DF0]" style={{ width: `${pct}%` }} /></div></div>
+      <div className="mt-2 flex items-center gap-3"><span className="rounded-full bg-[#DCE8FF] px-2.5 py-0.5 text-xs font-extrabold text-[#3D58C8]">{pct}%</span><div className="h-3 flex-1 overflow-hidden rounded-full bg-[#E3EEFB]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}><div className="h-full rounded-full bg-gradient-to-r from-[#7FB5FF] to-[#5B8DF0] transition-[width] duration-500" style={{ width: `${pct}%` }} /></div></div>
       <p className="mt-1 text-sm text-mute">{next && !tier ? `${usd(spendCents)} / ${usd(next.minSpendCents)} ${t("paid")}` : `${t("Total paid")} ${usd(spendCents)}`}</p></div>
     {tier && (perks.length > 0 ? <ul className="mt-3 space-y-1.5 border-t border-sky-border pt-3 text-sm">{perks.map((p) => { const n = used[p.id] ?? 0, left = p.monthlyLimit > 0 ? Math.max(0, p.monthlyLimit - n) : null; return (<li key={p.id} className="flex items-start gap-2">{p.kind === "custom" && p.image ? <img src={p.image} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-xl border border-sky-border object-cover" /> : <span aria-hidden="true" className="text-[#FF7BA9]">♡</span>}<span><b>{perkName(p, t)}</b>{p.kind === "custom" && p.detail && <span className="block text-xs text-mute">{p.detail}</span>}{left !== null && <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${left === 0 ? "bg-red-100 text-red-700" : "bg-[#EAE6FF] text-[#5B3FC8]"}`}>{left === 0 ? t("You've used this one up this month") : t("{n} left this month", { n: left })}</span>}</span></li>); })}</ul>
       : <p className="mt-3 text-sm text-mute">{t("No specials for {name} yet. Check back soon!", { name: tier.name })}</p>)}
   </section>);
 }
+
+/** Little hand-drawn shopping bag with a heart (replaces the plain 🛍 emoji so the button feels like Cloudy Toys, not a generic shop). Takes the button's text colour. */
+const ShopBagIcon = () => (<svg viewBox="0 0 28 28" aria-hidden="true" className="h-6 w-6 shrink-0 drop-shadow-[0_1px_0_rgba(43,26,143,.25)]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 10.5V9a4.5 4.5 0 0 1 9 0v1.5" /><path d="M5.5 10.5h17l-1.3 11.2a2.5 2.5 0 0 1-2.5 2.3H9.3a2.5 2.5 0 0 1-2.5-2.3z" fill="rgba(255,255,255,.18)" /><path d="M14 20.2s-3.6-2.3-3.6-5a2 2 0 0 1 3.6-1.2 2 2 0 0 1 3.6 1.2c0 2.7-3.6 5-3.6 5z" fill="#FF8FB5" stroke="#fff" strokeWidth="1.4" /></svg>);
 
 /** Points wallet card (blue, with sparkles) */
 export function PointsWallet() {
@@ -65,7 +68,7 @@ export function PointsWallet() {
     <p className="text-xs font-extrabold uppercase tracking-wide text-[#3D58C8]">{t("Points wallet")}</p>
     <p className="font-display text-5xl font-extrabold text-[#2B1A8F]">{loading ? "…" : points} <span className="text-2xl">{t("pts")}</span></p>
     <p className="mt-1 max-w-sm text-sm text-[#3B4D73]">{tier ? t("You earn 1 point for every {amount} you spend after your first {first}. Delivery doesn't count. Save them up and swap them for gifts!", { amount: usd(pointCents), first: first ? usd(first.minSpendCents) : "" }) : t("Join us as a member and start collecting points you can swap for lovely gifts!")}</p>
-    <Link to="/shop" className="btn-blue mt-4 inline-flex min-h-11 items-center gap-2 rounded-full px-6 font-extrabold">🛍 {t("Keep shopping")}</Link></section>);
+    <Link to="/shop" className="btn-blue mt-4 inline-flex min-h-11 items-center gap-2 rounded-full px-6 font-extrabold"><ShopBagIcon />{t("Keep shopping")}</Link></section>);
 }
 
 /** All the levels as four cute cards; levels you have not reached show a little lock. */
