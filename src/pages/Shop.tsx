@@ -65,7 +65,7 @@ export default function Shop() {
     <nav className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2" aria-label={t("Product")}>
       {LABELS.map((l) => <Link key={l.id} to={`/shop?type=${l.id}`} aria-current={type?.id === l.id ? "page" : undefined} className={`rounded-full px-3 py-1 text-xs font-bold transition sm:text-sm ${type?.id === l.id ? "bg-[#1F4E9C] text-white" : "bg-white/80 text-[#1F4E9C] hover:bg-white"}`}>{lang === "km" ? l.km : l.en}</Link>)}
       <span className="ml-auto flex gap-3"><Link to="?sort=price-asc" className={small}>{t("Price ↑")}</Link><Link to="?sort=price-desc" className={small}>{t("Price ↓")}</Link></span></nav>
-    {list.length === 0 ? <p className="rounded-[1.6rem] bg-white/80 p-8 text-center shadow-soft">{t("No products match.")} <Link to="/shop" className="underline">{t("Clear filters")}</Link></p>
+    {list.length === 0 ? <p className="rounded-[1.6rem] bg-white/80 p-8 text-center shadow-soft">{t("We couldn't find any toys like that. Try another word!")} <Link to="/shop" className="underline">{t("Clear filters")}</Link></p>
       : <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">{shown.map((p) => <ProductCard key={p.id} p={p} />)}</div>}
     <Pagination page={page} pages={pages} to={pageLink} /></div>);
 }

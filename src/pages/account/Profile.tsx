@@ -27,9 +27,9 @@ function Form({ user, profile, refresh }: { user: User; profile: ProfileInfo; re
         <ImageUpload round value={avatar} path="/account/profile/avatar" removeFields={{ remove: "1" }} onChange={(u) => { setAvatar(u); refresh(); }} hint={t("A square photo works best. It is saved as soon as you choose it.")} fallback="🙂" /></div></div>
     <label className="block">{t("Display name")}<input name="display_name" value={f.display_name} onChange={set("display_name")} maxLength={80} className={cls} /></label>
     <label className="block">{t("Phone")}<input name="phone" type="tel" value={f.phone} onChange={set("phone")} maxLength={30} className={cls} /></label>
-    <label className="block">{t("Address")}<textarea name="address" value={f.address} onChange={set("address")} maxLength={300} rows={3} placeholder="Example: House 12, Street 271, Sangkat Tuol Tumpung 1, Khan Chamkar Mon, Phnom Penh" className={cls} /></label>
-    <div className="grid gap-3 sm:grid-cols-2"><label className="block">{t("Facebook name")}<input name="facebook" value={f.facebook} onChange={set("facebook")} maxLength={100} placeholder="Example: Sok Dara" className={cls} /></label>
-      <label className="block">{t("Telegram username")}<input name="telegram" value={f.telegram} onChange={set("telegram")} maxLength={100} placeholder="Example: @sokdara" className={cls} /></label></div>
+    <label className="block">{t("Address")}<textarea name="address" value={f.address} onChange={set("address")} maxLength={300} rows={3} placeholder={t("Example: House 12, Street 271, Sangkat Tuol Tumpung 1, Khan Chamkar Mon, Phnom Penh")} className={cls} /></label>
+    <div className="grid gap-3 sm:grid-cols-2"><label className="block">{t("Facebook name")}<input name="facebook" value={f.facebook} onChange={set("facebook")} maxLength={100} placeholder={t("Example: Sok Dara")} className={cls} /></label>
+      <label className="block">{t("Telegram username")}<input name="telegram" value={f.telegram} onChange={set("telegram")} maxLength={100} placeholder={t("Example: @sokdara")} className={cls} /></label></div>
     {s.error && <p role="alert" className="text-red-700">{s.error}</p>}{s.ok && <p role="status" className="text-green-700">{t("Saved")}</p>}
     <button disabled={busy} className="min-h-11 rounded-full bg-sky px-6 font-bold hover:bg-sky-hover disabled:opacity-50">{busy ? t("Saving…") : t("Save changes")}</button></form>);
 }

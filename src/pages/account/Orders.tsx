@@ -21,13 +21,13 @@ function List({ email }: { email: string }) {
   return (<div className="max-w-xl space-y-4"><Link to="/account" className="text-sm font-semibold underline">← {t("My account")}</Link>
     <h1 className="text-2xl font-extrabold sm:text-3xl">{t("Order history")}</h1>
     <p className="text-sm text-mute">{t("Everything you bought while signed in as {email}.", { email })}</p>
-    {error && !data ? <div role="alert" className="space-y-2 rounded-xl2 bg-amber-100 p-4 text-sm text-amber-900">{t("We couldn't load your orders.")} <button onClick={refresh} className="font-bold underline">{t("Try again")}</button></div>
+    {error && !data ? <div role="alert" className="space-y-2 rounded-xl2 bg-amber-100 p-4 text-sm text-amber-900">{t("Oops, we couldn't load your orders. Please try again.")} <button onClick={refresh} className="font-bold underline">{t("Try again")}</button></div>
       : loading ? <div className="h-24 animate-pulse rounded-xl2 bg-sky-pale" aria-busy="true" />
-      : orders.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-6">{t("No orders yet.")} <Link to="/shop" className="underline">{t("Browse toys")}</Link></p>
+      : orders.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-6">{t("No orders yet.")} <Link to="/shop" className="underline">{t("Find a toy you'll love")}</Link></p>
       : <>
         <p className="rounded-xl2 bg-sky-pale p-4 text-sm"><b>{orders.length}</b> {t(orders.length === 1 ? "order" : "orders")} · <b>{usd(spent)}</b> {t("paid so far")}</p>
         <div className="flex flex-wrap gap-2" role="group" aria-label={t("Filter orders")}>{FILTERS.map((f) => <button key={f.id} onClick={() => setFilter(f.id)} aria-pressed={filter === f.id} className={`min-h-11 rounded-full border px-4 text-sm font-bold ${filter === f.id ? "border-ink bg-ink text-white" : "border-sky-border bg-white"}`}>{t(f.label)}</button>)}</div>
-        {shown.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-6 text-sm">{t("No orders match this filter.")}</p>
+        {shown.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-6 text-sm">{t("No orders here yet.")}</p>
         : <ul className="space-y-3">{shown.map((o) => <li key={o.orderNumber} className="space-y-2 rounded-xl2 border border-sky-border bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-extrabold">{o.orderNumber}</p><p className="text-xs text-mute">{when(o.createdAt, locale)}</p></div>
             <span className={`rounded-full px-3 py-1 text-xs font-bold ${o.paymentStatus === "PAID" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{o.paymentStatus === "PAID" ? t(o.method === "BAKONG" ? "Paid with Bakong" : o.method === "COD" ? "Paid on delivery" : "Paid") : t("Pay with delivery")}</span></div>

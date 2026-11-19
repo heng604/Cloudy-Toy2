@@ -3,9 +3,10 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { safeNext } from "@shared/safeRedirect";
 import { fetchRole } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 /** Google sign-in lands here. supabase-js exchanges the ?code for a session by itself; we only decide where to send the person. */
 export default function AuthCallback() {
-  const navigate = useNavigate(); const [sp] = useSearchParams();
+  const { t } = useI18n(); const navigate = useNavigate(); const [sp] = useSearchParams();
   useEffect(() => {
     const next = safeNext(sp.get("next")); const wantsAdmin = next === "/admin" || next.startsWith("/admin/");
     const fail = wantsAdmin ? "/admin/login?error=auth" : "/login?error=auth";
@@ -19,5 +20,5 @@ export default function AuthCallback() {
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return <p className="py-16 text-center text-mute" aria-busy="true">Signing you in…</p>;
+  return <p className="py-16 text-center text-mute" aria-busy="true">{t("Signing you in…")}</p>;
 }

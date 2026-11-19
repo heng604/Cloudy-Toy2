@@ -6,9 +6,9 @@ import { useTitle } from "@/lib/title";
 import { useI18n } from "@/lib/i18n";
 export default function Login() {
   const { t } = useI18n(); useTitle("Sign in"); const [sp] = useSearchParams();
-  return (<div className="mx-auto max-w-md space-y-4 rounded-xl2 border border-sky-border bg-white p-8 text-center shadow-soft"><h1 className="text-2xl font-extrabold">{t("Sign in to Cloudy-Toy")}</h1>
-    <p className="text-mute">{safeNext(sp.get("next")) === "/checkout" ? t("Please sign in or create an account to place your order. Your cart is kept.") : t("Your cart is kept while you sign in.")}</p>
-    {sp.get("error") && <p role="alert" className="text-red-700">{t("Sign-in was cancelled or failed. Please try again.")}</p>}
+  return (<div className="mx-auto max-w-md space-y-4 rounded-xl2 border border-sky-border bg-white p-8 text-center shadow-soft"><h1 className="text-2xl font-extrabold">{t("Hi, welcome to Cloudy Toys!")}</h1>
+    <p className="text-mute">{safeNext(sp.get("next")) === "/checkout" ? t("Please sign in or create an account to place your order. Don't worry, your cart is saved!") : t("Your cart stays safe while you sign in.")}</p>
+    {sp.get("error") && <p role="alert" className="text-red-700">{t("Hmm, we couldn't sign you in. Please try again.")}</p>}
     <EmailLogin next={safeNext(sp.get("next"))} />
     {GOOGLE_ENABLED && <p className="text-sm text-mute">{t("or")}</p>}
     <GoogleButton next={safeNext(sp.get("next"))} /></div>);

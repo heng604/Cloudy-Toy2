@@ -38,12 +38,12 @@ function offerScope(o: Offer, all: Product[], t: (s: string) => string) {
 }
 function terms(o: Offer, t: (s: string) => string, promotions: Promotions): string[] {
   const c = o.rule, f = o.festival; const out = [`${t("Offer period")}: ${o.validity}`];
-  if (f) out.push(f.code ? `${t("Use the event code at checkout")}: ${f.code}` : t("The discount is applied automatically to the selected products."));
+  if (f) out.push(f.code ? `${t("Use the event code at checkout")}: ${f.code}` : t("We take the discount off these toys for you automatically."));
   if (c) {
-    out.push(t("Applied automatically at checkout. No code needed."));
+    out.push(t("We apply this for you at checkout. No code needed!"));
     if (c.kind === "free_shipping") { if ((c.minQty ?? 0) > 0) out.push(`${t("Minimum items")}: ${c.minQty}`); else if (c.minSpendCents > 0) out.push(`${t("Minimum spend")}: ${usd(c.minSpendCents)}`); if (c.area === "PHNOM_PENH") out.push(t("Phnom Penh deliveries only.")); }
     else if (c.kind.startsWith("spend") && c.minSpendCents > 0) out.push(`${t("Minimum spend")}: ${usd(c.minSpendCents)}`);
-    if (c.kind === "bogo" || c.kind === "spend_gift") out.push(t("The free gift is added to your order automatically."));
+    if (c.kind === "bogo" || c.kind === "spend_gift") out.push(t("We add your free gift to your order automatically."));
   }
   void promotions; return out;
 }
@@ -76,7 +76,7 @@ export default function OfferDetail() {
   const offer = all ? buildOffers(promotions, all, lang, t).find((o) => o.id === id) : undefined;
   useTitle(all ? offer?.title ?? t("Special Offer") : undefined);
   if (!all) return <Skeleton />;
-  if (!offer) return (<div className="mx-auto max-w-lg space-y-4 rounded-3xl bg-white p-8 text-center shadow-soft"><p className="text-5xl" aria-hidden="true">🎈</p><h1 className="text-2xl font-extrabold text-[#1F4E9C]">{t("This offer has ended or is not available.")}</h1><Link to="/shop?sale=1" className="inline-block rounded-full bg-[#7A3FD8] px-6 py-2.5 font-extrabold text-white hover:bg-[#6930C4]">{t("See all special offers")}</Link></div>);
+  if (!offer) return (<div className="mx-auto max-w-lg space-y-4 rounded-3xl bg-white p-8 text-center shadow-soft"><p className="text-5xl" aria-hidden="true">🎈</p><h1 className="text-2xl font-extrabold text-[#1F4E9C]">{t("Sorry, this offer has ended or isn't available.")}</h1><Link to="/shop?sale=1" className="inline-block rounded-full bg-[#7A3FD8] px-6 py-2.5 font-extrabold text-white hover:bg-[#6930C4]">{t("See all special offers")}</Link></div>);
   const tone = TONES[offer.tone], badge = badgeOf(offer, t), { products, scope, gift } = offerScope(offer, all, t); const e = endOf(offer.rule?.endDate ?? offer.festival?.endDate); const end = e > Date.now() ? e : 0; const code = offer.festival?.code;
   const go = () => document.getElementById("offer-products")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const useCode = () => { try { sessionStorage.setItem("ct-event-code", code ?? ""); } catch { /* private mode */ } setSaved(true); };
@@ -93,9 +93,9 @@ export default function OfferDetail() {
           <div className="flex flex-wrap gap-2 text-sm"><span className="rounded-full bg-sky-pale px-3 py-1 font-semibold">{t("Applies to")}: <b>{scope}</b></span>{products.length > 0 && <span className="rounded-full bg-sky-pale px-3 py-1 font-semibold">{products.length} {t("products")}</span>}</div>
           {gift && (offer.rule?.kind === "bogo" || offer.rule?.kind === "spend_gift") && <Link to={`/product/${gift.slug}`} className="flex items-center gap-3 rounded-2xl bg-[#FFE4EE] p-3 hover:shadow-soft"><img src={gift.images[0]?.src} alt="" className="h-16 w-16 rounded-xl object-cover" /><span className="text-sm"><b className="text-[#C2305F]">🎁 {t("Free gift")}</b><br />{(offer.rule.getQty ?? 1)} × {gift.name} <s className="ml-1 text-mute">{money(gift.price)}</s> <b>{money(0)}</b></span></Link>}
           <div className="space-y-2 rounded-2xl bg-[#F6FAFF] p-4 text-sm"><p className="font-extrabold text-[#1F4E9C]">{t("How it works")}</p><ul className="list-disc space-y-1 pl-5 text-ink/90">{terms(offer, t, promotions).map((x) => <li key={x}>{x}</li>)}</ul></div>
-          {code && <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[#EFE6FF] p-3 text-sm"><span className="font-bold">🎟️ {t("Quick event code")}:</span><span className="rounded-xl bg-white px-4 py-1.5 font-mono text-base font-extrabold text-[#4B2A99]">{code}</span><button type="button" onClick={useCode} className="rounded-full bg-[#7A3FD8] px-4 py-1.5 text-xs font-extrabold text-white hover:bg-[#6930C4]">{t("Apply to Bag")}</button>{saved && <span role="status" className="text-xs">{t("Saved! It is filled in at checkout.")} <Link to="/cart" className="font-bold underline">{t("Go to cart")}</Link></span>}</div>}
+          {code && <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-[#EFE6FF] p-3 text-sm"><span className="font-bold">🎟️ {t("Quick event code")}:</span><span className="rounded-xl bg-white px-4 py-1.5 font-mono text-base font-extrabold text-[#4B2A99]">{code}</span><button type="button" onClick={useCode} className="rounded-full bg-[#7A3FD8] px-4 py-1.5 text-xs font-extrabold text-white hover:bg-[#6930C4]">{t("Apply to Bag")}</button>{saved && <span role="status" className="text-xs">{t("Saved! We'll fill it in for you at checkout.")} <Link to="/cart" className="font-bold underline">{t("Go to cart")}</Link></span>}</div>}
           <div className="flex flex-wrap gap-3 pt-1"><button type="button" onClick={go} className={`min-h-11 rounded-full px-7 font-extrabold text-white shadow-soft transition hover:-translate-y-0.5 ${tone.btn}`}>{t("Shop offer products")} ↓</button><Link to="/shop?sale=1" className="inline-flex min-h-11 items-center rounded-full border border-sky-border bg-white px-6 font-bold hover:bg-sky-pale">{t("All special offers")}</Link></div></div></section>
       <section id="offer-products" className="scroll-mt-24"><div className="mb-4 flex items-end justify-between gap-3"><h2 className="text-2xl font-extrabold text-[#1F4E9C]">{t("Products in this offer")}</h2><Link to="/shop" className="text-sm font-bold text-[#4A86D8] hover:underline">{t("See all")} →</Link></div>
-        {products.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center text-mute">{t("No products match.")}</p> : <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">{products.map((p) => <OfferProductCard key={p.id} p={p} />)}</div>}</section></div>
+        {products.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center text-mute">{t("We couldn't find any toys like that. Try another word!")}</p> : <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">{products.map((p) => <OfferProductCard key={p.id} p={p} />)}</div>}</section></div>
   </div>);
 }

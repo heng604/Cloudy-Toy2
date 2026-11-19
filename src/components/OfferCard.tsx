@@ -43,7 +43,7 @@ export function buildOffers(promotions: Promotions, all: Product[], lang: string
   const rules = liveCampaigns(promotions.campaigns).map((c: Campaign): Offer => {
     const k = c.kind; const tone: Tone = k === "bogo" || k === "spend_gift" ? "pink" : k === "free_shipping" ? "green" : k.startsWith("spend") ? "blue" : "purple";
     const picture = k === "bogo" || k === "spend_gift" ? img(c.bonusProductId) : k.startsWith("product") ? img(c.productIds?.[0]) : k.startsWith("category") ? all.find((p) => p.category.trim().toLowerCase() === c.category.trim().toLowerCase())?.images?.[0]?.src : undefined;
-    return { id: c.id, tone, badge: t(campaignLabel(c)), title: c.name, text: campaignDetail(c, nameOf), validity: valid(c.startDate, c.endDate), rule: c, image: c.image || picture, more: `${campaignDetail(c, nameOf)}.\n${t("Applied automatically at checkout.")}`, to: `/offer/${c.id}` };
+    return { id: c.id, tone, badge: t(campaignLabel(c)), title: c.name, text: campaignDetail(c, nameOf), validity: valid(c.startDate, c.endDate), rule: c, image: c.image || picture, more: `${campaignDetail(c, nameOf)}.\n${t("We apply this for you at checkout.")}`, to: `/offer/${c.id}` };
   });
   const festivals = fests.map((f): Offer => ({ id: `f-${f.id}`, tone: "purple", badge: f.percent > 0 ? `${f.percent}% OFF` : t("Festival"), title: festivalName(f, lang), text: festivalText(f, lang) || festivalDetail(f), validity: valid(f.startDate, f.endDate), festival: f, image: f.image || img(f.productIds[0]), more: `${festivalDetail(f)}${f.code ? `\n${t("Code")}: ${f.code}` : ""}`, to: `/offer/f-${f.id}` }));
   return [...rules, ...festivals];

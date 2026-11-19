@@ -52,7 +52,7 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
   <div className="space-y-6 px-3 sm:px-6 lg:px-10">
     {hero?.code && <div className="flex flex-wrap items-center justify-center gap-3 rounded-2xl bg-white p-3 text-sm shadow-soft"><span className="font-bold">🎟️ {t("Quick event code")}:</span><span className="rounded-xl bg-[#EFE6FF] px-4 py-1.5 font-mono text-base font-extrabold text-[#4B2A99]">{hero.code}</span>
       <button type="button" onClick={() => useCode(hero.code!)} className="rounded-full bg-[#7A3FD8] px-4 py-1.5 text-xs font-extrabold text-white hover:bg-[#6930C4]">{t("Apply to Bag")}</button>
-      {saved === hero.code && <span role="status" className="text-xs">{t("Saved! It is filled in at checkout.")} <Link to="/cart" className="font-bold underline">{t("Go to cart")}</Link></span>}</div>}
+      {saved === hero.code && <span role="status" className="text-xs">{t("Saved! We'll fill it in for you at checkout.")} <Link to="/cart" className="font-bold underline">{t("Go to cart")}</Link></span>}</div>}
     {total > 0 && <section><div className="mb-3 flex items-end justify-between gap-3"><div><h2 className="text-xl font-extrabold text-[#1F4E9C]">{t("Active Promotions & Rewards")}</h2><p className="text-sm text-mute">{t("Unlock discounts and freebies automatically at checkout")}</p></div><span className="shrink-0 rounded-full bg-[#DDF6E8] px-3 py-1 text-xs font-extrabold text-[#2F8F5B]">{total} {t("Live Offers")}</span></div>
       <div className="grid gap-4 lg:grid-cols-2">{offers.map((o) => <OfferCard key={o.id} o={o} t={t} />)}</div></section>}
     {total === 0 && list.length === 0 && <p className="rounded-xl2 bg-sky-pale p-6 text-center text-mute">{t("No special offers right now. Please check back soon!")}</p>}
@@ -61,9 +61,9 @@ export default function SpecialOffers({ all, festivalId }: { all: Product[]; fes
         <hr className="my-3 border-sky-border" /><p className="mb-2 text-sm font-extrabold text-[#1F4E9C]">{t("Category")}</p>
         <div role="radiogroup" aria-label={t("Category")} className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
           {["", ...cats].map((c) => <label key={c || "all"} className={`flex shrink-0 cursor-pointer items-center gap-2.5 rounded-full px-2 py-1.5 text-sm font-semibold hover:bg-sky-pale lg:rounded-xl ${cat === c ? "text-[#1F4E9C]" : "text-ink"}`}><input type="radio" name="offer-cat" checked={cat === c} onChange={() => setCat(c)} className="h-4 w-4 accent-[#4A86D8]" />{c || t("All Products")}</label>)}</div></aside>
-      <section aria-label={t("Featured Cloudy Products")}>{shown.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center">{t("No products match.")}</p>
+      <section aria-label={t("Featured Cloudy Products")}>{shown.length === 0 ? <p className="rounded-xl2 bg-sky-pale p-8 text-center">{t("We couldn't find any toys like that. Try another word!")}</p>
         : <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">{shown.map((p) => <OfferProductCard key={p.id} p={p} />)}</div>}</section></div>}
-    {list.length === 0 && total > 0 && <p className="rounded-xl2 bg-sky-pale p-6 text-center">{t("No products match.")} <Link to="/shop" className="underline">{t("Browse all products")}</Link></p>}
+    {list.length === 0 && total > 0 && <p className="rounded-xl2 bg-sky-pale p-6 text-center">{t("We couldn't find any toys like that. Try another word!")} <Link to="/shop" className="underline">{t("Browse all products")}</Link></p>}
   </div>
   </div>);
 }

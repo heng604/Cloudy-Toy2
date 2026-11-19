@@ -53,7 +53,7 @@ export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string
         <nav aria-label={t("Main menu")} className="hidden items-center gap-0.5 xl:flex">{links()}</nav>
         <div className="flex items-center gap-0.5 sm:gap-1.5">
           <form onSubmit={search} role="search" className="relative mr-1 hidden 2xl:block"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1F4E9C" strokeWidth="2.200" strokeLinecap="round" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.500-3.500" /></svg>
-            <input type="search" name="q" key={loc.search} defaultValue={onShop ? q.get("q") ?? "" : ""} placeholder={`${t("Search products")}...`} aria-label={t("Search products")} className="h-10 w-56 rounded-full border-[1.5px] border-[#CFE3F8] bg-white pl-10 pr-4 text-sm shadow-soft placeholder:text-[#1F4E9C]/50 focus:outline-none focus:ring-2 focus:ring-[#4A86D8]/40" /></form>
+            <input type="search" name="q" key={loc.search} defaultValue={onShop ? q.get("q") ?? "" : ""} placeholder={`${t("Search for a toy")}...`} aria-label={t("Search for a toy")} className="h-10 w-56 rounded-full border-[1.5px] border-[#CFE3F8] bg-white pl-10 pr-4 text-sm shadow-soft placeholder:text-[#1F4E9C]/50 focus:outline-none focus:ring-2 focus:ring-[#4A86D8]/40" /></form>
           <button type="button" aria-label={open ? t("Close search") : t("Open search")} aria-expanded={open} onClick={() => { setOpen(!open); setMenu(false); }} className={`${icon} 2xl:hidden`}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{open ? <path d="M6 6l12 12M18 6L6 18" /> : <><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.500-3.500" /></>}</svg></button>
           <LangSwitch className="mx-0.5 sm:mx-1" />
@@ -80,7 +80,7 @@ export default function Header({ logoUrl = "/img/logo.png" }: { logoUrl?: string
       )}
       {open && (
         <form onSubmit={search} role="search" className="menu-in page-wrap pb-3 2xl:hidden">
-          <input ref={input} type="search" name="q" placeholder={t("Search products")} aria-label={t("Search products")} className="w-full rounded-full border border-sky-border bg-white px-5 py-3" />
+          <input ref={input} type="search" name="q" placeholder={t("Search for a toy")} aria-label={t("Search for a toy")} className="w-full rounded-full border border-sky-border bg-white px-5 py-3" />
         </form>
       )}
     </header>
